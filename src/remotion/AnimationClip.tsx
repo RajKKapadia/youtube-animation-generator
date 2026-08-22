@@ -1,12 +1,20 @@
 import type {CSSProperties, ReactNode} from 'react';
 import {
   AbsoluteFill,
+  Easing,
   interpolate,
-  spring,
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
 import type {AnimationClip as AnimationClipSpec, RenderInput} from '../types.js';
+import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
+import {TechnologyBadge} from './TechnologyBadge.js';
+import {
+  createConnectionWindow,
+  createRevealSchedule,
+  createSteppedProgress,
+  getBeatTransitionFrames,
+} from './timing.js';
 
 const COLORS = {
   ink: '#F8FAFC',
@@ -49,23 +57,31 @@ const useClipOpacity = (): number => {
 const useEntrance = (delay: number): number => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
-  return spring({
-    frame: frame - delay,
-    fps,
-    config: {damping: 18, stiffness: 150, mass: 0.8},
-  });
+  return interpolate(
+    frame,
+    [delay, delay + getBeatTransitionFrames(fps)],
+    [0, 1],
+    {...clamp, easing: Easing.out(Easing.cubic)},
+  );
 };
 
 const titleStyle: CSSProperties = {
   color: COLORS.ink,
-  fontSize: 66,
-  fontWeight: 800,
-  letterSpacing: -2,
-  lineHeight: 1.05,
+  display: 'flex',
+  justifyContent: 'center',
   margin: 0,
   maxWidth: 1500,
   textAlign: 'center',
-  textShadow: '0 12px 34px rgba(0,0,0,0.34)',
+  textShadow: '0 3px 0 rgba(2,6,23,0.96), 0 14px 38px rgba(0,0,0,0.48)',
+  WebkitTextStroke: '2px rgba(2, 6, 23, 0.96)',
+};
+
+const floatingTitleStyle: CSSProperties = {
+  background: 'rgba(2, 6, 23, 0.78)',
+  border: '2px solid rgba(255, 255, 255, 0.24)',
+  borderRadius: 26,
+  boxShadow: '0 18px 50px rgba(2, 6, 23, 0.4)',
+  padding: '18px 34px 22px',
 };
 
 const ClipCanvas = ({children}: {children: ReactNode}) => {
@@ -75,7 +91,7 @@ const ClipCanvas = ({children}: {children: ReactNode}) => {
       style={{
         alignItems: 'center',
         display: 'flex',
-        fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+        fontFamily: RENDER_FONT_FAMILY,
         justifyContent: 'center',
         opacity,
       }}
@@ -85,23 +101,39 @@ const ClipCanvas = ({children}: {children: ReactNode}) => {
   );
 };
 
-const Header = ({title}: {title: string}) => {
+const Header = ({
+  floating = true,
+  title,
+}: {
+  floating?: boolean;
+  title: string;
+}) => {
   const entrance = useEntrance(2);
   return (
     <h1
       style={{
         ...titleStyle,
+        ...(floating ? floatingTitleStyle : {}),
         opacity: entrance,
         transform: `translateY(${(1 - entrance) * 28}px)`,
       }}
     >
-      {title}
+      <FittedText
+        fontWeight={800}
+        letterSpacing={-2}
+        lineHeight={1.05}
+        maxFontSize={66}
+        maxHeight={150}
+        maxLines={2}
+        maxWidth={1400}
+        text={title}
+      />
     </h1>
   );
 };
 
-const NodeCard = ({label, index}: {label: string; index: number}) => {
-  const entrance = useEntrance(12 + index * 18);
+const NodeCard = ({delay, label}: {delay: number; label: string}) => {
+  const entrance = useEntrance(delay);
   return (
     <div
       style={{
@@ -112,26 +144,45 @@ const NodeCard = ({label, index}: {label: string; index: number}) => {
         boxShadow: '0 24px 55px rgba(0,0,0,0.36)',
         color: COLORS.ink,
         display: 'flex',
-        fontSize: 32,
-        fontWeight: 750,
-        height: 150,
+        height: 204,
         justifyContent: 'center',
-        lineHeight: 1.15,
         opacity: entrance,
-        padding: '0 24px',
+        padding: '34px 18px 14px',
+        position: 'relative',
         textAlign: 'center',
         transform: `scale(${0.84 + entrance * 0.16})`,
         width: 230,
       }}
     >
-      {label}
+      <div
+        style={{
+          left: '50%',
+          position: 'absolute',
+          top: -27,
+          transform: 'translateX(-50%)',
+        }}
+      >
+        <TechnologyBadge label={label} size={54} />
+      </div>
+      <FittedText
+        fontWeight={750}
+        lineHeight={1.15}
+        maxFontSize={29}
+        maxHeight={145}
+        maxLines={5}
+        maxWidth={194}
+        text={label}
+      />
     </div>
   );
 };
 
-const FlowArrow = ({index}: {index: number}) => {
+const FlowArrow = ({endFrame, startFrame}: {endFrame: number; startFrame: number}) => {
   const frame = useCurrentFrame();
-  const progress = interpolate(frame, [24 + index * 18, 40 + index * 18], [0, 1], clamp);
+  const progress = interpolate(frame, [startFrame, endFrame], [0, 1], {
+    ...clamp,
+    easing: Easing.inOut(Easing.cubic),
+  });
   return (
     <div style={{height: 44, position: 'relative', width: 86}}>
       <div
@@ -163,42 +214,64 @@ const FlowArrow = ({index}: {index: number}) => {
   );
 };
 
-const ProcessFlow = ({clip}: {clip: AnimationClipSpec}) => (
-  <ClipCanvas>
-    <div
-      style={{
-        alignItems: 'center',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 115,
-        width: 1740,
-      }}
-    >
-      <Header title={clip.title} />
-      <div style={{alignItems: 'center', display: 'flex', justifyContent: 'center'}}>
-        {clip.primaryItems.map((item, index) => (
-          <div key={`${item}-${index}`} style={{alignItems: 'center', display: 'flex'}}>
-            <NodeCard index={index} label={item} />
-            {index < clip.primaryItems.length - 1 ? <FlowArrow index={index} /> : null}
-          </div>
-        ))}
+const ProcessFlow = ({clip}: {clip: AnimationClipSpec}) => {
+  const {durationInFrames, fps} = useVideoConfig();
+  const revealFrames = createRevealSchedule({
+    durationInFrames,
+    fps,
+    total: clip.primaryItems.length,
+  });
+
+  return (
+    <ClipCanvas>
+      <div
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 92,
+          width: 1740,
+        }}
+      >
+        <Header title={clip.title} />
+        <div style={{alignItems: 'center', display: 'flex', justifyContent: 'center'}}>
+          {clip.primaryItems.map((item, index) => {
+            const nextFrame = revealFrames[index + 1];
+            const connection =
+              nextFrame === undefined
+                ? null
+                : createConnectionWindow(revealFrames[index] ?? 0, nextFrame, fps);
+            return (
+              <div key={`${item}-${index}`} style={{alignItems: 'center', display: 'flex'}}>
+                <NodeCard delay={revealFrames[index] ?? 0} label={item} />
+                {connection ? (
+                  <FlowArrow endFrame={connection.end} startFrame={connection.start} />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  </ClipCanvas>
-);
+    </ClipCanvas>
+  );
+};
 
 const ComparisonColumn = ({
   accent,
+  columnDelay,
+  itemDelays,
   items,
   label,
   side,
 }: {
   accent: string;
+  columnDelay: number;
+  itemDelays: number[];
   items: string[];
   label: string;
   side: number;
 }) => {
-  const entrance = useEntrance(12 + side * 8);
+  const entrance = useEntrance(columnDelay);
   return (
     <div
       style={{
@@ -215,21 +288,31 @@ const ComparisonColumn = ({
     >
       <div
         style={{
+          alignItems: 'center',
           background: accent,
           color: '#07111F',
-          fontSize: 42,
-          fontWeight: 850,
-          padding: '30px 42px',
+          display: 'flex',
+          justifyContent: 'center',
+          minHeight: 104,
+          padding: '22px 42px',
           textAlign: 'center',
         }}
       >
-        {label}
+        <FittedText
+          fontWeight={850}
+          lineHeight={1.08}
+          maxFontSize={42}
+          maxHeight={84}
+          maxLines={2}
+          maxWidth={620}
+          text={label}
+        />
       </div>
       <div style={{display: 'flex', flexDirection: 'column', gap: 25, padding: '42px 52px'}}>
         {items.map((item, index) => (
           <ComparisonItem
             accent={accent}
-            delay={30 + side * 7 + index * 10}
+            delay={itemDelays[index] ?? columnDelay}
             item={item}
             key={`${item}-${index}`}
           />
@@ -252,53 +335,82 @@ const ComparisonItem = ({
   return (
     <div
       style={{
-        alignItems: 'flex-start',
+        alignItems: 'center',
+        borderLeft: `5px solid ${accent}`,
         color: COLORS.ink,
         display: 'flex',
-        fontSize: 34,
-        fontWeight: 600,
         gap: 20,
-        lineHeight: 1.25,
         opacity: entrance,
+        paddingLeft: 18,
         transform: `translateY(${(1 - entrance) * 18}px)`,
       }}
     >
-      <span style={{color: accent, fontWeight: 900}}>●</span>
-      <span>{item}</span>
+      <TechnologyBadge label={item} size={42} />
+      <FittedText
+        align="left"
+        fontWeight={600}
+        lineHeight={1.2}
+        maxFontSize={34}
+        maxHeight={88}
+        maxLines={3}
+        maxWidth={500}
+        text={item}
+      />
     </div>
   );
 };
 
-const Comparison = ({clip}: {clip: AnimationClipSpec}) => (
-  <ClipCanvas>
-    <div style={{display: 'flex', flexDirection: 'column', gap: 60, width: 1580}}>
-      <Header title={clip.title} />
-      <div style={{display: 'flex', gap: 60, justifyContent: 'center'}}>
-        <ComparisonColumn
-          accent={COLORS.blue}
-          items={clip.primaryItems}
-          label={clip.leftLabel}
-          side={0}
-        />
-        <ComparisonColumn
-          accent={COLORS.violet}
-          items={clip.secondaryItems}
-          label={clip.rightLabel}
-          side={1}
-        />
+const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
+  const {durationInFrames, fps} = useVideoConfig();
+  const rowCount = Math.max(clip.primaryItems.length, clip.secondaryItems.length);
+  const revealFrames = createRevealSchedule({
+    durationInFrames,
+    fps,
+    total: rowCount + 1,
+  });
+  const columnDelay = revealFrames[0] ?? 0;
+  const itemDelays = revealFrames.slice(1);
+
+  return (
+    <ClipCanvas>
+      <div style={{display: 'flex', flexDirection: 'column', gap: 60, width: 1580}}>
+        <Header title={clip.title} />
+        <div style={{display: 'flex', gap: 60, justifyContent: 'center'}}>
+          <ComparisonColumn
+            accent={COLORS.blue}
+            columnDelay={columnDelay}
+            itemDelays={itemDelays}
+            items={clip.primaryItems}
+            label={clip.leftLabel}
+            side={0}
+          />
+          <ComparisonColumn
+            accent={COLORS.violet}
+            columnDelay={columnDelay}
+            itemDelays={itemDelays}
+            items={clip.secondaryItems}
+            label={clip.rightLabel}
+            side={1}
+          />
+        </div>
       </div>
-    </div>
-  </ClipCanvas>
-);
+    </ClipCanvas>
+  );
+};
 
 const Timeline = ({clip}: {clip: AnimationClipSpec}) => {
   const frame = useCurrentFrame();
-  const lineProgress = interpolate(
+  const {durationInFrames, fps} = useVideoConfig();
+  const revealFrames = createRevealSchedule({
+    durationInFrames,
+    fps,
+    total: clip.primaryItems.length,
+  });
+  const lineProgress = createSteppedProgress({
     frame,
-    [18, 18 + clip.primaryItems.length * 15],
-    [0, 1],
-    clamp,
-  );
+    revealFrames,
+    transitionFrames: getBeatTransitionFrames(fps),
+  });
 
   return (
     <ClipCanvas>
@@ -330,7 +442,12 @@ const Timeline = ({clip}: {clip: AnimationClipSpec}) => {
           />
           <div style={{display: 'flex', justifyContent: 'space-between', position: 'relative'}}>
             {clip.primaryItems.map((item, index) => (
-              <TimelineItem index={index} item={item} key={`${item}-${index}`} />
+              <TimelineItem
+                delay={revealFrames[index] ?? 0}
+                index={index}
+                item={item}
+                key={`${item}-${index}`}
+              />
             ))}
           </div>
         </div>
@@ -339,8 +456,16 @@ const Timeline = ({clip}: {clip: AnimationClipSpec}) => {
   );
 };
 
-const TimelineItem = ({index, item}: {index: number; item: string}) => {
-  const entrance = useEntrance(18 + index * 15);
+const TimelineItem = ({
+  delay,
+  index,
+  item,
+}: {
+  delay: number;
+  index: number;
+  item: string;
+}) => {
+  const entrance = useEntrance(delay);
   return (
     <div
       style={{
@@ -376,23 +501,40 @@ const TimelineItem = ({index, item}: {index: number; item: string}) => {
           border: `2px solid ${COLORS.border}`,
           borderRadius: 22,
           color: COLORS.ink,
-          fontSize: 29,
-          fontWeight: 700,
-          lineHeight: 1.2,
-          minHeight: 126,
-          padding: '27px 22px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: 204,
+          padding: '18px 22px',
           textAlign: 'center',
           width: 250,
         }}
       >
-        {item}
+        <TechnologyBadge label={item} size={46} />
+        <FittedText
+          fontWeight={700}
+          lineHeight={1.18}
+          maxFontSize={29}
+          maxHeight={104}
+          maxLines={5}
+          maxWidth={206}
+          text={item}
+        />
       </div>
     </div>
   );
 };
 
 const Callout = ({clip}: {clip: AnimationClipSpec}) => {
-  const entrance = useEntrance(8);
+  const {durationInFrames, fps} = useVideoConfig();
+  const revealFrames = createRevealSchedule({
+    durationInFrames,
+    fps,
+    total: clip.primaryItems.length + 1,
+  });
+  const entrance = useEntrance(revealFrames[0] ?? 0);
   return (
     <ClipCanvas>
       <div
@@ -414,21 +556,22 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
           }}
         />
         <div style={{padding: '70px 90px 78px', textAlign: 'center'}}>
-          <Header title={clip.title} />
+          <Header floating={false} title={clip.title} />
           <div
             style={{
               color: COLORS.muted,
               display: 'flex',
               flexDirection: 'column',
-              fontSize: 40,
-              fontWeight: 600,
               gap: 20,
-              lineHeight: 1.28,
               marginTop: 42,
             }}
           >
             {clip.primaryItems.map((item, index) => (
-              <CalloutItem delay={24 + index * 10} item={item} key={`${item}-${index}`} />
+              <CalloutItem
+                delay={revealFrames[index + 1] ?? revealFrames[0] ?? 0}
+                item={item}
+                key={`${item}-${index}`}
+              />
             ))}
           </div>
         </div>
@@ -442,11 +585,25 @@ const CalloutItem = ({delay, item}: {delay: number; item: string}) => {
   return (
     <div
       style={{
+        alignItems: 'center',
+        display: 'flex',
+        gap: 18,
+        justifyContent: 'center',
         opacity: entrance,
         transform: `translateY(${(1 - entrance) * 20}px)`,
       }}
     >
-      {item}
+      <TechnologyBadge label={item} size={44} />
+      <FittedText
+        fontWeight={600}
+        lineHeight={1.2}
+        maxFontSize={40}
+        maxHeight={92}
+        maxLines={3}
+        maxWidth={1060}
+        style={{color: COLORS.muted}}
+        text={item}
+      />
     </div>
   );
 };

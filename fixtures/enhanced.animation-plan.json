@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "sourceSubtitle": "/tmp/youtube-animations-enhanced.srt",
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "model": "fixture",
+  "clips": [
+    {
+      "id": "animation-01",
+      "startCue": 1,
+      "endCue": 6,
+      "sourceStartMs": 0,
+      "sourceEndMs": 12000,
+      "durationMs": 12000,
+      "template": "process-flow",
+      "title": "Docker Runtime Architecture",
+      "primaryItems": [
+        "docker compose up --build",
+        "Start PostgreSQL",
+        "Start Qdrant",
+        "Start Redis",
+        "Run FastAPI application",
+        "Run Python worker"
+      ],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Exercises duration-aware staging and technology badges.",
+      "transcript": "Docker starts PostgreSQL, Qdrant, Redis, FastAPI, and the Python worker."
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "sourceSubtitle": "/tmp/youtube-animations-text-fit.srt",
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "model": "fixture",
+  "clips": [
+    {
+      "id": "animation-01",
+      "startCue": 1,
+      "endCue": 5,
+      "sourceStartMs": 0,
+      "sourceEndMs": 10000,
+      "durationMs": 10000,
+      "template": "process-flow",
+      "title": "Adaptive Text Fitting Across Long Technical Process Labels",
+      "primaryItems": [
+        "Receive YouTube URL and validate the submitted request",
+        "Queue background processing job for transcript chunk indexing",
+        "Store knowledge in vector database",
+        "Retrieve the most relevant information from semantic search results",
+        "Generate a concise answer with the large language model"
+      ],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Stress-tests deterministic fitting with long process labels.",
+      "transcript": "The process validates a URL, queues indexing, stores vectors, retrieves context, and generates an answer."
+    }
+  ]
+}
