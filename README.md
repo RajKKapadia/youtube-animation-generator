@@ -18,12 +18,21 @@ the default command creates:
 /videos/animations/
 ├── episode-12.animation-plan.json
 ├── episode-12.animations.json
-├── 00h04m12s-01-process-flow.mov
-├── 00h07m32s-02-comparison.mov
-└── 00h11m48s-03-callout.mov
+├── 00h04m12s-01-process-flow.mp4
+├── 00h07m32s-02-comparison.mp4
+└── 00h11m48s-03-callout.mp4
 ```
 
 The timestamps in the filenames and manifest identify where each clip belongs in the editor.
+
+Each clip automatically:
+
+- uses a dual-contrast title treatment that stays legible over light or dark footage
+- measures and fits titles and labels into their available boxes without truncating the text
+- reveals each part at a scheduled beat using a short fixed transition, then holds until the next beat
+- adds matching technology badges for labels such as Docker, Python, PostgreSQL, Redis, FastAPI, Qdrant, YouTube, and FFmpeg
+
+Existing saved plans gain these enhancements when re-rendered; no new OpenAI request is required.
 
 ## Requirements
 
@@ -58,7 +67,7 @@ From the repository:
 pnpm animations -- /absolute/path/to/episode-12.srt
 ```
 
-The default output is an `animations/` directory beside the subtitle file. Each selected clip is rendered as a transparent ProRes 4444 `.mov`.
+The default output is an `animations/` directory beside the subtitle file. Each selected clip is rendered as a green-background H.264 `.mp4` for chroma-keying in your editor.
 
 You can also build and execute the compiled CLI:
 
@@ -69,7 +78,13 @@ node dist/cli.js /absolute/path/to/episode-12.srt
 
 ## Output formats
 
-Transparent ProRes 4444 is the default and best choice for conventional editors:
+Green-background H.264 MP4 is the default:
+
+```bash
+pnpm animations -- episode.srt
+```
+
+Transparent ProRes 4444 remains available when needed:
 
 ```bash
 pnpm animations -- episode.srt --format prores
@@ -81,13 +96,7 @@ Transparent WebM:
 pnpm animations -- episode.srt --format webm
 ```
 
-Green-background H.264 MP4 fallback:
-
-```bash
-pnpm animations -- episode.srt --format green
-```
-
-The transparent render settings follow Remotion's [transparent video guidance](https://www.remotion.dev/docs/transparent-videos).
+The transparent optional formats follow Remotion's [transparent video guidance](https://www.remotion.dev/docs/transparent-videos).
 
 ## Review before rendering
 
@@ -108,7 +117,7 @@ This is useful when you want to adjust labels, timing, templates, or selected tr
 ## Options
 
 ```text
---format <prores|webm|green>  Output format (default: prores)
+--format <prores|webm|green>  Output format (default: green)
 --output-dir <path>           Override the output directory
 --model <model>               Override OPENAI_MODEL
 --max-suggestions <number>    Maximum animations (default: 6)
@@ -128,6 +137,8 @@ Generated files are not replaced unless `--force` is explicitly supplied.
 - `callout` — definitions, concepts, and important statistics
 
 The reusable template implementation lives in `src/remotion/`. OpenAI selects and fills these templates; it does not generate arbitrary React or animation code.
+
+Animation pacing is computed from each clip's `durationMs`, which comes from the selected subtitle cue range. Brand badges are inferred deterministically from the generated item labels.
 
 ## Development checks
 

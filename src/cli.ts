@@ -26,7 +26,7 @@ Usage:
   youtube-animations --render-plan <animation-plan.json> [options]
 
 Options:
-  --format <prores|webm|green>  Output format (default: prores)
+  --format <prores|webm|green>  Output format (default: green)
   --output-dir <path>           Output directory (default: animations/ beside subtitles)
   --model <model>               OpenAI model (default: OPENAI_MODEL or gpt-5.6)
   --max-suggestions <number>    Maximum animations to generate (default: 6)
@@ -39,7 +39,7 @@ Options:
 
 Examples:
   youtube-animations /videos/episode-12.srt
-  youtube-animations episode.vtt --format webm --max-suggestions 4
+  youtube-animations episode.vtt --format prores --max-suggestions 4
   youtube-animations --render-plan animations/episode.animation-plan.json
 `;
 
@@ -99,7 +99,7 @@ const main = async () => {
     strict: true,
     options: {
       force: {type: 'boolean', default: false},
-      format: {type: 'string', default: 'prores'},
+      format: {type: 'string', default: 'green'},
       fps: {type: 'string'},
       help: {type: 'boolean', default: false},
       'max-suggestions': {type: 'string'},
