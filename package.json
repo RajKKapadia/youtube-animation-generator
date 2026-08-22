@@ -1,0 +1,37 @@
+{
+  "name": "youtube-animations",
+  "version": "0.1.0",
+  "description": "Generate editor-ready animation clips from subtitle files.",
+  "private": true,
+  "bin": {
+    "youtube-animations": "./dist/cli.js"
+  },
+  "scripts": {
+    "animations": "tsx src/cli.ts",
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "packageManager": "pnpm@11.22.0",
+  "type": "module",
+  "dependencies": {
+    "@remotion/bundler": "4.0.515",
+    "@remotion/renderer": "4.0.515",
+    "openai": "7.5.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "remotion": "4.0.515",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "sourceSubtitle": "/tmp/youtube-animations-sample.srt",
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "model": "fixture",
+  "clips": [
+    {
+      "id": "animation-01",
+      "startCue": 1,
+      "endCue": 3,
+      "sourceStartMs": 1000,
+      "sourceEndMs": 5000,
+      "durationMs": 4000,
+      "template": "process-flow",
+      "title": "Request Processing",
+      "primaryItems": ["Client", "API", "Queue", "Worker", "Database"],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Shows a technical process.",
+      "transcript": "The client calls the API, which queues work for a worker and stores the result."
+    }
+  ]
+}
