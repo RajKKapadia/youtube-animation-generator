@@ -3,16 +3,11 @@ import {technologyIconKindFor} from './technology.js';
 
 describe('technologyIconKindFor', () => {
   it.each([
-    ['Receive YouTube URL', 'youtube'],
-    ['docker compose up --build', 'docker'],
-    ['Run Python worker', 'python'],
-    ['Save metadata to PostgreSQL', 'postgresql'],
-    ['Queue background job in Redis', 'redis'],
-    ['Start Qdrant', 'qdrant'],
-    ['Run FastAPI application', 'fastapi'],
-    ['Convert video to audio', 'ffmpeg'],
     ['Generate answer with LLM', 'ai'],
     ['Retrieve relevant information', 'search'],
+    ['Deploy service to AWS', 'cloud'],
+    ['Start the container service', 'server'],
+    ['Open the frontend UI', 'web'],
   ] as const)('matches %s to the %s visual', (label, expected) => {
     expect(technologyIconKindFor(label)).toBe(expected);
   });

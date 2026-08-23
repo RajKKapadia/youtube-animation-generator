@@ -1,36 +1,33 @@
-import type {ReactNode} from 'react';
-import type {SimpleIcon} from 'simple-icons';
-import {
-  siCelery,
-  siDocker,
-  siFastapi,
-  siFfmpeg,
-  siLangchain,
-  siLanggraph,
-  siPostgresql,
-  siPython,
-  siQdrant,
-  siRedis,
-  siYoutube,
-} from 'simple-icons';
+import {createContext, useContext, type ReactNode} from 'react';
+import type {TechnologyBrandIcon} from '../types.js';
 import {
   technologyIconKindFor,
   type TechnologyIconKind,
 } from './technology.js';
 
-const BRAND_ICONS: Partial<Record<TechnologyIconKind, SimpleIcon>> = {
-  celery: siCelery,
-  docker: siDocker,
-  fastapi: siFastapi,
-  ffmpeg: siFfmpeg,
-  langchain: siLangchain,
-  langgraph: siLanggraph,
-  postgresql: siPostgresql,
-  python: siPython,
-  qdrant: siQdrant,
-  redis: siRedis,
-  youtube: siYoutube,
+const TechnologyIconsContext = createContext<Record<string, TechnologyBrandIcon>>({});
+
+const usesDarkBadgeBackground = (icon: TechnologyBrandIcon | undefined): boolean => {
+  if (!icon) {
+    return false;
+  }
+  const red = Number.parseInt(icon.hex.slice(0, 2), 16);
+  const green = Number.parseInt(icon.hex.slice(2, 4), 16);
+  const blue = Number.parseInt(icon.hex.slice(4, 6), 16);
+  return (red * 299 + green * 587 + blue * 114) / 1_000 >= 200;
 };
+
+export const TechnologyIconsProvider = ({
+  children,
+  icons,
+}: {
+  children: ReactNode;
+  icons: Record<string, TechnologyBrandIcon>;
+}) => (
+  <TechnologyIconsContext.Provider value={icons}>
+    {children}
+  </TechnologyIconsContext.Provider>
+);
 
 const GenericGlyph = ({kind}: {kind: TechnologyIconKind}) => {
   const glyph = (() => {
@@ -52,6 +49,16 @@ const GenericGlyph = ({kind}: {kind: TechnologyIconKind}) => {
         );
       case 'audio':
         return <path d="M3 13h3l2-6 3 11 3-14 3 9h4" />;
+      case 'cloud':
+        return <path d="M6 18h12a4 4 0 0 0 .4-8A6.5 6.5 0 0 0 6 8.5 4.8 4.8 0 0 0 6 18Z" />;
+      case 'code':
+        return (
+          <>
+            <path d="m8 7-5 5 5 5" />
+            <path d="m16 7 5 5-5 5" />
+            <path d="m14 4-4 16" />
+          </>
+        );
       case 'database':
         return (
           <>
@@ -75,6 +82,14 @@ const GenericGlyph = ({kind}: {kind: TechnologyIconKind}) => {
             <path d="m15.5 15.5 5 5" />
           </>
         );
+      case 'server':
+        return (
+          <>
+            <rect height="7" rx="2" width="18" x="3" y="3" />
+            <rect height="7" rx="2" width="18" x="3" y="14" />
+            <path d="M7 6.5h.01M7 17.5h.01M11 6.5h7M11 17.5h7" />
+          </>
+        );
       case 'video':
         return (
           <>
@@ -87,6 +102,13 @@ const GenericGlyph = ({kind}: {kind: TechnologyIconKind}) => {
           <>
             <circle cx="12" cy="12" r="3" />
             <path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2" />
+          </>
+        );
+      case 'web':
+        return (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9S14.5 18.5 12 21M12 3C9.5 5.5 8.2 8.5 8.2 12S9.5 18.5 12 21" />
           </>
         );
       default:
@@ -119,14 +141,18 @@ const GenericGlyph = ({kind}: {kind: TechnologyIconKind}) => {
 };
 
 export const TechnologyBadge = ({label, size = 52}: {label: string; size?: number}) => {
+  const icons = useContext(TechnologyIconsContext);
   const kind = technologyIconKindFor(label);
-  const icon = BRAND_ICONS[kind];
+  const icon = icons[label];
+  const darkBackground = usesDarkBadgeBackground(icon);
 
   return (
     <div
       style={{
         alignItems: 'center',
-        background: 'rgba(248, 250, 252, 0.98)',
+        background: darkBackground
+          ? 'rgba(15, 23, 42, 0.98)'
+          : 'rgba(248, 250, 252, 0.98)',
         border: '2px solid rgba(255, 255, 255, 0.72)',
         borderRadius: Math.round(size * 0.28),
         boxShadow: '0 8px 20px rgba(2, 6, 23, 0.32)',

@@ -30,7 +30,8 @@ Each clip automatically:
 - uses a dual-contrast title treatment that stays legible over light or dark footage
 - measures and fits titles and labels into their available boxes without truncating the text
 - reveals each part at a scheduled beat using a short fixed transition, then holds until the next beat
-- adds matching technology badges for labels such as Docker, Python, PostgreSQL, Redis, FastAPI, Qdrant, YouTube, and FFmpeg
+- resolves technology badges from the full installed Simple Icons catalog, with aliases for common names such as `k8s`, `pgvector`, and `NodeJS`
+- falls back to semantic icons for concepts such as APIs, queues, databases, cloud services, search, audio, video, and workers when no brand icon exists
 
 Existing saved plans gain these enhancements when re-rendered; no new OpenAI request is required.
 
@@ -139,6 +140,8 @@ Generated files are not replaced unless `--force` is explicitly supplied.
 The reusable template implementation lives in `src/remotion/`. OpenAI selects and fills these templates; it does not generate arbitrary React or animation code.
 
 Animation pacing is computed from each clip's `durationMs`, which comes from the selected subtitle cue range. Brand badges are inferred deterministically from the generated item labels.
+
+Technology matching does not require a hard-coded entry for every supported brand. Before rendering, the CLI searches the installed Simple Icons catalog by normalized brand title and passes only the matched SVG data into Remotion. This keeps the Remotion bundle small while allowing new catalog technologies to work without renderer changes. A short alias list covers common names that differ from official icon titles.
 
 ## Development checks
 

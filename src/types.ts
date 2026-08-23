@@ -60,10 +60,20 @@ export type SavedPlan = z.infer<typeof savedPlanSchema>;
 export const renderBackgroundSchema = z.enum(['transparent', 'green']);
 export type RenderBackground = z.infer<typeof renderBackgroundSchema>;
 
+export const technologyBrandIconSchema = z.object({
+  title: z.string().min(1),
+  slug: z.string().min(1),
+  path: z.string().min(1),
+  hex: z.string().regex(/^[0-9A-F]{6}$/i),
+});
+
+export type TechnologyBrandIcon = z.infer<typeof technologyBrandIconSchema>;
+
 export const renderInputSchema = z.object({
   clip: animationClipSchema,
   background: renderBackgroundSchema,
   fps: z.number().int().positive(),
+  technologyIcons: z.record(z.string(), technologyBrandIconSchema).default({}),
 });
 
 export type RenderInput = z.infer<typeof renderInputSchema>;

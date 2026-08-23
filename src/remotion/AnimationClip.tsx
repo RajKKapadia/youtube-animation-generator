@@ -8,7 +8,10 @@ import {
 } from 'remotion';
 import type {AnimationClip as AnimationClipSpec, RenderInput} from '../types.js';
 import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
-import {TechnologyBadge} from './TechnologyBadge.js';
+import {
+  TechnologyBadge,
+  TechnologyIconsProvider,
+} from './TechnologyBadge.js';
 import {
   createConnectionWindow,
   createRevealSchedule,
@@ -608,7 +611,7 @@ const CalloutItem = ({delay, item}: {delay: number; item: string}) => {
   );
 };
 
-export const AnimationClip = ({background, clip}: RenderInput) => {
+export const AnimationClip = ({background, clip, technologyIcons}: RenderInput) => {
   const content = (() => {
     switch (clip.template) {
       case 'process-flow':
@@ -628,7 +631,9 @@ export const AnimationClip = ({background, clip}: RenderInput) => {
         backgroundColor: background === 'green' ? '#00FF00' : 'transparent',
       }}
     >
-      {content}
+      <TechnologyIconsProvider icons={technologyIcons}>
+        {content}
+      </TechnologyIconsProvider>
     </AbsoluteFill>
   );
 };

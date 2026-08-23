@@ -7,6 +7,7 @@ import {renderInputSchema} from '../types.js';
 const defaultProps: RenderInput = {
   background: 'transparent',
   fps: 30,
+  technologyIcons: {},
   clip: {
     id: 'preview',
     startCue: 1,

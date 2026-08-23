@@ -9,6 +9,7 @@ import type {
   ManifestClip,
   OutputFormat,
   RenderBackground,
+  TechnologyBrandIcon,
 } from './types.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -72,6 +73,7 @@ const renderOne = async ({
   fps,
   outputPath,
   serveUrl,
+  technologyIcons,
 }: {
   background: RenderBackground;
   clip: AnimationClip;
@@ -80,8 +82,9 @@ const renderOne = async ({
   fps: number;
   outputPath: string;
   serveUrl: string;
+  technologyIcons: Record<string, TechnologyBrandIcon>;
 }): Promise<void> => {
-  const inputProps = {background, clip, fps};
+  const inputProps = {background, clip, fps, technologyIcons};
   const browserExecutable = findBrowserExecutable();
   const composition = await selectComposition({
     serveUrl,
@@ -191,6 +194,13 @@ export const renderClips = async (
   });
 
   const background: RenderBackground = options.format === 'green' ? 'green' : 'transparent';
+  const {resolveTechnologyBrandIcons} = await import('./technology-catalog.js');
+  const technologyIcons = resolveTechnologyBrandIcons(
+    options.clips.flatMap((clip) => [
+      ...clip.primaryItems,
+      ...clip.secondaryItems,
+    ]),
+  );
   const manifestClips: ManifestClip[] = [];
 
   for (const [index, output] of outputs.entries()) {
@@ -205,6 +215,7 @@ export const renderClips = async (
       fps: options.fps,
       outputPath: output.outputPath,
       serveUrl,
+      technologyIcons,
     });
     manifestClips.push({...output.clip, file: output.file});
   }
