@@ -1,15 +1,26 @@
 import {AbsoluteFill, Audio, Sequence, staticFile} from 'remotion';
 import type {NarratedRenderInput, VisualClip} from '../types.js';
 import {AnimationClip} from './AnimationClip.js';
+import {
+  captionBottomInset,
+  PhraseCaption,
+  SceneBackdrop,
+} from './NarratedSceneLayer.js';
 
 export const NarratedVideo = ({
   audioFile,
+  backgroundAssets,
+  captions,
   fps,
   plan,
   profile,
+  sceneBackground,
   technologyIcons,
 }: NarratedRenderInput) => (
   <AbsoluteFill style={{backgroundColor: '#020617'}}>
+    {plan.scenes[0] ? (
+      <SceneBackdrop mode="ambient" scene={plan.scenes[0]} />
+    ) : null}
     <Audio src={staticFile(audioFile)} />
     {plan.scenes.map((scene) => {
       const clip: VisualClip = {
@@ -32,13 +43,22 @@ export const NarratedVideo = ({
           key={scene.id}
           name={scene.title}
         >
-          <AnimationClip
-            background="dark"
-            clip={clip}
-            fps={fps}
-            profile={profile}
-            technologyIcons={technologyIcons}
-          />
+          <AbsoluteFill>
+            <SceneBackdrop
+              asset={backgroundAssets[scene.id]}
+              mode={sceneBackground}
+              scene={scene}
+            />
+            <AnimationClip
+              background="transparent"
+              clip={clip}
+              contentBottomInset={captionBottomInset(captions, profile)}
+              fps={fps}
+              profile={profile}
+              technologyIcons={technologyIcons}
+            />
+            <PhraseCaption captions={captions} profile={profile} scene={scene} />
+          </AbsoluteFill>
         </Sequence>
       );
     })}

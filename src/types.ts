@@ -172,9 +172,16 @@ export const savedPlanSchema = z.object({
 
 export type SavedPlan = z.infer<typeof savedPlanSchema>;
 
+export const narrationPhraseSchema = z.object({
+  id: z.string().min(1).max(100),
+  text: z.string().min(1).max(120),
+});
+
+export type NarrationPhrase = z.infer<typeof narrationPhraseSchema>;
+
 export const narrationBeatSchema = z.object({
   id: z.string().min(1).max(80),
-  text: z.string().min(1).max(600),
+  phrases: z.array(narrationPhraseSchema).min(1).max(12),
   primaryItemIndices: z.array(z.number().int().nonnegative()).max(6),
   secondaryItemIndices: z.array(z.number().int().nonnegative()).max(6),
 });
@@ -190,6 +197,17 @@ const addNarrationSceneIssues = (
       code: 'custom',
       message: 'Comparison scenes require secondary items.',
       path: ['secondaryItems'],
+    });
+  }
+
+  const phraseIds = scene.beats.flatMap((beat) =>
+    beat.phrases.map((phrase) => phrase.id),
+  );
+  if (new Set(phraseIds).size !== phraseIds.length) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Narration phrase ids must be unique inside a scene.',
+      path: ['beats'],
     });
   }
 
@@ -214,13 +232,14 @@ const addNarrationSceneIssues = (
 
 export const draftNarrationSceneSchema = visualContentSchema.extend({
   id: z.string().min(1).max(80),
+  backgroundPrompt: z.string().min(1).max(600),
   beats: z.array(narrationBeatSchema).min(1).max(12),
 }).superRefine(addNarrationSceneIssues);
 
 export type DraftNarrationScene = z.infer<typeof draftNarrationSceneSchema>;
 
 export const draftNarratedPlanSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   kind: z.literal('narrated-video'),
   stage: z.literal('draft'),
   sourceText: z.string().min(1),
@@ -243,11 +262,42 @@ export const draftNarratedPlanSchema = z.object({
 
 export type DraftNarratedPlan = z.infer<typeof draftNarratedPlanSchema>;
 
+export const timedNarrationPhraseSchema = narrationPhraseSchema.extend({
+  startMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().positive(),
+  sampleCount: z.number().int().positive(),
+});
+
+export type TimedNarrationPhrase = z.infer<typeof timedNarrationPhraseSchema>;
+
 export const timedNarrationBeatSchema = narrationBeatSchema.extend({
+  phrases: z.array(timedNarrationPhraseSchema).min(1).max(12),
   startMs: z.number().int().nonnegative(),
   durationMs: z.number().int().positive(),
   audioFile: z.string().min(1),
   sampleCount: z.number().int().positive(),
+}).superRefine((beat, context) => {
+  let previousPhraseEnd = beat.startMs;
+  for (const [phraseIndex, phrase] of beat.phrases.entries()) {
+    if (
+      phrase.startMs < beat.startMs ||
+      phrase.startMs + phrase.durationMs > beat.startMs + beat.durationMs
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Phrase timing must fall inside its narration beat.',
+        path: ['phrases', phraseIndex],
+      });
+    }
+    if (phrase.startMs < previousPhraseEnd) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Phrase timings must be chronological and non-overlapping.',
+        path: ['phrases', phraseIndex, 'startMs'],
+      });
+    }
+    previousPhraseEnd = phrase.startMs + phrase.durationMs;
+  }
 });
 
 export const anchoredItemTimingSchema = visualItemTimingSchema.extend({
@@ -256,6 +306,7 @@ export const anchoredItemTimingSchema = visualItemTimingSchema.extend({
 
 export const timedNarrationSceneSchema = visualContentSchema.extend({
   id: z.string().min(1).max(80),
+  backgroundPrompt: z.string().min(1).max(600),
   startMs: z.number().int().nonnegative(),
   durationMs: z.number().int().positive(),
   beats: z.array(timedNarrationBeatSchema).min(1).max(12),
@@ -306,7 +357,7 @@ export const timedNarrationSceneSchema = visualContentSchema.extend({
 export type TimedNarrationScene = z.infer<typeof timedNarrationSceneSchema>;
 
 export const timedNarratedPlanSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   kind: z.literal('narrated-video'),
   stage: z.literal('timed'),
   sourceText: z.string().min(1),
@@ -351,15 +402,128 @@ export const timedNarratedPlanSchema = z.object({
 
 export type TimedNarratedPlan = z.infer<typeof timedNarratedPlanSchema>;
 
-export const narratedPlanSchema = z.discriminatedUnion('stage', [
+const legacyNarrationBeatSchema = z.object({
+  id: z.string().min(1).max(80),
+  text: z.string().min(1).max(600),
+  primaryItemIndices: z.array(z.number().int().nonnegative()).max(6),
+  secondaryItemIndices: z.array(z.number().int().nonnegative()).max(6),
+});
+
+const legacyDraftNarrationSceneSchema = visualContentSchema.extend({
+  id: z.string().min(1).max(80),
+  beats: z.array(legacyNarrationBeatSchema).min(1).max(12),
+});
+
+const legacyDraftNarratedPlanSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal('narrated-video'),
+  stage: z.literal('draft'),
+  sourceText: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  targetDurationSeconds: z.number().positive(),
+  language: z.string().min(1),
+  title: z.string().min(1).max(100),
+  scenes: z.array(legacyDraftNarrationSceneSchema).min(1).max(6),
+});
+
+const legacyTimedNarrationBeatSchema = legacyNarrationBeatSchema.extend({
+  startMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().positive(),
+  audioFile: z.string().min(1),
+  sampleCount: z.number().int().positive(),
+});
+
+const legacyTimedNarrationSceneSchema = visualContentSchema.extend({
+  id: z.string().min(1).max(80),
+  startMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().positive(),
+  beats: z.array(legacyTimedNarrationBeatSchema).min(1).max(12),
+  primaryItemTimings: z.array(anchoredItemTimingSchema).max(6),
+  secondaryItemTimings: z.array(anchoredItemTimingSchema).max(6),
+});
+
+const legacyTimedNarratedPlanSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal('narrated-video'),
+  stage: z.literal('timed'),
+  sourceText: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  targetDurationSeconds: z.number().positive(),
+  language: z.string().min(1),
+  title: z.string().min(1).max(100),
+  sampleRate: z.number().int().positive(),
+  voice: z.string().min(1),
+  ttsSpeed: z.number().positive(),
+  ttsSteps: z.number().int().positive(),
+  voiceoverFile: z.string().min(1),
+  durationMs: z.number().int().positive(),
+  totalSamples: z.number().int().positive(),
+  scenes: z.array(legacyTimedNarrationSceneSchema).min(1).max(6),
+});
+
+export const defaultSceneBackgroundPrompt = (scene: VisualContent): string =>
+  `Abstract technical atmosphere for ${scene.title}. ${scene.reason}`.slice(0, 600);
+
+const legacyPhraseId = (beatId: string): string => `${beatId}-phrase-1`;
+
+const normalizeLegacyDraft = (
+  plan: z.infer<typeof legacyDraftNarratedPlanSchema>,
+): DraftNarratedPlan => draftNarratedPlanSchema.parse({
+  ...plan,
+  version: 2,
+  scenes: plan.scenes.map((scene) => ({
+    ...scene,
+    backgroundPrompt: defaultSceneBackgroundPrompt(scene),
+    beats: scene.beats.map(({text, ...beat}) => ({
+      ...beat,
+      phrases: [{id: legacyPhraseId(beat.id), text}],
+    })),
+  })),
+});
+
+const normalizeLegacyTimed = (
+  plan: z.infer<typeof legacyTimedNarratedPlanSchema>,
+): TimedNarratedPlan => timedNarratedPlanSchema.parse({
+  ...plan,
+  version: 2,
+  scenes: plan.scenes.map((scene) => ({
+    ...scene,
+    backgroundPrompt: defaultSceneBackgroundPrompt(scene),
+    beats: scene.beats.map(({text, ...beat}) => ({
+      ...beat,
+      phrases: [{
+        id: legacyPhraseId(beat.id),
+        text,
+        startMs: beat.startMs,
+        durationMs: beat.durationMs,
+        sampleCount: beat.sampleCount,
+      }],
+    })),
+  })),
+});
+
+export const narratedPlanSchema = z.union([
   draftNarratedPlanSchema,
   timedNarratedPlanSchema,
+  legacyDraftNarratedPlanSchema.transform(normalizeLegacyDraft),
+  legacyTimedNarratedPlanSchema.transform(normalizeLegacyTimed),
 ]);
 
 export type NarratedPlan = z.infer<typeof narratedPlanSchema>;
 
 export const renderBackgroundSchema = z.enum(['transparent', 'green', 'dark']);
 export type RenderBackground = z.infer<typeof renderBackgroundSchema>;
+
+export const captionModeSchema = z.enum(['on', 'off']);
+export type CaptionMode = z.infer<typeof captionModeSchema>;
+
+export const sceneBackgroundModeSchema = z.enum(['ambient', 'generated']);
+export type SceneBackgroundMode = z.infer<typeof sceneBackgroundModeSchema>;
+
+export const imageQualitySchema = z.enum(['low', 'medium', 'high']);
+export type ImageQuality = z.infer<typeof imageQualitySchema>;
 
 export const technologyBrandIconSchema = z.object({
   title: z.string().min(1),
@@ -373,6 +537,7 @@ export type TechnologyBrandIcon = z.infer<typeof technologyBrandIconSchema>;
 export const renderInputSchema = z.object({
   clip: visualClipSchema,
   background: renderBackgroundSchema,
+  contentBottomInset: z.number().int().nonnegative().optional(),
   fps: z.number().int().positive(),
   profile: renderProfileSchema,
   technologyIcons: z.record(z.string(), technologyBrandIconSchema).default({}),
@@ -382,6 +547,9 @@ export type RenderInput = z.infer<typeof renderInputSchema>;
 
 export const narratedRenderInputSchema = z.object({
   plan: timedNarratedPlanSchema,
+  captions: captionModeSchema,
+  sceneBackground: sceneBackgroundModeSchema,
+  backgroundAssets: z.record(z.string(), z.string().min(1)).default({}),
   fps: z.number().int().positive(),
   profile: renderProfileSchema,
   audioFile: z.string().min(1),

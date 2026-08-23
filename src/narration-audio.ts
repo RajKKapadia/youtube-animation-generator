@@ -26,6 +26,16 @@ const pathExists = async (filePath: string): Promise<boolean> => {
 const samplesToMilliseconds = (samples: number, sampleRate: number): number =>
   Math.round((samples / sampleRate) * 1_000);
 
+const sampleIntervalToTiming = (
+  startSample: number,
+  sampleCount: number,
+  sampleRate: number,
+) => {
+  const startMs = samplesToMilliseconds(startSample, sampleRate);
+  const endMs = samplesToMilliseconds(startSample + sampleCount, sampleRate);
+  return {startMs, durationMs: Math.max(1, endMs - startMs)};
+};
+
 export const materializeTimedNarration = ({
   audioDirectoryName,
   draft,
@@ -53,19 +63,37 @@ export const materializeTimedNarration = ({
     const beatById = new Map(timing.beats.map((beat) => [beat.id, beat]));
     const timedBeats = scene.beats.map((beat) => {
       const beatTiming = beatById.get(beat.id);
-      if (!beatTiming) {
+      if (!beatTiming || beatTiming.phrases.length !== beat.phrases.length) {
         throw new Error(`Supertonic result is missing beat ${beat.id}.`);
       }
+      const phraseById = new Map(
+        beatTiming.phrases.map((phrase) => [phrase.id, phrase]),
+      );
+      const beatStartSample = beatTiming.startSample - timing.startSample;
+      const beatInterval = sampleIntervalToTiming(
+        beatStartSample,
+        beatTiming.sampleCount,
+        result.sampleRate,
+      );
       return {
         ...beat,
-        startMs: samplesToMilliseconds(
-          beatTiming.startSample - timing.startSample,
-          result.sampleRate,
-        ),
-        durationMs: Math.max(
-          1,
-          samplesToMilliseconds(beatTiming.sampleCount, result.sampleRate),
-        ),
+        phrases: beat.phrases.map((phrase) => {
+          const phraseTiming = phraseById.get(phrase.id);
+          if (!phraseTiming) {
+            throw new Error(`Supertonic result is missing phrase ${phrase.id}.`);
+          }
+          const phraseInterval = sampleIntervalToTiming(
+            phraseTiming.startSample - timing.startSample,
+            phraseTiming.sampleCount,
+            result.sampleRate,
+          );
+          return {
+            ...phrase,
+            ...phraseInterval,
+            sampleCount: phraseTiming.sampleCount,
+          };
+        }),
+        ...beatInterval,
         audioFile: `${audioDirectoryName}/${beatTiming.file}`,
         sampleCount: beatTiming.sampleCount,
       };
@@ -91,8 +119,14 @@ export const materializeTimedNarration = ({
       };
     });
 
+    const sceneInterval = sampleIntervalToTiming(
+      timing.startSample,
+      timing.sampleCount,
+      result.sampleRate,
+    );
     return {
       id: scene.id,
+      backgroundPrompt: scene.backgroundPrompt,
       template: scene.template,
       title: scene.title,
       primaryItems: scene.primaryItems,
@@ -100,11 +134,7 @@ export const materializeTimedNarration = ({
       leftLabel: scene.leftLabel,
       rightLabel: scene.rightLabel,
       reason: scene.reason,
-      startMs: samplesToMilliseconds(timing.startSample, result.sampleRate),
-      durationMs: Math.max(
-        1,
-        samplesToMilliseconds(timing.sampleCount, result.sampleRate),
-      ),
+      ...sceneInterval,
       beats: timedBeats,
       primaryItemTimings: itemTimings(
         'primaryItemIndices',
@@ -174,7 +204,13 @@ export const synthesizeNarration = async (
       steps: options.steps,
       scenes: options.draft.scenes.map((scene) => ({
         id: scene.id,
-        beats: scene.beats.map((beat) => ({id: beat.id, text: beat.text})),
+        beats: scene.beats.map((beat) => ({
+          id: beat.id,
+          phrases: beat.phrases.map((phrase) => ({
+            id: phrase.id,
+            text: phrase.text,
+          })),
+        })),
       })),
     });
     const timed = materializeTimedNarration({

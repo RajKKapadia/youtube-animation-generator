@@ -40,6 +40,7 @@ const clamp = {
 const RenderProfileContext = createContext<RenderProfile>(
   RENDER_PROFILES['16:9'],
 );
+const ContentBottomInsetContext = createContext(0);
 
 const useClipOpacity = (): number => {
   const frame = useCurrentFrame();
@@ -98,6 +99,7 @@ const ClipCanvas = ({children}: {children: ReactNode}) => {
   const {height, width} = useVideoConfig();
   const vertical = isVerticalDimensions(width, height);
   const profile = useContext(RenderProfileContext);
+  const contentBottomInset = useContext(ContentBottomInsetContext);
   return (
     <AbsoluteFill
       style={{
@@ -108,8 +110,8 @@ const ClipCanvas = ({children}: {children: ReactNode}) => {
         opacity,
         boxSizing: 'border-box',
         padding: vertical
-          ? `${profile.safeArea.top}px ${profile.safeArea.right}px ${profile.safeArea.bottom}px ${profile.safeArea.left}px`
-          : 0,
+          ? `${profile.safeArea.top}px ${profile.safeArea.right}px ${profile.safeArea.bottom + contentBottomInset}px ${profile.safeArea.left}px`
+          : `0 0 ${contentBottomInset}px`,
       }}
     >
       {children}
@@ -170,10 +172,10 @@ const NodeCard = ({
         boxShadow: '0 24px 55px rgba(0,0,0,0.36)',
         color: COLORS.ink,
         display: 'flex',
-        height: vertical ? 142 : 204,
+        height: vertical ? 150 : 216,
         justifyContent: 'center',
         opacity: entrance,
-        padding: vertical ? '24px 32px 16px 96px' : '34px 18px 14px',
+        padding: vertical ? '24px 32px 16px 116px' : '42px 18px 14px',
         position: 'relative',
         textAlign: vertical ? 'left' : 'center',
         transform: `scale(${0.84 + entrance * 0.16})`,
@@ -182,13 +184,13 @@ const NodeCard = ({
     >
       <div
         style={{
-          left: vertical ? 34 : '50%',
+          left: vertical ? 32 : '50%',
           position: 'absolute',
-          top: vertical ? '50%' : -27,
+          top: vertical ? '50%' : -34,
           transform: vertical ? 'translateY(-50%)' : 'translateX(-50%)',
         }}
       >
-        <TechnologyBadge label={label} size={54} />
+        <TechnologyBadge label={label} size={vertical ? 66 : 68} />
       </div>
       <FittedText
         fontWeight={750}
@@ -197,7 +199,7 @@ const NodeCard = ({
         maxFontSize={vertical ? 36 : 29}
         maxHeight={vertical ? 106 : 145}
         maxLines={vertical ? 3 : 5}
-        maxWidth={vertical ? 580 : 194}
+        maxWidth={vertical ? 552 : 194}
         text={label}
       />
     </div>
@@ -461,7 +463,10 @@ const ComparisonItem = ({
         transform: `translateY(${(1 - entrance) * 18}px)`,
       }}
     >
-      <TechnologyBadge label={item} size={vertical ? 36 : 42} />
+      <TechnologyBadge
+        label={item}
+        size={compact ? 44 : vertical ? 52 : 54}
+      />
       <FittedText
         align="left"
         fontWeight={600}
@@ -727,7 +732,7 @@ const TimelineItem = ({
             width: 382,
           }}
         >
-          <TechnologyBadge label={item} size={40} />
+          <TechnologyBadge label={item} size={56} />
           <FittedText
             align="left"
             fontWeight={700}
@@ -789,7 +794,7 @@ const TimelineItem = ({
           width: 250,
         }}
       >
-        <TechnologyBadge label={item} size={46} />
+        <TechnologyBadge label={item} size={60} />
         <FittedText
           fontWeight={700}
           lineHeight={1.18}
@@ -898,7 +903,7 @@ const CalloutItem = ({
         transform: `translateY(${(1 - entrance) * 20}px)`,
       }}
     >
-      <TechnologyBadge label={item} size={vertical ? 50 : 44} />
+      <TechnologyBadge label={item} size={vertical ? 62 : 56} />
       <FittedText
         fontWeight={600}
         lineHeight={1.2}
@@ -917,6 +922,7 @@ const CalloutItem = ({
 export const AnimationClip = ({
   background,
   clip,
+  contentBottomInset = 0,
   profile,
   technologyIcons,
 }: RenderInput) => {
@@ -945,9 +951,11 @@ export const AnimationClip = ({
       }}
     >
       <RenderProfileContext.Provider value={profile}>
-        <TechnologyIconsProvider icons={technologyIcons}>
-          {content}
-        </TechnologyIconsProvider>
+        <ContentBottomInsetContext.Provider value={contentBottomInset}>
+          <TechnologyIconsProvider icons={technologyIcons}>
+            {content}
+          </TechnologyIconsProvider>
+        </ContentBottomInsetContext.Provider>
       </RenderProfileContext.Provider>
     </AbsoluteFill>
   );

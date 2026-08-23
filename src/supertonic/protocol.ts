@@ -32,7 +32,12 @@ export const supertonicJobSchema = z.object({
     z.object({
       id: z.string().min(1),
       beats: z.array(
-        z.object({id: z.string().min(1), text: z.string().min(1)}),
+        z.object({
+          id: z.string().min(1),
+          phrases: z.array(
+            z.object({id: z.string().min(1), text: z.string().min(1)}),
+          ).min(1).max(12),
+        }),
       ).min(1),
     }),
   ).min(1).max(6),
@@ -55,6 +60,13 @@ export const supertonicResultSchema = z.object({
           file: z.string().min(1),
           startSample: z.number().int().nonnegative(),
           sampleCount: z.number().int().positive(),
+          phrases: z.array(
+            z.object({
+              id: z.string().min(1),
+              startSample: z.number().int().nonnegative(),
+              sampleCount: z.number().int().positive(),
+            }),
+          ).min(1).max(12),
         }),
       ),
     }),

@@ -8,9 +8,12 @@ import {renderMedia, selectComposition} from '@remotion/renderer';
 import {aspectSuffix, profilesForSelection} from './render-profile.js';
 import type {
   AspectRatioSelection,
+  CaptionMode,
   RenderProfile,
+  SceneBackgroundMode,
   TimedNarratedPlan,
 } from './types.js';
+import type {SceneBackgroundAssets} from './scene-backgrounds.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -42,10 +45,13 @@ export interface NarratedOutput {
 
 export interface RenderNarratedVideoOptions {
   aspectRatio: AspectRatioSelection;
+  backgroundAssets?: SceneBackgroundAssets | undefined;
+  captions: CaptionMode;
   force: boolean;
   fps: number;
   outputDirectory: string;
   plan: TimedNarratedPlan;
+  sceneBackground: SceneBackgroundMode;
   stem: string;
   voiceoverBaseDirectory?: string;
 }
@@ -83,6 +89,22 @@ export const renderNarratedVideo = async (
   try {
     const publicAudioName = basename(voiceoverPath);
     await copyFile(voiceoverPath, resolve(publicDirectory, publicAudioName));
+    const publicBackgroundAssets: SceneBackgroundAssets = {'16:9': {}, '9:16': {}};
+    if (options.sceneBackground === 'generated') {
+      for (const output of outputs) {
+        for (const scene of options.plan.scenes) {
+          const asset = options.backgroundAssets?.[output.profile.aspectRatio]?.[scene.id];
+          if (!asset || !existsSync(asset)) {
+            throw new Error(
+              `Generated background does not exist for ${scene.id} (${output.profile.aspectRatio}).`,
+            );
+          }
+          const publicName = basename(asset);
+          await copyFile(asset, resolve(publicDirectory, publicName));
+          publicBackgroundAssets[output.profile.aspectRatio][scene.id] = publicName;
+        }
+      }
+    }
     console.log('Bundling narrated-video templates...');
     const serveUrl = await bundle({
       entryPoint: findEntryPoint(),
@@ -110,6 +132,9 @@ export const renderNarratedVideo = async (
     for (const [index, output] of outputs.entries()) {
       const inputProps = {
         plan: options.plan,
+        captions: options.captions,
+        sceneBackground: options.sceneBackground,
+        backgroundAssets: publicBackgroundAssets[output.profile.aspectRatio],
         fps: options.fps,
         profile: output.profile,
         audioFile: publicAudioName,

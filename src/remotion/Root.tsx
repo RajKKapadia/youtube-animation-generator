@@ -44,11 +44,13 @@ const calculateMetadata: CalculateMetadataFunction<RenderInput> = async ({props}
 
 const defaultNarratedProps: NarratedRenderInput = {
   audioFile: 'voiceover.wav',
+  backgroundAssets: {},
+  captions: 'on',
   fps: 30,
   profile: RENDER_PROFILES['16:9'],
   technologyIcons: {},
   plan: {
-    version: 1,
+    version: 2,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText: 'A request moves through a queue.',
@@ -66,6 +68,7 @@ const defaultNarratedProps: NarratedRenderInput = {
     totalSamples: 264_600,
     scenes: [{
       id: 'request-flow',
+      backgroundPrompt: 'Abstract request pipeline with flowing cyan data trails.',
       startMs: 0,
       durationMs: 6_000,
       template: 'process-flow',
@@ -78,7 +81,13 @@ const defaultNarratedProps: NarratedRenderInput = {
       beats: [
         {
           id: 'request',
-          text: 'A client submits a request.',
+          phrases: [{
+            id: 'request-phrase-1',
+            text: 'A client submits a request.',
+            startMs: 300,
+            durationMs: 2_000,
+            sampleCount: 88_200,
+          }],
           primaryItemIndices: [0, 1],
           secondaryItemIndices: [],
           startMs: 300,
@@ -88,7 +97,13 @@ const defaultNarratedProps: NarratedRenderInput = {
         },
         {
           id: 'worker',
-          text: 'A worker processes it.',
+          phrases: [{
+            id: 'worker-phrase-1',
+            text: 'A worker processes it.',
+            startMs: 2_450,
+            durationMs: 2_000,
+            sampleCount: 88_200,
+          }],
           primaryItemIndices: [2],
           secondaryItemIndices: [],
           startMs: 2_450,
@@ -105,6 +120,7 @@ const defaultNarratedProps: NarratedRenderInput = {
       secondaryItemTimings: [],
     }],
   },
+  sceneBackground: 'ambient',
 };
 
 const calculateNarratedMetadata: CalculateMetadataFunction<NarratedRenderInput> = async ({props}) => {

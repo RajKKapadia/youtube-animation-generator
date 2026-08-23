@@ -56,6 +56,10 @@ describe('narrated CLI plan-only path', () => {
         '--plan-only',
         '--aspect-ratio',
         aspectRatio,
+        '--scene-background',
+        'generated',
+        '--captions',
+        'off',
       ],
     );
     expect(log).toHaveBeenCalledWith(
@@ -68,5 +72,28 @@ describe('narrated CLI plan-only path', () => {
     await expect(
       runCli(['create', 'missing.md', '--aspect-ratio', 'square']),
     ).rejects.toThrow('--aspect-ratio must be one of');
+  });
+
+  it('validates narrated visual options and keeps them out of overlay workflows', async () => {
+    await expect(
+      runCli(['create', 'missing.md', '--captions', 'sometimes']),
+    ).rejects.toThrow('--captions must be one of: on, off');
+    await expect(
+      runCli(['create', 'missing.md', '--regenerate-backgrounds']),
+    ).rejects.toThrow('--regenerate-backgrounds requires');
+    await expect(
+      runCli(['missing.srt', '--scene-background', 'generated']),
+    ).rejects.toThrow('Narrated visual options cannot be used with subtitle overlays');
+  });
+
+  it('documents the v0.3 narrated visual defaults', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    await runCli(['--help']);
+    const output = String(log.mock.calls[0]?.[0]);
+    expect(output).toContain('youtube-animations 0.3.0');
+    expect(output).toContain('--captions <on|off>');
+    expect(output).toContain('--scene-background <mode>');
+    expect(output).toContain('--image-quality <quality>');
+    log.mockRestore();
   });
 });

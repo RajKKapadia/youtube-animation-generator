@@ -34,6 +34,7 @@ const IGNORED_TITLES = new Set([
   'go',
   'lg',
   'matter',
+  'make',
   'next',
   'node',
   'process',

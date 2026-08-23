@@ -6,7 +6,7 @@ import {materializeTimedNarration, synthesizeNarration} from './narration-audio.
 import {draftNarratedPlanSchema, timedNarratedPlanSchema} from './types.js';
 
 const draft = draftNarratedPlanSchema.parse({
-  version: 1,
+  version: 2,
   kind: 'narrated-video',
   stage: 'draft',
   sourceText: 'A then B.',
@@ -17,6 +17,7 @@ const draft = draftNarratedPlanSchema.parse({
   title: 'Flow',
   scenes: [{
     id: 'flow',
+    backgroundPrompt: 'Abstract A to B flow.',
     template: 'process-flow',
     title: 'A to B',
     primaryItems: ['A', 'B'],
@@ -25,8 +26,21 @@ const draft = draftNarratedPlanSchema.parse({
     rightLabel: '',
     reason: 'Flow',
     beats: [
-      {id: 'a', text: 'A starts.', primaryItemIndices: [0], secondaryItemIndices: []},
-      {id: 'b', text: 'Then B.', primaryItemIndices: [1], secondaryItemIndices: []},
+      {
+        id: 'a',
+        phrases: [{id: 'a-starts', text: 'A starts.'}],
+        primaryItemIndices: [0],
+        secondaryItemIndices: [],
+      },
+      {
+        id: 'b',
+        phrases: [
+          {id: 'then', text: 'Then'},
+          {id: 'b-finishes', text: 'B finishes.'},
+        ],
+        primaryItemIndices: [1],
+        secondaryItemIndices: [],
+      },
     ],
   }],
 });
@@ -71,8 +85,23 @@ describe('materializeTimedNarration', () => {
           startSample: 0,
           sampleCount: 1_500,
           beats: [
-            {id: 'a', file: 'beats/a.wav', startSample: 300, sampleCount: 400},
-            {id: 'b', file: 'beats/b.wav', startSample: 850, sampleCount: 350},
+            {
+              id: 'a',
+              file: 'beats/a.wav',
+              startSample: 300,
+              sampleCount: 400,
+              phrases: [{id: 'a-starts', startSample: 300, sampleCount: 400}],
+            },
+            {
+              id: 'b',
+              file: 'beats/b.wav',
+              startSample: 850,
+              sampleCount: 350,
+              phrases: [
+                {id: 'then', startSample: 850, sampleCount: 150},
+                {id: 'b-finishes', startSample: 1_050, sampleCount: 150},
+              ],
+            },
           ],
         }],
       },
@@ -85,6 +114,16 @@ describe('materializeTimedNarration', () => {
     expect(timed.scenes[0]!.primaryItemTimings).toEqual([
       {beatId: 'a', startMs: 300},
       {beatId: 'b', startMs: 850},
+    ]);
+    expect(timed.scenes[0]!.beats[1]!.phrases).toEqual([
+      {id: 'then', text: 'Then', startMs: 850, durationMs: 150, sampleCount: 150},
+      {
+        id: 'b-finishes',
+        text: 'B finishes.',
+        startMs: 1_050,
+        durationMs: 150,
+        sampleCount: 150,
+      },
     ]);
     expect(timed.voiceoverFile).toBe('flow.audio/voiceover.wav');
     expect(() =>
@@ -131,8 +170,23 @@ describe('synthesizeNarration promotion', () => {
             startSample: 0,
             sampleCount: 1_500,
             beats: [
-              {id: 'a', file: 'beats/a.wav', startSample: 300, sampleCount: 400},
-              {id: 'b', file: 'beats/b.wav', startSample: 850, sampleCount: 350},
+              {
+                id: 'a',
+                file: 'beats/a.wav',
+                startSample: 300,
+                sampleCount: 400,
+                phrases: [{id: 'a-starts', startSample: 300, sampleCount: 400}],
+              },
+              {
+                id: 'b',
+                file: 'beats/b.wav',
+                startSample: 850,
+                sampleCount: 350,
+                phrases: [
+                  {id: 'then', startSample: 850, sampleCount: 150},
+                  {id: 'b-finishes', startSample: 1_050, sampleCount: 150},
+                ],
+              },
             ],
           }],
         };

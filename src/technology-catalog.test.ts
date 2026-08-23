@@ -30,6 +30,7 @@ describe('technologyBrandIconFor', () => {
 
   it('does not treat ordinary workflow words as brands', () => {
     expect(technologyBrandIconFor('Generate the answer')).toBeUndefined();
+    expect(technologyBrandIconFor('Make every operation idempotent')).toBeUndefined();
     expect(technologyBrandIconFor('Process the task')).toBeUndefined();
     expect(technologyBrandIconFor('Connect one node to another')).toBeUndefined();
   });

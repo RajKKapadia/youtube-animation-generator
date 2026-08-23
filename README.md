@@ -1,6 +1,6 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos include exact phrase captions and animated ambient scene backgrounds by default.
 
 ## What it creates
 
@@ -23,6 +23,15 @@ Default output:
 │       ├── 001-hook.wav
 │       └── ...
 └── summary.mp4
+```
+
+With generated scene backgrounds, a reusable cache is added beside those files:
+
+```text
+summary-video/summary.backgrounds/
+├── manifest.json
+├── hook-16x9-0de4c0ffee12.jpg
+└── hook-9x16-91a20cafe123.jpg
 ```
 
 With `--aspect-ratio both`, `summary-9x16.mp4` is rendered from the same narration, voiceover, and sample-derived timeline.
@@ -60,6 +69,7 @@ cp .env.example .env
 ```dotenv
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-5.6
+OPENAI_IMAGE_MODEL=gpt-image-2
 ```
 
 Download Supertonic 3 once at the default location:
@@ -88,9 +98,25 @@ pnpm run animations create summary.md --aspect-ratio 9:16
 pnpm run animations create summary.md --aspect-ratio both
 ```
 
-The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. Every visible item is anchored to exactly one semantic narration beat. The complete spoken copy is also saved as `summary.narration-script.md` for review.
+The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. Every visible item is anchored to exactly one semantic narration beat, and every beat contains short ordered subtitle phrases. The complete spoken copy is also saved as `summary.narration-script.md` for review.
 
-Create only the script and draft storyboard—no model assets are required for this step:
+Phrase captions are enabled by default and can be disabled for a clean export:
+
+```bash
+pnpm run animations create summary.md --captions off
+```
+
+The former black canvas is replaced by a deterministic animated ambient background. To generate and cache a separate OpenAI image for every scene and requested orientation:
+
+```bash
+pnpm run animations create summary.md \
+  --aspect-ratio both \
+  --scene-background generated
+```
+
+Generated images use `gpt-image-2` at medium quality by default. Change the model or quality with `--image-model` and `--image-quality`. `--regenerate-backgrounds` refreshes matching cached images; `--force` replaces videos and plans without purchasing new images. All requested images are staged before the cache is promoted, and a failed image request stops before voice synthesis or rendering.
+
+Create only the script and draft storyboard—including editable subtitle phrases and scene background prompts. No voice or image assets are required for this step:
 
 ```bash
 pnpm run animations create summary.md --plan-only
@@ -104,7 +130,7 @@ pnpm run animations create \
   --aspect-ratio both
 ```
 
-A timed plan can also be rendered again without OpenAI or Supertonic:
+A timed plan can also be rendered again without planning or Supertonic. Ambient renders need no OpenAI call; generated renders reuse the cache and request only missing assets:
 
 ```bash
 pnpm run animations create \
@@ -115,13 +141,14 @@ Narrated output is H.264 video with AAC voiceover audio. Planning and TTS happen
 
 ## Exact voice-derived timing
 
-Supertonic returns float PCM and a predicted voiced duration for each beat. The worker trims the waveform to that duration, writes mono 44.1 kHz PCM16 WAV files, and records the exact number of written samples. The combined voiceover adds:
+Supertonic returns float PCM and a predicted voiced duration for each phrase. The worker trims each waveform to that duration, combines phrases into the existing per-beat WAV files, writes mono 44.1 kHz PCM16 audio, and records the exact number of written samples. The combined voiceover adds:
 
 - 300 ms before each scene
+- 50 ms between phrases
 - 150 ms between semantic beats
 - 300 ms after each scene
 
-Scene boundaries and item reveal timestamps are calculated from those integer sample offsets—not estimated from word counts. The aspect-independent timed plan is passed unchanged to both orientations, so their audio and reveal timeline are identical within one render frame.
+Scene boundaries, phrase-caption windows, and item reveal timestamps are calculated from those integer sample offsets—not estimated from word counts. Captions show one active phrase at a time and reserve a safe lower lane in both orientations. The aspect-independent timed plan is passed unchanged to both orientations, so their audio, captions, and reveal timeline are identical within one render frame.
 
 Audio is staged in a temporary directory and promoted only after all beats and the combined voiceover succeed.
 
@@ -184,6 +211,11 @@ Narrated videos:
 --tts-speed <number>              0.7-2.0 (default: 1.05)
 --tts-steps <number>              1-20 (default: 8)
 --target-duration <seconds>       Default: 60
+--captions <on|off>               Default: on
+--scene-background <mode>         ambient or generated; default: ambient
+--image-model <model>             Default: OPENAI_IMAGE_MODEL or gpt-image-2
+--image-quality <quality>         low, medium, or high; default: medium
+--regenerate-backgrounds          Refresh matching cached generated assets
 ```
 
 Every requested output is checked before rendering. Existing generated files are never replaced unless `--force` is supplied.
@@ -195,9 +227,15 @@ Every requested output is checked before rendering. Existing generated files are
 - `timeline` — ordered stages or events
 - `callout` — definitions, concepts, and important statistics
 
-Titles and labels are measured and fitted into their bounds. Technology badges come from the installed Simple Icons catalog, with aliases and semantic fallbacks for concepts such as APIs, queues, databases, search, audio, video, and workers.
+Titles and labels are measured and fitted into their bounds. Larger technology badges come from the installed Simple Icons catalog when a product brand is recognized, then fall back to Lucide icons across authentication, security, users, documents, messaging, email, cache, storage, analytics, monitoring, payments, mobile, networking, webhooks, events, retries, scheduling, transforms, uploads/downloads, errors, and the existing technical concepts.
+
+Narrated plan files are version 2. Version-1 narrated draft and timed plans remain loadable: each legacy beat becomes one timed phrase and receives a deterministic ambient background prompt. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
+
+Ambient backgrounds are generated entirely in Remotion from deterministic gradients, moving light fields, a subtle grid, and a vignette. Generated backgrounds use native `2048×1152` and `1152×2048` JPEG assets, add a slow pan/zoom plus readability overlays, and never silently fall back to ambient when generation was requested.
 
 The OpenAI Responses API uses Zod Structured Outputs with response storage disabled (`store: false`). OpenAI selects and fills these templates; it does not generate arbitrary React code.
+
+Optional scene imagery uses the OpenAI Image API. GPT Image access can depend on account and organization availability; see the [official image-generation guide](https://developers.openai.com/api/docs/guides/image-generation).
 
 ## Supertonic terms and project notice
 
@@ -220,6 +258,13 @@ pnpm fixtures:layouts -- /tmp/youtube-animation-layout-fixtures
 ```
 
 The fixture uses six long primary and secondary items. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping and unsafe positioning.
+
+Render narrated MP4 fixtures with captions in both orientations. The second command uses local mock artwork to exercise the generated-image rendering path without an API call:
+
+```bash
+pnpm fixtures:narrated -- /tmp/youtube-animation-narrated ambient
+pnpm fixtures:narrated -- /tmp/youtube-animation-narrated-generated generated
+```
 
 An offline overlay plan remains available for a full media render:
 

@@ -39,7 +39,13 @@ describe('Supertonic worker JSON jobs', () => {
       language: 'hi',
       speed: 1.05,
       steps: 8,
-      scenes: [{id: 'scene', beats: [{id: 'beat', text: 'नमस्ते'}]}],
+      scenes: [{
+        id: 'scene',
+        beats: [{
+          id: 'beat',
+          phrases: [{id: 'greeting', text: 'नमस्ते'}],
+        }],
+      }],
     })).toMatchObject({voice: 'F5', language: 'hi'});
     expect(() => supertonicJobSchema.parse({
       assetsDirectory: '/models',
@@ -72,8 +78,14 @@ describe('synthesizeJob', () => {
           {
             id: 'scene',
             beats: [
-              {id: 'one', text: 'One'},
-              {id: 'two', text: 'Two'},
+              {
+                id: 'one',
+                phrases: [
+                  {id: 'one-a', text: 'One'},
+                  {id: 'one-b', text: 'again'},
+                ],
+              },
+              {id: 'two', phrases: [{id: 'two-a', text: 'Two'}]},
             ],
           },
         ],
@@ -91,17 +103,28 @@ describe('synthesizeJob', () => {
       },
     );
 
-    expect(calls).toEqual(['One', 'Two']);
+    expect(calls).toEqual(['One', 'again', 'Two']);
     expect(maxActive).toBe(1);
     expect(result.scenes[0]).toMatchObject({
       startSample: 0,
-      sampleCount: 756,
+      sampleCount: 809,
       beats: [
-        {startSample: 300, sampleCount: 3},
-        {startSample: 453, sampleCount: 3},
+        {
+          startSample: 300,
+          sampleCount: 56,
+          phrases: [
+            {id: 'one-a', startSample: 300, sampleCount: 3},
+            {id: 'one-b', startSample: 353, sampleCount: 3},
+          ],
+        },
+        {
+          startSample: 506,
+          sampleCount: 3,
+          phrases: [{id: 'two-a', startSample: 506, sampleCount: 3}],
+        },
       ],
     });
-    expect(result.totalSamples).toBe(756);
+    expect(result.totalSamples).toBe(809);
     const voiceover = await readFile(resolve(directory, 'voiceover.wav'));
     expect(voiceover.readUInt32LE(40)).toBe(result.totalSamples * 2);
   });
@@ -119,7 +142,13 @@ describe('synthesizeJob', () => {
           language: 'en',
           speed: 1.05,
           steps: 8,
-          scenes: [{id: 'scene', beats: [{id: 'one', text: 'One'}, {id: 'two', text: 'Two'}]}],
+          scenes: [{
+            id: 'scene',
+            beats: [
+              {id: 'one', phrases: [{id: 'one-a', text: 'One'}]},
+              {id: 'two', phrases: [{id: 'two-a', text: 'Two'}]},
+            ],
+          }],
         },
         {
           sampleRate: 1_000,
