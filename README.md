@@ -29,7 +29,7 @@ Each clip automatically:
 
 - uses a dual-contrast title treatment that stays legible over light or dark footage
 - measures and fits titles and labels into their available boxes without truncating the text
-- reveals each part at a scheduled beat using a short fixed transition, then holds until the next beat
+- reveals each part when its concept is spoken, using subtitle-cue anchors and a short fixed transition
 - resolves technology badges from the full installed Simple Icons catalog, with aliases for common names such as `k8s`, `pgvector`, and `NodeJS`
 - falls back to semantic icons for concepts such as APIs, queues, databases, cloud services, search, audio, video, and workers when no brand icon exists
 
@@ -113,7 +113,7 @@ Review or edit `animations/episode.animation-plan.json`, then render it without 
 pnpm animations -- --render-plan animations/episode.animation-plan.json
 ```
 
-This is useful when you want to adjust labels, timing, templates, or selected transcript ranges before creating media files.
+This is useful when you want to adjust labels, timing, templates, or selected transcript ranges before creating media files. New plans include `primaryItemTimings` and `secondaryItemTimings`; each `startMs` is relative to the beginning of that clip and can be fine-tuned before rendering.
 
 ## Options
 
@@ -139,7 +139,21 @@ Generated files are not replaced unless `--force` is explicitly supplied.
 
 The reusable template implementation lives in `src/remotion/`. OpenAI selects and fills these templates; it does not generate arbitrary React or animation code.
 
-Animation pacing is computed from each clip's `durationMs`, which comes from the selected subtitle cue range. Brand badges are inferred deterministically from the generated item labels.
+For new plans, OpenAI anchors every visible item to the subtitle cue where that concept is first spoken. The CLI resolves those cue indices into clip-relative `startMs` values, and Remotion converts them to reveal frames at the requested FPS. Cue indices remain in the plan as traceable provenance. Plans created by older versions remain valid and fall back to evenly distributed pacing computed from the clip's subtitle-derived `durationMs`.
+
+If OpenAI returns overlapping animation ranges, planning no longer fails. The CLI deterministically keeps the largest possible non-overlapping set, writes a `planningWarnings` entry for every dropped suggestion, and prints those warnings before rendering. This preserves editor-safe output without spending another API request or silently discarding a conflict.
+
+For example:
+
+```json
+"primaryItemTimings": [
+  {"cueIndex": 42, "startMs": 0},
+  {"cueIndex": 44, "startMs": 1800},
+  {"cueIndex": 45, "startMs": 3100}
+]
+```
+
+Timing arrays correspond by position to `primaryItems` or `secondaryItems`. Their lengths must match, cue indices must stay inside the clip's `startCue`/`endCue` range, and offsets must be chronological and earlier than `durationMs`. Brand badges are inferred deterministically from the generated item labels.
 
 Technology matching does not require a hard-coded entry for every supported brand. Before rendering, the CLI searches the installed Simple Icons catalog by normalized brand title and passes only the matched SVG data into Remotion. This keeps the Remotion bundle small while allowing new catalog technologies to work without renderer changes. A short alias list covers common names that differ from official icon titles.
 

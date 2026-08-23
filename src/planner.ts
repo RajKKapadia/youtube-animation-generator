@@ -19,7 +19,14 @@ Choose from exactly these templates:
 - timeline: primaryItems are ordered steps.
 - callout: primaryItems contain one to three short phrases; labels must be empty strings.
 
-Every suggestion must reference existing cueIndex values. Use the smallest consecutive cue range that contains the complete explanation. Do not overlap suggestions. Keep all visible text concise. Return suggestions in chronological order.`;
+Every suggestion must reference existing cueIndex values. Use the smallest consecutive cue range that contains the complete explanation. Do not overlap suggestions. Keep all visible text concise. Return suggestions in chronological order.
+
+Speech-align every visible item:
+- primaryItemStartCues must contain exactly one cueIndex for each primaryItems entry, in the same order.
+- secondaryItemStartCues must contain exactly one cueIndex for each secondaryItems entry, in the same order. Return an empty array when there are no secondary items.
+- Anchor each item to the cue where its concept is first spoken. Repeat a cueIndex when several items are introduced in the same cue.
+- Every item cue must be inside the suggestion's startCue/endCue range and each array must be chronological.
+- Do not invent an item that cannot be anchored to a specific spoken cue.`;
 
 const serializeCues = (cues: SubtitleCue[]): string =>
   cues
@@ -53,6 +60,47 @@ const validateSuggestion = (
   ) {
     throw new Error('AI returned a comparison without two labelled sides.');
   }
+
+  const validateItemCues = (
+    itemCues: number[],
+    items: string[],
+    fieldName: string,
+  ): void => {
+    if (itemCues.length !== items.length) {
+      throw new Error(
+        `AI returned ${fieldName} without one speech cue per item.`,
+      );
+    }
+
+    let previousCue = suggestion.startCue;
+    for (const cueIndex of itemCues) {
+      if (cueIndex < suggestion.startCue || cueIndex > suggestion.endCue) {
+        throw new Error(
+          `AI returned a ${fieldName} cue outside its animation range: ${cueIndex}.`,
+        );
+      }
+      if (!cues[cueIndex - 1]) {
+        throw new Error(
+          `AI referenced a cue outside the subtitle file: ${cueIndex}.`,
+        );
+      }
+      if (cueIndex < previousCue) {
+        throw new Error(`AI returned ${fieldName} cues out of chronological order.`);
+      }
+      previousCue = cueIndex;
+    }
+  };
+
+  validateItemCues(
+    suggestion.primaryItemStartCues,
+    suggestion.primaryItems,
+    'primary item',
+  );
+  validateItemCues(
+    suggestion.secondaryItemStartCues,
+    suggestion.secondaryItems,
+    'secondary item',
+  );
 };
 
 export const materializeSuggestions = (
@@ -79,15 +127,86 @@ export const materializeSuggestions = (
       throw new Error('Could not resolve an AI-selected subtitle range.');
     }
 
+    const materializeItemTimings = (itemCues: number[]) =>
+      itemCues.map((cueIndex) => ({
+        cueIndex,
+        startMs: cues[cueIndex - 1]!.startMs - firstCue.startMs,
+      }));
+
+    const {
+      primaryItemStartCues,
+      secondaryItemStartCues,
+      ...animationContent
+    } = suggestion;
+
     return {
-      ...suggestion,
+      ...animationContent,
       id: `animation-${String(index + 1).padStart(2, '0')}`,
       sourceStartMs: firstCue.startMs,
       sourceEndMs: lastCue.endMs,
       durationMs: lastCue.endMs - firstCue.startMs,
       transcript: selectedCues.map((cue) => cue.text).join(' '),
+      primaryItemTimings: materializeItemTimings(primaryItemStartCues),
+      secondaryItemTimings: materializeItemTimings(secondaryItemStartCues),
     };
   });
+};
+
+export interface SuggestionOverlapResolution {
+  suggestions: AnimationSuggestion[];
+  warnings: string[];
+}
+
+/**
+ * Uses earliest-finish interval scheduling to retain the largest possible
+ * number of non-overlapping suggestions. Structured Outputs can constrain
+ * individual ranges, but cannot enforce relationships between array entries.
+ */
+export const resolveOverlappingSuggestions = (
+  suggestions: AnimationSuggestion[],
+  cues: SubtitleCue[],
+): SuggestionOverlapResolution => {
+  const candidates = suggestions.map((suggestion, originalIndex) => {
+    validateSuggestion(suggestion, cues);
+    return {originalIndex, suggestion};
+  });
+  candidates.sort(
+    (left, right) =>
+      left.suggestion.endCue - right.suggestion.endCue ||
+      left.suggestion.startCue - right.suggestion.startCue ||
+      left.originalIndex - right.originalIndex,
+  );
+
+  const selected: typeof candidates = [];
+  const warnings: string[] = [];
+
+  for (const candidate of candidates) {
+    const previous = selected.at(-1);
+    if (
+      previous &&
+      candidate.suggestion.startCue <= previous.suggestion.endCue
+    ) {
+      warnings.push(
+        `Dropped overlapping suggestion "${candidate.suggestion.title}" ` +
+          `(cues ${candidate.suggestion.startCue}-${candidate.suggestion.endCue}); ` +
+          `it conflicts with selected "${previous.suggestion.title}" ` +
+          `(cues ${previous.suggestion.startCue}-${previous.suggestion.endCue}).`,
+      );
+      continue;
+    }
+    selected.push(candidate);
+  }
+
+  selected.sort(
+    (left, right) =>
+      left.suggestion.startCue - right.suggestion.startCue ||
+      left.originalIndex - right.originalIndex,
+  );
+
+  return {
+    suggestions: selected.map(({suggestion}) => suggestion),
+    warnings,
+  };
 };
 
 export interface PlanOptions {
@@ -126,16 +245,20 @@ export const planAnimations = async (
     throw new Error('OpenAI did not return a usable animation plan.');
   }
 
-  const suggestions = response.output_parsed.animations.slice(
+  const candidates = response.output_parsed.animations.slice(
     0,
     options.maxSuggestions,
   );
+  const resolution = resolveOverlappingSuggestions(candidates, cues);
 
   return {
     version: 1,
     sourceSubtitle: options.sourceSubtitle,
     generatedAt: new Date().toISOString(),
     model: options.model,
-    clips: materializeSuggestions(suggestions, cues),
+    ...(resolution.warnings.length > 0
+      ? {planningWarnings: resolution.warnings}
+      : {}),
+    clips: materializeSuggestions(resolution.suggestions, cues),
   };
 };

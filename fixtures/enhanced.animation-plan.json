@@ -21,7 +21,16 @@
         "Run FastAPI application",
         "Run Python worker"
       ],
+      "primaryItemTimings": [
+        {"cueIndex": 1, "startMs": 0},
+        {"cueIndex": 2, "startMs": 1500},
+        {"cueIndex": 3, "startMs": 3200},
+        {"cueIndex": 4, "startMs": 5100},
+        {"cueIndex": 5, "startMs": 7600},
+        {"cueIndex": 6, "startMs": 9400}
+      ],
       "secondaryItems": [],
+      "secondaryItemTimings": [],
       "leftLabel": "",
       "rightLabel": "",
       "reason": "Exercises duration-aware staging and technology badges.",
