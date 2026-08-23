@@ -50,7 +50,7 @@ const defaultNarratedProps: NarratedRenderInput = {
   profile: RENDER_PROFILES['16:9'],
   technologyIcons: {},
   plan: {
-    version: 2,
+    version: 3,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText: 'A request moves through a queue.',
@@ -81,6 +81,7 @@ const defaultNarratedProps: NarratedRenderInput = {
       beats: [
         {
           id: 'request',
+          expression: 'breath',
           phrases: [{
             id: 'request-phrase-1',
             text: 'A client submits a request.',
@@ -97,6 +98,7 @@ const defaultNarratedProps: NarratedRenderInput = {
         },
         {
           id: 'worker',
+          expression: 'none',
           phrases: [{
             id: 'worker-phrase-1',
             text: 'A worker processes it.',

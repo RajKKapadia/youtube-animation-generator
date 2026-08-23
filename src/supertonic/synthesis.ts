@@ -1,6 +1,7 @@
 import {mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import type {SupertonicJob, SupertonicResult} from './protocol.js';
+import {applyNarrationExpression} from './expressions.js';
 import {trimSynthesizedWaveform, writePcm16Wav} from './wav.js';
 
 export const SCENE_PRE_ROLL_SECONDS = 0.3;
@@ -61,7 +62,10 @@ export const synthesizeJob = async (
           cursor += silence.length;
         }
         const synthesis = await engine.synthesize(
-          phrase.text,
+          applyNarrationExpression(
+            phrase.text,
+            phraseIndex === 0 ? beat.expression : 'none',
+          ),
           job.language,
           job.steps,
           job.speed,

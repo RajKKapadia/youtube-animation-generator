@@ -206,6 +206,7 @@ export const synthesizeNarration = async (
         id: scene.id,
         beats: scene.beats.map((beat) => ({
           id: beat.id,
+          expression: beat.expression,
           phrases: beat.phrases.map((phrase) => ({
             id: phrase.id,
             text: phrase.text,

@@ -54,7 +54,7 @@ const main = async () => {
   );
   await writePcm16Wav(resolve(audioDirectory, 'voiceover.wav'), audio, sampleRate);
   const plan = timedNarratedPlanSchema.parse({
-    version: 2,
+    version: 3,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText: 'Fixture narration.',
@@ -86,6 +86,7 @@ const main = async () => {
         beats: [
           {
             id: 'flow-beat',
+            expression: 'breath',
             phrases: [
               {
                 id: 'flow-producer',
@@ -132,6 +133,7 @@ const main = async () => {
         beats: [
           {
             id: 'takeaway-beat',
+            expression: 'none',
             phrases: [
               {
                 id: 'takeaway-independent',

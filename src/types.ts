@@ -1,4 +1,11 @@
 import {z} from 'zod';
+import {
+  narrationExpressionSchema,
+  type NarrationExpression,
+} from './supertonic/expressions.js';
+
+export {narrationExpressionSchema};
+export type {NarrationExpression};
 
 export const animationTemplateSchema = z.enum([
   'process-flow',
@@ -172,9 +179,14 @@ export const savedPlanSchema = z.object({
 
 export type SavedPlan = z.infer<typeof savedPlanSchema>;
 
+const narrationTextSchema = z.string().min(1).max(120).refine(
+  (text) => !/<(?:laugh|breath|sigh)>/i.test(text),
+  'Store Supertonic expressions in the expression field, not narration text.',
+);
+
 export const narrationPhraseSchema = z.object({
   id: z.string().min(1).max(100),
-  text: z.string().min(1).max(120),
+  text: narrationTextSchema,
 });
 
 export type NarrationPhrase = z.infer<typeof narrationPhraseSchema>;
@@ -182,6 +194,7 @@ export type NarrationPhrase = z.infer<typeof narrationPhraseSchema>;
 export const narrationBeatSchema = z.object({
   id: z.string().min(1).max(80),
   phrases: z.array(narrationPhraseSchema).min(1).max(12),
+  expression: narrationExpressionSchema,
   primaryItemIndices: z.array(z.number().int().nonnegative()).max(6),
   secondaryItemIndices: z.array(z.number().int().nonnegative()).max(6),
 });
@@ -238,8 +251,62 @@ export const draftNarrationSceneSchema = visualContentSchema.extend({
 
 export type DraftNarrationScene = z.infer<typeof draftNarrationSceneSchema>;
 
+export const maxNarrationExpressionsForDuration = (
+  targetDurationSeconds: number,
+): number => Math.min(
+  3,
+  Math.max(1, Math.round(targetDurationSeconds / 30)),
+);
+
+const addNarratedPlanIssues = (
+  plan: {
+    scenes: Array<{beats: NarrationBeat[]}>;
+    targetDurationSeconds: number;
+  },
+  context: z.core.$RefinementCtx,
+): void => {
+  const beats = plan.scenes.flatMap((scene) => scene.beats);
+  if (beats.length > 64) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Narrated plans cannot exceed 64 semantic beats.',
+      path: ['scenes'],
+    });
+  }
+
+  const expressionLimit = maxNarrationExpressionsForDuration(
+    plan.targetDurationSeconds,
+  );
+  const expressionCount = beats.filter(
+    ({expression}) => expression !== 'none',
+  ).length;
+  if (expressionCount > expressionLimit) {
+    context.addIssue({
+      code: 'custom',
+      message:
+        `Narrated plans can use at most ${expressionLimit} voice ` +
+        `expression${expressionLimit === 1 ? '' : 's'} for this target duration.`,
+      path: ['scenes'],
+    });
+  }
+
+  for (let beatIndex = 1; beatIndex < beats.length; beatIndex += 1) {
+    if (
+      beats[beatIndex - 1]?.expression !== 'none' &&
+      beats[beatIndex]?.expression !== 'none'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Voice expressions cannot be used on consecutive narration beats.',
+        path: ['scenes'],
+      });
+      break;
+    }
+  }
+};
+
 export const draftNarratedPlanSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(3),
   kind: z.literal('narrated-video'),
   stage: z.literal('draft'),
   sourceText: z.string().min(1),
@@ -249,16 +316,7 @@ export const draftNarratedPlanSchema = z.object({
   language: z.string().min(1),
   title: z.string().min(1).max(100),
   scenes: z.array(draftNarrationSceneSchema).min(1).max(6),
-}).superRefine((plan, context) => {
-  const beatCount = plan.scenes.reduce((total, scene) => total + scene.beats.length, 0);
-  if (beatCount > 64) {
-    context.addIssue({
-      code: 'custom',
-      message: 'Narrated plans cannot exceed 64 semantic beats.',
-      path: ['scenes'],
-    });
-  }
-});
+}).superRefine(addNarratedPlanIssues);
 
 export type DraftNarratedPlan = z.infer<typeof draftNarratedPlanSchema>;
 
@@ -357,7 +415,7 @@ export const timedNarrationSceneSchema = visualContentSchema.extend({
 export type TimedNarrationScene = z.infer<typeof timedNarrationSceneSchema>;
 
 export const timedNarratedPlanSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(3),
   kind: z.literal('narrated-video'),
   stage: z.literal('timed'),
   sourceText: z.string().min(1),
@@ -375,6 +433,7 @@ export const timedNarratedPlanSchema = z.object({
   totalSamples: z.number().int().positive(),
   scenes: z.array(timedNarrationSceneSchema).min(1).max(6),
 }).superRefine((plan, context) => {
+  addNarratedPlanIssues(plan, context);
   let previousSceneEnd = 0;
   for (const [sceneIndex, scene] of plan.scenes.entries()) {
     if (scene.startMs < previousSceneEnd) {
@@ -463,6 +522,70 @@ const legacyTimedNarratedPlanSchema = z.object({
   scenes: z.array(legacyTimedNarrationSceneSchema).min(1).max(6),
 });
 
+const legacyV2NarrationBeatSchema = z.object({
+  id: z.string().min(1).max(80),
+  phrases: z.array(narrationPhraseSchema).min(1).max(12),
+  primaryItemIndices: z.array(z.number().int().nonnegative()).max(6),
+  secondaryItemIndices: z.array(z.number().int().nonnegative()).max(6),
+});
+
+const legacyV2DraftNarrationSceneSchema = visualContentSchema.extend({
+  id: z.string().min(1).max(80),
+  backgroundPrompt: z.string().min(1).max(600),
+  beats: z.array(legacyV2NarrationBeatSchema).min(1).max(12),
+});
+
+const legacyV2DraftNarratedPlanSchema = z.object({
+  version: z.literal(2),
+  kind: z.literal('narrated-video'),
+  stage: z.literal('draft'),
+  sourceText: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  targetDurationSeconds: z.number().positive(),
+  language: z.string().min(1),
+  title: z.string().min(1).max(100),
+  scenes: z.array(legacyV2DraftNarrationSceneSchema).min(1).max(6),
+});
+
+const legacyV2TimedNarrationBeatSchema = legacyV2NarrationBeatSchema.extend({
+  phrases: z.array(timedNarrationPhraseSchema).min(1).max(12),
+  startMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().positive(),
+  audioFile: z.string().min(1),
+  sampleCount: z.number().int().positive(),
+});
+
+const legacyV2TimedNarrationSceneSchema = visualContentSchema.extend({
+  id: z.string().min(1).max(80),
+  backgroundPrompt: z.string().min(1).max(600),
+  startMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().positive(),
+  beats: z.array(legacyV2TimedNarrationBeatSchema).min(1).max(12),
+  primaryItemTimings: z.array(anchoredItemTimingSchema).max(6),
+  secondaryItemTimings: z.array(anchoredItemTimingSchema).max(6),
+});
+
+const legacyV2TimedNarratedPlanSchema = z.object({
+  version: z.literal(2),
+  kind: z.literal('narrated-video'),
+  stage: z.literal('timed'),
+  sourceText: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  targetDurationSeconds: z.number().positive(),
+  language: z.string().min(1),
+  title: z.string().min(1).max(100),
+  sampleRate: z.number().int().positive(),
+  voice: z.string().min(1),
+  ttsSpeed: z.number().positive(),
+  ttsSteps: z.number().int().positive(),
+  voiceoverFile: z.string().min(1),
+  durationMs: z.number().int().positive(),
+  totalSamples: z.number().int().positive(),
+  scenes: z.array(legacyV2TimedNarrationSceneSchema).min(1).max(6),
+});
+
 export const defaultSceneBackgroundPrompt = (scene: VisualContent): string =>
   `Abstract technical atmosphere for ${scene.title}. ${scene.reason}`.slice(0, 600);
 
@@ -472,12 +595,13 @@ const normalizeLegacyDraft = (
   plan: z.infer<typeof legacyDraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 2,
+  version: 3,
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     backgroundPrompt: defaultSceneBackgroundPrompt(scene),
     beats: scene.beats.map(({text, ...beat}) => ({
       ...beat,
+      expression: 'none' as const,
       phrases: [{id: legacyPhraseId(beat.id), text}],
     })),
   })),
@@ -487,12 +611,13 @@ const normalizeLegacyTimed = (
   plan: z.infer<typeof legacyTimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 2,
+  version: 3,
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     backgroundPrompt: defaultSceneBackgroundPrompt(scene),
     beats: scene.beats.map(({text, ...beat}) => ({
       ...beat,
+      expression: 'none' as const,
       phrases: [{
         id: legacyPhraseId(beat.id),
         text,
@@ -504,9 +629,39 @@ const normalizeLegacyTimed = (
   })),
 });
 
+const normalizeLegacyV2Draft = (
+  plan: z.infer<typeof legacyV2DraftNarratedPlanSchema>,
+): DraftNarratedPlan => draftNarratedPlanSchema.parse({
+  ...plan,
+  version: 3,
+  scenes: plan.scenes.map((scene) => ({
+    ...scene,
+    beats: scene.beats.map((beat) => ({
+      ...beat,
+      expression: 'none' as const,
+    })),
+  })),
+});
+
+const normalizeLegacyV2Timed = (
+  plan: z.infer<typeof legacyV2TimedNarratedPlanSchema>,
+): TimedNarratedPlan => timedNarratedPlanSchema.parse({
+  ...plan,
+  version: 3,
+  scenes: plan.scenes.map((scene) => ({
+    ...scene,
+    beats: scene.beats.map((beat) => ({
+      ...beat,
+      expression: 'none' as const,
+    })),
+  })),
+});
+
 export const narratedPlanSchema = z.union([
   draftNarratedPlanSchema,
   timedNarratedPlanSchema,
+  legacyV2DraftNarratedPlanSchema.transform(normalizeLegacyV2Draft),
+  legacyV2TimedNarratedPlanSchema.transform(normalizeLegacyV2Timed),
   legacyDraftNarratedPlanSchema.transform(normalizeLegacyDraft),
   legacyTimedNarratedPlanSchema.transform(normalizeLegacyTimed),
 ]);

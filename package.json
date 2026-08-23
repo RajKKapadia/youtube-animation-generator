@@ -12,6 +12,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "fixtures:layouts": "node --import tsx src/render-layout-fixtures.ts",
     "fixtures:narrated": "node --import tsx src/render-narrated-fixture.ts",
+    "fixtures:voice-expressions": "node --import tsx src/render-voice-expression-fixture.ts",
     "test": "vitest run"
   },
   "engines": {

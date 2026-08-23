@@ -21,6 +21,7 @@ const scene = timedNarrationSceneSchema.parse({
   reason: 'Fixture',
   beats: [{
     id: 'caption-beat',
+    expression: 'breath',
     phrases: [
       {
         id: 'first',
