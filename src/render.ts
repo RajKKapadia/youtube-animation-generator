@@ -5,12 +5,15 @@ import {fileURLToPath} from 'node:url';
 import {bundle} from '@remotion/bundler';
 import {renderMedia, selectComposition} from '@remotion/renderer';
 import type {
+  AspectRatioSelection,
   AnimationClip,
   ManifestClip,
   OutputFormat,
   RenderBackground,
+  RenderProfile,
   TechnologyBrandIcon,
 } from './types.js';
+import {aspectSuffix, profilesForSelection} from './render-profile.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -62,8 +65,9 @@ export const filenameForClip = (
   clip: AnimationClip,
   index: number,
   format: OutputFormat,
+  profile: RenderProfile = profilesForSelection('16:9')[0]!,
 ): string =>
-  `${timestampForFilename(clip.sourceStartMs)}-${String(index + 1).padStart(2, '0')}-${clip.template}.${extensionForFormat(format)}`;
+  `${timestampForFilename(clip.sourceStartMs)}-${String(index + 1).padStart(2, '0')}-${clip.template}${aspectSuffix(profile.aspectRatio)}.${extensionForFormat(format)}`;
 
 const renderOne = async ({
   background,
@@ -72,6 +76,7 @@ const renderOne = async ({
   format,
   fps,
   outputPath,
+  profile,
   serveUrl,
   technologyIcons,
 }: {
@@ -81,10 +86,11 @@ const renderOne = async ({
   format: OutputFormat;
   fps: number;
   outputPath: string;
+  profile: RenderProfile;
   serveUrl: string;
   technologyIcons: Record<string, TechnologyBrandIcon>;
 }): Promise<void> => {
-  const inputProps = {background, clip, fps, technologyIcons};
+  const inputProps = {background, clip, fps, profile, technologyIcons};
   const browserExecutable = findBrowserExecutable();
   const composition = await selectComposition({
     serveUrl,
@@ -143,6 +149,7 @@ const renderOne = async ({
 };
 
 export interface RenderClipsOptions {
+  aspectRatio: AspectRatioSelection;
   clips: AnimationClip[];
   force: boolean;
   format: OutputFormat;
@@ -150,15 +157,23 @@ export interface RenderClipsOptions {
   outputDirectory: string;
 }
 
+export interface RenderedClipProfile {
+  profile: RenderProfile;
+  clips: ManifestClip[];
+}
+
 export const renderClips = async (
   options: RenderClipsOptions,
-): Promise<ManifestClip[]> => {
+): Promise<RenderedClipProfile[]> => {
   await mkdir(options.outputDirectory, {recursive: true});
 
-  const outputs = options.clips.map((clip, index) => {
-    const file = filenameForClip(clip, index, options.format);
-    return {clip, file, outputPath: resolve(options.outputDirectory, file)};
-  });
+  const profiles = profilesForSelection(options.aspectRatio);
+  const outputs = profiles.flatMap((profile) =>
+    options.clips.map((clip, index) => {
+      const file = filenameForClip(clip, index, options.format, profile);
+      return {clip, file, outputPath: resolve(options.outputDirectory, file), profile};
+    }),
+  );
 
   if (!options.force) {
     const existing = outputs.find(({outputPath}) => existsSync(outputPath));
@@ -170,7 +185,7 @@ export const renderClips = async (
   }
 
   if (outputs.length === 0) {
-    return [];
+    return profiles.map((profile) => ({profile, clips: []}));
   }
 
   console.log('Bundling animation templates...');
@@ -201,7 +216,10 @@ export const renderClips = async (
       ...clip.secondaryItems,
     ]),
   );
-  const manifestClips: ManifestClip[] = [];
+  const rendered = new Map<string, ManifestClip[]>();
+  for (const profile of profiles) {
+    rendered.set(profile.aspectRatio, []);
+  }
 
   for (const [index, output] of outputs.entries()) {
     console.log(
@@ -214,11 +232,15 @@ export const renderClips = async (
       format: options.format,
       fps: options.fps,
       outputPath: output.outputPath,
+      profile: output.profile,
       serveUrl,
       technologyIcons,
     });
-    manifestClips.push({...output.clip, file: output.file});
+    rendered.get(output.profile.aspectRatio)!.push({...output.clip, file: output.file});
   }
 
-  return manifestClips;
+  return profiles.map((profile) => ({
+    profile,
+    clips: rendered.get(profile.aspectRatio) ?? [],
+  }));
 };

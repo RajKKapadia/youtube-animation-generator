@@ -1,161 +1,209 @@
 # YouTube Animations CLI
 
-Generate separate, editor-ready animation clips from an `.srt` or `.vtt` subtitle file. The tool finds transcript sections that benefit from a visual explanation, creates a structured animation plan with OpenAI, and renders each selected animation with Remotion.
-
-This is intentionally **not a video editor**. It never modifies the source video. You import the generated clips into Lightworks, DaVinci Resolve, Premiere, or another editor yourself.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both.
 
 ## What it creates
 
-Given:
+Narrated input:
 
 ```text
-/videos/episode-12.srt
+/videos/summary.md
 ```
 
-the default command creates:
+Default output:
+
+```text
+/videos/summary-video/
+├── summary.narration-script.md
+├── summary.narration-plan.json
+├── summary.narration-timed.json
+├── summary.audio/
+│   ├── voiceover.wav
+│   └── beats/
+│       ├── 001-hook.wav
+│       └── ...
+└── summary.mp4
+```
+
+With `--aspect-ratio both`, `summary-9x16.mp4` is rendered from the same narration, voiceover, and sample-derived timeline.
+
+Subtitle input keeps its existing editor-oriented output names. Vertical files insert `-9x16` before the extension, and manifests are version 2:
 
 ```text
 /videos/animations/
-├── episode-12.animation-plan.json
-├── episode-12.animations.json
+├── episode.animation-plan.json
+├── episode.animations.json
+├── episode.animations-9x16.json
 ├── 00h04m12s-01-process-flow.mp4
-├── 00h07m32s-02-comparison.mp4
-└── 00h11m48s-03-callout.mp4
+└── 00h04m12s-01-process-flow-9x16.mp4
 ```
-
-The timestamps in the filenames and manifest identify where each clip belongs in the editor.
-
-Each clip automatically:
-
-- uses a dual-contrast title treatment that stays legible over light or dark footage
-- measures and fits titles and labels into their available boxes without truncating the text
-- reveals each part when its concept is spoken, using subtitle-cue anchors and a short fixed transition
-- resolves technology badges from the full installed Simple Icons catalog, with aliases for common names such as `k8s`, `pgvector`, and `NodeJS`
-- falls back to semantic icons for concepts such as APIs, queues, databases, cloud services, search, audio, video, and workers when no brand icon exists
-
-Existing saved plans gain these enhancements when re-rendered; no new OpenAI request is required.
 
 ## Requirements
 
 - Node.js 22.13 or newer
 - pnpm 11.22
-- An OpenAI API key
+- an OpenAI API key for new plans
 - Google Chrome or Chromium for Remotion rendering
+- Git LFS for the one-time Supertonic model checkout
 
-Remotion has its own license terms. Confirm that your use qualifies for its free license or obtain the appropriate license before production use: [Remotion license](https://www.remotion.dev/license).
+Remotion has separate license terms. Confirm that your use qualifies for its free license or obtain the appropriate license: [Remotion license](https://www.remotion.dev/license).
 
 ## Setup
+
+Install application dependencies and configure OpenAI:
 
 ```bash
 pnpm install
 cp .env.example .env
 ```
 
-Add your key to `.env`:
-
 ```dotenv
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-5.6
 ```
 
-The CLI uses the OpenAI Responses API with Zod Structured Outputs. Subtitle text is sent to OpenAI for analysis with response storage disabled (`store: false`). See the [official Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs).
+Download Supertonic 3 once at the default location:
 
-## Generate animations
+```bash
+git lfs install
+git clone https://huggingface.co/Supertone/supertonic-3 \
+  models/supertonic-3
+```
+
+The model directory is ignored by Git. The CLI validates all four ONNX files, `tts.json`, `unicode_indexer.json`, and the requested preset voice before synthesis.
+
+### No separate Supertonic server
+
+You do not need Python, `supertonic serve`, an HTTP endpoint, or a separately managed background process. The CLI automatically starts a short-lived Node worker, sends one JSON job over stdin, loads the model and selected voice once, synthesizes every beat sequentially, returns exact sample counts, and exits before Remotion starts. This releases ONNX memory between voice generation and video rendering.
+
+`onnxruntime-node` is pinned to `1.27.0`. The worker adapts Supertone's official MIT-licensed Node helper rather than executing its example CLI; attribution is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Create narrated videos
 
 From the repository:
 
 ```bash
-pnpm animations -- /absolute/path/to/episode-12.srt
+pnpm run animations create summary.md
+pnpm run animations create summary.md --aspect-ratio 9:16
+pnpm run animations create summary.md --aspect-ratio both
 ```
 
-The default output is an `animations/` directory beside the subtitle file. Each selected clip is rendered as a green-background H.264 `.mp4` for chroma-keying in your editor.
+The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. Every visible item is anchored to exactly one semantic narration beat. The complete spoken copy is also saved as `summary.narration-script.md` for review.
 
-You can also build and execute the compiled CLI:
+Create only the script and draft storyboard—no model assets are required for this step:
 
 ```bash
-pnpm build
-node dist/cli.js /absolute/path/to/episode-12.srt
+pnpm run animations create summary.md --plan-only
 ```
 
-## Output formats
-
-Green-background H.264 MP4 is the default:
+After reviewing or editing the draft, synthesize and render without another OpenAI request:
 
 ```bash
-pnpm animations -- episode.srt
+pnpm run animations create \
+  --render-plan summary-video/summary.narration-plan.json \
+  --aspect-ratio both
 ```
 
-Transparent ProRes 4444 remains available when needed:
+A timed plan can also be rendered again without OpenAI or Supertonic:
 
 ```bash
-pnpm animations -- episode.srt --format prores
+pnpm run animations create \
+  --render-plan summary-video/summary.narration-timed.json
 ```
 
-Transparent WebM:
+Narrated output is H.264 video with AAC voiceover audio. Planning and TTS happen once; `both` performs two independent Remotion render passes.
+
+## Exact voice-derived timing
+
+Supertonic returns float PCM and a predicted voiced duration for each beat. The worker trims the waveform to that duration, writes mono 44.1 kHz PCM16 WAV files, and records the exact number of written samples. The combined voiceover adds:
+
+- 300 ms before each scene
+- 150 ms between semantic beats
+- 300 ms after each scene
+
+Scene boundaries and item reveal timestamps are calculated from those integer sample offsets—not estimated from word counts. The aspect-independent timed plan is passed unchanged to both orientations, so their audio and reveal timeline are identical within one render frame.
+
+Audio is staged in a temporary directory and promoted only after all beats and the combined voiceover succeed.
+
+## Subtitle animation overlays
+
+Generate green-background H.264 clips from `.srt` or `.vtt`:
 
 ```bash
-pnpm animations -- episode.srt --format webm
+pnpm run animations episode.srt
+pnpm run animations episode.srt --aspect-ratio 9:16
+pnpm run animations episode.srt --aspect-ratio both
 ```
 
-The transparent optional formats follow Remotion's [transparent video guidance](https://www.remotion.dev/docs/transparent-videos).
-
-## Review before rendering
-
-Create only the structured animation plan:
+Transparent ProRes 4444 and WebM remain available in either orientation:
 
 ```bash
-pnpm animations -- episode.srt --plan-only
+pnpm run animations episode.srt --format prores --aspect-ratio both
+pnpm run animations episode.srt --format webm --aspect-ratio 9:16
 ```
 
-Review or edit `animations/episode.animation-plan.json`, then render it without another OpenAI request:
+Create only the overlay plan, then render it later:
 
 ```bash
-pnpm animations -- --render-plan animations/episode.animation-plan.json
+pnpm run animations episode.srt --plan-only
+pnpm run animations --render-plan animations/episode.animation-plan.json
 ```
 
-This is useful when you want to adjust labels, timing, templates, or selected transcript ranges before creating media files. New plans include `primaryItemTimings` and `secondaryItemTimings`; each `startMs` is relative to the beginning of that clip and can be fine-tuned before rendering.
+New overlay plans speech-align visible items to subtitle cues. Saved version-1 plans remain compatible and fall back to evenly distributed reveals when item timings are absent. Version-2 output manifests add `aspectRatio`, `width`, and `height` while landscape filenames remain unchanged.
+
+## Native vertical layouts
+
+Vertical output is 1080×1920 rather than a scaled or cropped landscape frame. It uses safe margins of 72 px horizontally, 120 px at the top, and 220 px at the bottom.
+
+- `process-flow` stacks cards with downward animated connectors.
+- `comparison` stacks the labelled panels and switches six-item panels to compact two-column grids.
+- `timeline` uses a vertical spine with alternating stage cards.
+- `callout` uses a tall centered panel and wider text bounds.
+
+Landscape remains 1920×1080 and preserves the original layouts.
 
 ## Options
 
 ```text
---format <prores|webm|green>  Output format (default: green)
---output-dir <path>           Override the output directory
---model <model>               Override OPENAI_MODEL
---max-suggestions <number>    Maximum animations (default: 6)
---fps <number>                Frames per second (default: 30)
---plan-only                   Analyze and save the plan without rendering
---render-plan <path>          Render an existing plan without OpenAI
---force                       Replace previously generated files
+--aspect-ratio <16:9|9:16|both>  Output orientation (default: 16:9)
+--output-dir <path>               Override the output directory
+--model <model>                   Override OPENAI_MODEL
+--fps <number>                    Frames per second (default: 30)
+--plan-only                       Save or validate without rendering
+--render-plan <path>              Continue from a saved plan
+--force                           Replace generated files
+
+Subtitle overlays:
+--format <prores|webm|green>      Output format (default: green)
+--max-suggestions <number>        Maximum overlays (default: 6)
+
+Narrated videos:
+--supertonic-assets-dir <path>    Default: models/supertonic-3
+--voice <M1..M5|F1..F5>          Default: M1
+--language <code>                 Default: en; use na for language-agnostic
+--tts-speed <number>              0.7-2.0 (default: 1.05)
+--tts-steps <number>              1-20 (default: 8)
+--target-duration <seconds>       Default: 60
 ```
 
-Generated files are not replaced unless `--force` is explicitly supplied.
+Every requested output is checked before rendering. Existing generated files are never replaced unless `--force` is supplied.
 
-## Initial animation templates
+## Templates and visual behavior
 
 - `process-flow` — ordered systems or request flows
-- `comparison` — two labelled columns
+- `comparison` — two labelled groups
 - `timeline` — ordered stages or events
 - `callout` — definitions, concepts, and important statistics
 
-The reusable template implementation lives in `src/remotion/`. OpenAI selects and fills these templates; it does not generate arbitrary React or animation code.
+Titles and labels are measured and fitted into their bounds. Technology badges come from the installed Simple Icons catalog, with aliases and semantic fallbacks for concepts such as APIs, queues, databases, search, audio, video, and workers.
 
-For new plans, OpenAI anchors every visible item to the subtitle cue where that concept is first spoken. The CLI resolves those cue indices into clip-relative `startMs` values, and Remotion converts them to reveal frames at the requested FPS. Cue indices remain in the plan as traceable provenance. Plans created by older versions remain valid and fall back to evenly distributed pacing computed from the clip's subtitle-derived `durationMs`.
+The OpenAI Responses API uses Zod Structured Outputs with response storage disabled (`store: false`). OpenAI selects and fills these templates; it does not generate arbitrary React code.
 
-If OpenAI returns overlapping animation ranges, planning no longer fails. The CLI deterministically keeps the largest possible non-overlapping set, writes a `planningWarnings` entry for every dropped suggestion, and prints those warnings before rendering. This preserves editor-safe output without spending another API request or silently discarding a conflict.
+## Supertonic terms and project notice
 
-For example:
+Supertone's sample code is MIT licensed, while the Supertonic 3 model is distributed under OpenRAIL-M. Review the [official model card and license](https://huggingface.co/Supertone/supertonic-3) before distributing model-derived output.
 
-```json
-"primaryItemTimings": [
-  {"cueIndex": 42, "startMs": 0},
-  {"cueIndex": 44, "startMs": 1800},
-  {"cueIndex": 45, "startMs": 3100}
-]
-```
-
-Timing arrays correspond by position to `primaryItems` or `secondaryItems`. Their lengths must match, cue indices must stay inside the clip's `startCue`/`endCue` range, and offsets must be chronological and earlier than `durationMs`. Brand badges are inferred deterministically from the generated item labels.
-
-Technology matching does not require a hard-coded entry for every supported brand. Before rendering, the CLI searches the installed Simple Icons catalog by normalized brand title and passes only the matched SVG data into Remotion. This keeps the Remotion bundle small while allowing new catalog technologies to work without renderer changes. A short alias list covers common names that differ from official icon titles.
+The official repository announced on July 23, 2026 that it will be archived and receive no further open-source model development or official support. This project therefore pins its runtime integration and vendors the small helper boundary rather than relying on a moving server API. See the [official repository notice](https://github.com/supertone-inc/supertonic).
 
 ## Development checks
 
@@ -165,7 +213,15 @@ pnpm test
 pnpm build
 ```
 
-An offline fixture is included for renderer testing:
+Render early, middle, and completed stress-test frames for all four templates and both orientations:
+
+```bash
+pnpm fixtures:layouts -- /tmp/youtube-animation-layout-fixtures
+```
+
+The fixture uses six long primary and secondary items. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping and unsafe positioning.
+
+An offline overlay plan remains available for a full media render:
 
 ```bash
 node dist/cli.js \
@@ -173,8 +229,4 @@ node dist/cli.js \
   --output-dir /tmp/youtube-animations-render-check
 ```
 
-If Chrome is installed in a nonstandard location, set:
-
-```bash
-REMOTION_BROWSER_EXECUTABLE=/path/to/chrome
-```
+If Chrome is installed in a nonstandard location, set `REMOTION_BROWSER_EXECUTABLE`.

@@ -1,5 +1,6 @@
 allowBuilds:
   esbuild: true
+  onnxruntime-node: true
 minimumReleaseAgeExclude:
   - '@remotion/bundler@4.0.515'
   - '@remotion/captions@4.0.515'

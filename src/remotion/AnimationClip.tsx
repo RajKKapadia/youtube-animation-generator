@@ -1,4 +1,4 @@
-import type {CSSProperties, ReactNode} from 'react';
+import {createContext, useContext, type CSSProperties, type ReactNode} from 'react';
 import {
   AbsoluteFill,
   Easing,
@@ -6,7 +6,9 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
-import type {AnimationClip as AnimationClipSpec, RenderInput} from '../types.js';
+import type {RenderInput, VisualClip as AnimationClipSpec} from '../types.js';
+import {isVerticalDimensions, RENDER_PROFILES} from '../render-profile.js';
+import type {RenderProfile} from '../types.js';
 import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
 import {
   TechnologyBadge,
@@ -34,6 +36,10 @@ const clamp = {
   extrapolateLeft: 'clamp' as const,
   extrapolateRight: 'clamp' as const,
 };
+
+const RenderProfileContext = createContext<RenderProfile>(
+  RENDER_PROFILES['16:9'],
+);
 
 const useClipOpacity = (): number => {
   const frame = useCurrentFrame();
@@ -89,6 +95,9 @@ const floatingTitleStyle: CSSProperties = {
 
 const ClipCanvas = ({children}: {children: ReactNode}) => {
   const opacity = useClipOpacity();
+  const {height, width} = useVideoConfig();
+  const vertical = isVerticalDimensions(width, height);
+  const profile = useContext(RenderProfileContext);
   return (
     <AbsoluteFill
       style={{
@@ -97,6 +106,10 @@ const ClipCanvas = ({children}: {children: ReactNode}) => {
         fontFamily: RENDER_FONT_FAMILY,
         justifyContent: 'center',
         opacity,
+        boxSizing: 'border-box',
+        padding: vertical
+          ? `${profile.safeArea.top}px ${profile.safeArea.right}px ${profile.safeArea.bottom}px ${profile.safeArea.left}px`
+          : 0,
       }}
     >
       {children}
@@ -112,6 +125,8 @@ const Header = ({
   title: string;
 }) => {
   const entrance = useEntrance(2);
+  const {height, width} = useVideoConfig();
+  const vertical = isVerticalDimensions(width, height);
   return (
     <h1
       style={{
@@ -123,19 +138,27 @@ const Header = ({
     >
       <FittedText
         fontWeight={800}
-        letterSpacing={-2}
+        letterSpacing={vertical ? -1 : -2}
         lineHeight={1.05}
-        maxFontSize={66}
-        maxHeight={150}
-        maxLines={2}
-        maxWidth={1400}
+        maxFontSize={vertical ? 62 : 66}
+        maxHeight={vertical ? 176 : 150}
+        maxLines={vertical ? 3 : 2}
+        maxWidth={vertical ? 850 : 1400}
         text={title}
       />
     </h1>
   );
 };
 
-const NodeCard = ({delay, label}: {delay: number; label: string}) => {
+const NodeCard = ({
+  delay,
+  label,
+  vertical = false,
+}: {
+  delay: number;
+  label: string;
+  vertical?: boolean;
+}) => {
   const entrance = useEntrance(delay);
   return (
     <div
@@ -147,22 +170,22 @@ const NodeCard = ({delay, label}: {delay: number; label: string}) => {
         boxShadow: '0 24px 55px rgba(0,0,0,0.36)',
         color: COLORS.ink,
         display: 'flex',
-        height: 204,
+        height: vertical ? 142 : 204,
         justifyContent: 'center',
         opacity: entrance,
-        padding: '34px 18px 14px',
+        padding: vertical ? '24px 32px 16px 96px' : '34px 18px 14px',
         position: 'relative',
-        textAlign: 'center',
+        textAlign: vertical ? 'left' : 'center',
         transform: `scale(${0.84 + entrance * 0.16})`,
-        width: 230,
+        width: vertical ? 720 : 230,
       }}
     >
       <div
         style={{
-          left: '50%',
+          left: vertical ? 34 : '50%',
           position: 'absolute',
-          top: -27,
-          transform: 'translateX(-50%)',
+          top: vertical ? '50%' : -27,
+          transform: vertical ? 'translateY(-50%)' : 'translateX(-50%)',
         }}
       >
         <TechnologyBadge label={label} size={54} />
@@ -170,11 +193,55 @@ const NodeCard = ({delay, label}: {delay: number; label: string}) => {
       <FittedText
         fontWeight={750}
         lineHeight={1.15}
-        maxFontSize={29}
-        maxHeight={145}
-        maxLines={5}
-        maxWidth={194}
+        align={vertical ? 'left' : 'center'}
+        maxFontSize={vertical ? 36 : 29}
+        maxHeight={vertical ? 106 : 145}
+        maxLines={vertical ? 3 : 5}
+        maxWidth={vertical ? 580 : 194}
         text={label}
+      />
+    </div>
+  );
+};
+
+const VerticalFlowArrow = ({
+  endFrame,
+  startFrame,
+}: {
+  endFrame: number;
+  startFrame: number;
+}) => {
+  const frame = useCurrentFrame();
+  const progress = interpolate(frame, [startFrame, endFrame], [0, 1], {
+    ...clamp,
+    easing: Easing.inOut(Easing.cubic),
+  });
+  return (
+    <div style={{height: 52, position: 'relative', width: 44}}>
+      <div
+        style={{
+          background: `linear-gradient(180deg, ${COLORS.blue}, ${COLORS.violet})`,
+          borderRadius: 999,
+          height: 35,
+          left: 19,
+          position: 'absolute',
+          top: 0,
+          transform: `scaleY(${progress})`,
+          transformOrigin: 'top center',
+          width: 6,
+        }}
+      />
+      <div
+        style={{
+          borderLeft: '13px solid transparent',
+          borderRight: '13px solid transparent',
+          borderTop: `18px solid ${COLORS.violet}`,
+          bottom: 0,
+          left: 9,
+          opacity: progress,
+          position: 'absolute',
+          transform: `translateY(${(1 - progress) * -12}px)`,
+        }}
       />
     </div>
   );
@@ -218,7 +285,8 @@ const FlowArrow = ({endFrame, startFrame}: {endFrame: number; startFrame: number
 };
 
 const ProcessFlow = ({clip}: {clip: AnimationClipSpec}) => {
-  const {durationInFrames, fps} = useVideoConfig();
+  const {durationInFrames, fps, height, width} = useVideoConfig();
+  const vertical = isVerticalDimensions(width, height);
   const revealFrames = createRevealSchedule({
     durationInFrames,
     fps,
@@ -233,12 +301,19 @@ const ProcessFlow = ({clip}: {clip: AnimationClipSpec}) => {
           alignItems: 'center',
           display: 'flex',
           flexDirection: 'column',
-          gap: 92,
-          width: 1740,
+          gap: vertical ? 54 : 92,
+          width: vertical ? 936 : 1740,
         }}
       >
         <Header title={clip.title} />
-        <div style={{alignItems: 'center', display: 'flex', justifyContent: 'center'}}>
+        <div
+          style={{
+            alignItems: 'center',
+            display: 'flex',
+            flexDirection: vertical ? 'column' : 'row',
+            justifyContent: 'center',
+          }}
+        >
           {clip.primaryItems.map((item, index) => {
             const nextFrame = revealFrames[index + 1];
             const connection =
@@ -246,10 +321,28 @@ const ProcessFlow = ({clip}: {clip: AnimationClipSpec}) => {
                 ? null
                 : createConnectionWindow(revealFrames[index] ?? 0, nextFrame, fps);
             return (
-              <div key={`${item}-${index}`} style={{alignItems: 'center', display: 'flex'}}>
-                <NodeCard delay={revealFrames[index] ?? 0} label={item} />
+              <div
+                key={`${item}-${index}`}
+                style={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  flexDirection: vertical ? 'column' : 'row',
+                }}
+              >
+                <NodeCard
+                  delay={revealFrames[index] ?? 0}
+                  label={item}
+                  vertical={vertical}
+                />
                 {connection ? (
-                  <FlowArrow endFrame={connection.end} startFrame={connection.start} />
+                  vertical ? (
+                    <VerticalFlowArrow
+                      endFrame={connection.end}
+                      startFrame={connection.start}
+                    />
+                  ) : (
+                    <FlowArrow endFrame={connection.end} startFrame={connection.start} />
+                  )
                 ) : null}
               </div>
             );
@@ -267,6 +360,7 @@ const ComparisonColumn = ({
   items,
   label,
   side,
+  vertical,
 }: {
   accent: string;
   columnDelay: number;
@@ -274,6 +368,7 @@ const ComparisonColumn = ({
   items: string[];
   label: string;
   side: number;
+  vertical: boolean;
 }) => {
   const entrance = useEntrance(columnDelay);
   return (
@@ -283,11 +378,13 @@ const ComparisonColumn = ({
         border: `2px solid ${COLORS.border}`,
         borderRadius: 30,
         boxShadow: '0 28px 70px rgba(0,0,0,0.38)',
-        minHeight: 500,
+        minHeight: vertical ? 420 : 500,
         opacity: entrance,
         overflow: 'hidden',
-        transform: `translateX(${(1 - entrance) * (side === 0 ? -60 : 60)}px)`,
-        width: 720,
+        transform: vertical
+          ? `translateY(${(1 - entrance) * 36}px)`
+          : `translateX(${(1 - entrance) * (side === 0 ? -60 : 60)}px)`,
+        width: vertical ? 936 : 720,
       }}
     >
       <div
@@ -297,28 +394,38 @@ const ComparisonColumn = ({
           color: '#07111F',
           display: 'flex',
           justifyContent: 'center',
-          minHeight: 104,
-          padding: '22px 42px',
+          minHeight: vertical ? 88 : 104,
+          padding: vertical ? '14px 36px' : '22px 42px',
           textAlign: 'center',
         }}
       >
         <FittedText
           fontWeight={850}
           lineHeight={1.08}
-          maxFontSize={42}
-          maxHeight={84}
+          maxFontSize={vertical ? 38 : 42}
+          maxHeight={vertical ? 70 : 84}
           maxLines={2}
-          maxWidth={620}
+          maxWidth={vertical ? 820 : 620}
           text={label}
         />
       </div>
-      <div style={{display: 'flex', flexDirection: 'column', gap: 25, padding: '42px 52px'}}>
+      <div
+        style={{
+          display: vertical ? 'grid' : 'flex',
+          flexDirection: 'column',
+          gap: vertical ? 18 : 25,
+          gridTemplateColumns: vertical && items.length > 3 ? '1fr 1fr' : '1fr',
+          padding: vertical ? '28px 36px 32px' : '42px 52px',
+        }}
+      >
         {items.map((item, index) => (
           <ComparisonItem
             accent={accent}
+            compact={vertical && items.length > 3}
             delay={itemDelays[index] ?? columnDelay}
             item={item}
             key={`${item}-${index}`}
+            vertical={vertical}
           />
         ))}
       </div>
@@ -328,12 +435,16 @@ const ComparisonColumn = ({
 
 const ComparisonItem = ({
   accent,
+  compact,
   delay,
   item,
+  vertical,
 }: {
   accent: string;
+  compact: boolean;
   delay: number;
   item: string;
+  vertical: boolean;
 }) => {
   const entrance = useEntrance(delay);
   return (
@@ -343,21 +454,22 @@ const ComparisonItem = ({
         borderLeft: `5px solid ${accent}`,
         color: COLORS.ink,
         display: 'flex',
-        gap: 20,
+        gap: vertical ? 14 : 20,
         opacity: entrance,
-        paddingLeft: 18,
+        minHeight: vertical ? 80 : undefined,
+        paddingLeft: vertical ? 14 : 18,
         transform: `translateY(${(1 - entrance) * 18}px)`,
       }}
     >
-      <TechnologyBadge label={item} size={42} />
+      <TechnologyBadge label={item} size={vertical ? 36 : 42} />
       <FittedText
         align="left"
         fontWeight={600}
         lineHeight={1.2}
-        maxFontSize={34}
-        maxHeight={88}
+        maxFontSize={vertical ? 29 : 34}
+        maxHeight={vertical ? 76 : 88}
         maxLines={3}
-        maxWidth={500}
+        maxWidth={compact ? 340 : vertical ? 760 : 500}
         text={item}
       />
     </div>
@@ -365,7 +477,8 @@ const ComparisonItem = ({
 };
 
 const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
-  const {durationInFrames, fps} = useVideoConfig();
+  const {durationInFrames, fps, height, width} = useVideoConfig();
+  const vertical = isVerticalDimensions(width, height);
   const rowCount = Math.max(clip.primaryItems.length, clip.secondaryItems.length);
   const fallbackFrames = createRevealSchedule({
     durationInFrames,
@@ -401,9 +514,23 @@ const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
 
   return (
     <ClipCanvas>
-      <div style={{display: 'flex', flexDirection: 'column', gap: 60, width: 1580}}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: vertical ? 48 : 60,
+          width: vertical ? 936 : 1580,
+        }}
+      >
         <Header title={clip.title} />
-        <div style={{display: 'flex', gap: 60, justifyContent: 'center'}}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: vertical ? 'column' : 'row',
+            gap: vertical ? 34 : 60,
+            justifyContent: 'center',
+          }}
+        >
           <ComparisonColumn
             accent={COLORS.blue}
             columnDelay={columnDelay}
@@ -411,6 +538,7 @@ const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
             items={clip.primaryItems}
             label={clip.leftLabel}
             side={0}
+            vertical={vertical}
           />
           <ComparisonColumn
             accent={COLORS.violet}
@@ -419,6 +547,7 @@ const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
             items={clip.secondaryItems}
             label={clip.rightLabel}
             side={1}
+            vertical={vertical}
           />
         </div>
       </div>
@@ -428,7 +557,8 @@ const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
 
 const Timeline = ({clip}: {clip: AnimationClipSpec}) => {
   const frame = useCurrentFrame();
-  const {durationInFrames, fps} = useVideoConfig();
+  const {durationInFrames, fps, height, width} = useVideoConfig();
+  const vertical = isVerticalDimensions(width, height);
   const revealFrames = createRevealSchedule({
     durationInFrames,
     fps,
@@ -440,6 +570,54 @@ const Timeline = ({clip}: {clip: AnimationClipSpec}) => {
     revealFrames,
     transitionFrames: getBeatTransitionFrames(fps),
   });
+
+  if (vertical) {
+    const rowHeight = 188;
+    const lineHeight = Math.max(rowHeight, rowHeight * clip.primaryItems.length - 70);
+    return (
+      <ClipCanvas>
+        <div style={{display: 'flex', flexDirection: 'column', gap: 48, width: 936}}>
+          <Header title={clip.title} />
+          <div style={{position: 'relative'}}>
+            <div
+              style={{
+                background: COLORS.border,
+                height: lineHeight,
+                left: 465,
+                position: 'absolute',
+                top: 34,
+                width: 7,
+              }}
+            />
+            <div
+              style={{
+                background: `linear-gradient(180deg, ${COLORS.blue}, ${COLORS.violet})`,
+                borderRadius: 999,
+                height: lineHeight,
+                left: 465,
+                position: 'absolute',
+                top: 34,
+                transform: `scaleY(${lineProgress})`,
+                transformOrigin: 'top center',
+                width: 7,
+              }}
+            />
+            <div style={{display: 'flex', flexDirection: 'column', position: 'relative'}}>
+              {clip.primaryItems.map((item, index) => (
+                <TimelineItem
+                  delay={revealFrames[index] ?? 0}
+                  index={index}
+                  item={item}
+                  key={`${item}-${index}`}
+                  vertical
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </ClipCanvas>
+    );
+  }
 
   return (
     <ClipCanvas>
@@ -476,6 +654,7 @@ const Timeline = ({clip}: {clip: AnimationClipSpec}) => {
                 index={index}
                 item={item}
                 key={`${item}-${index}`}
+                vertical={false}
               />
             ))}
           </div>
@@ -489,12 +668,81 @@ const TimelineItem = ({
   delay,
   index,
   item,
+  vertical,
 }: {
   delay: number;
   index: number;
   item: string;
+  vertical: boolean;
 }) => {
   const entrance = useEntrance(delay);
+  if (vertical) {
+    const onLeft = index % 2 === 0;
+    return (
+      <div
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          height: 188,
+          justifyContent: onLeft ? 'flex-start' : 'flex-end',
+          opacity: entrance,
+          position: 'relative',
+          transform: `translateY(${(1 - entrance) * 20}px)`,
+          width: 936,
+        }}
+      >
+        <div
+          style={{
+            alignItems: 'center',
+            background: index % 2 === 0 ? COLORS.blue : COLORS.violet,
+            border: '7px solid rgba(15, 23, 42, 0.98)',
+            borderRadius: 999,
+            color: '#07111F',
+            display: 'flex',
+            fontSize: 27,
+            fontWeight: 900,
+            height: 78,
+            justifyContent: 'center',
+            left: 429,
+            position: 'absolute',
+            width: 78,
+            zIndex: 2,
+          }}
+        >
+          {index + 1}
+        </div>
+        <div
+          style={{
+            alignItems: 'center',
+            background: COLORS.panel,
+            border: `2px solid ${COLORS.border}`,
+            borderRadius: 22,
+            color: COLORS.ink,
+            display: 'flex',
+            gap: 14,
+            height: 146,
+            justifyContent: 'center',
+            padding: '18px 22px',
+            textAlign: 'center',
+            width: 382,
+          }}
+        >
+          <TechnologyBadge label={item} size={40} />
+          <FittedText
+            align="left"
+            fontWeight={700}
+            lineHeight={1.15}
+            maxFontSize={27}
+            maxHeight={104}
+            maxLines={4}
+            maxWidth={276}
+            text={item}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -557,7 +805,8 @@ const TimelineItem = ({
 };
 
 const Callout = ({clip}: {clip: AnimationClipSpec}) => {
-  const {durationInFrames, fps} = useVideoConfig();
+  const {durationInFrames, fps, height, width} = useVideoConfig();
+  const vertical = isVerticalDimensions(width, height);
   const fallbackFrames = createRevealSchedule({
     durationInFrames,
     fps,
@@ -584,7 +833,8 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
           border: `3px solid ${COLORS.blue}`,
           borderRadius: 38,
           boxShadow: '0 30px 90px rgba(0,0,0,0.42)',
-          maxWidth: 1380,
+          maxWidth: vertical ? 936 : 1380,
+          width: vertical ? 936 : undefined,
           opacity: entrance,
           overflow: 'hidden',
           transform: `scale(${0.82 + entrance * 0.18})`,
@@ -596,15 +846,20 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
             height: 12,
           }}
         />
-        <div style={{padding: '70px 90px 78px', textAlign: 'center'}}>
+        <div
+          style={{
+            padding: vertical ? '92px 64px 108px' : '70px 90px 78px',
+            textAlign: 'center',
+          }}
+        >
           <Header floating={false} title={clip.title} />
           <div
             style={{
               color: COLORS.muted,
               display: 'flex',
               flexDirection: 'column',
-              gap: 20,
-              marginTop: 42,
+              gap: vertical ? 34 : 20,
+              marginTop: vertical ? 74 : 42,
             }}
           >
             {clip.primaryItems.map((item, index) => (
@@ -612,6 +867,7 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
                 delay={itemDelays[index] ?? containerDelay}
                 item={item}
                 key={`${item}-${index}`}
+                vertical={vertical}
               />
             ))}
           </div>
@@ -621,27 +877,36 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
   );
 };
 
-const CalloutItem = ({delay, item}: {delay: number; item: string}) => {
+const CalloutItem = ({
+  delay,
+  item,
+  vertical,
+}: {
+  delay: number;
+  item: string;
+  vertical: boolean;
+}) => {
   const entrance = useEntrance(delay);
   return (
     <div
       style={{
         alignItems: 'center',
         display: 'flex',
-        gap: 18,
+        gap: vertical ? 22 : 18,
         justifyContent: 'center',
         opacity: entrance,
         transform: `translateY(${(1 - entrance) * 20}px)`,
       }}
     >
-      <TechnologyBadge label={item} size={44} />
+      <TechnologyBadge label={item} size={vertical ? 50 : 44} />
       <FittedText
         fontWeight={600}
         lineHeight={1.2}
-        maxFontSize={40}
-        maxHeight={92}
-        maxLines={3}
-        maxWidth={1060}
+        align={vertical ? 'left' : 'center'}
+        maxFontSize={vertical ? 38 : 40}
+        maxHeight={vertical ? 112 : 92}
+        maxLines={vertical ? 4 : 3}
+        maxWidth={vertical ? 700 : 1060}
         style={{color: COLORS.muted}}
         text={item}
       />
@@ -649,7 +914,12 @@ const CalloutItem = ({delay, item}: {delay: number; item: string}) => {
   );
 };
 
-export const AnimationClip = ({background, clip, technologyIcons}: RenderInput) => {
+export const AnimationClip = ({
+  background,
+  clip,
+  profile,
+  technologyIcons,
+}: RenderInput) => {
   const content = (() => {
     switch (clip.template) {
       case 'process-flow':
@@ -666,12 +936,19 @@ export const AnimationClip = ({background, clip, technologyIcons}: RenderInput) 
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: background === 'green' ? '#00FF00' : 'transparent',
+        backgroundColor:
+          background === 'green'
+            ? '#00FF00'
+            : background === 'dark'
+              ? '#020617'
+              : 'transparent',
       }}
     >
-      <TechnologyIconsProvider icons={technologyIcons}>
-        {content}
-      </TechnologyIconsProvider>
+      <RenderProfileContext.Provider value={profile}>
+        <TechnologyIconsProvider icons={technologyIcons}>
+          {content}
+        </TechnologyIconsProvider>
+      </RenderProfileContext.Provider>
     </AbsoluteFill>
   );
 };

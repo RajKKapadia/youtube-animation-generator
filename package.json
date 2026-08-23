@@ -1,15 +1,17 @@
 {
   "name": "youtube-animations",
-  "version": "0.1.0",
-  "description": "Generate editor-ready animation clips from subtitle files.",
+  "version": "0.2.0",
+  "description": "Generate narrated videos and editor-ready animation clips from text or subtitles.",
   "private": true,
   "bin": {
     "youtube-animations": "./dist/cli.js"
   },
   "scripts": {
-    "animations": "tsx src/cli.ts",
+    "animations": "node --import tsx src/cli.ts",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
+    "fixtures:layouts": "node --import tsx src/render-layout-fixtures.ts",
+    "fixtures:narrated": "node --import tsx src/render-narrated-fixture.ts",
     "test": "vitest run"
   },
   "engines": {
@@ -21,6 +23,7 @@
     "@remotion/bundler": "4.0.515",
     "@remotion/layout-utils": "4.0.515",
     "@remotion/renderer": "4.0.515",
+    "onnxruntime-node": "1.27.0",
     "openai": "7.5.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
