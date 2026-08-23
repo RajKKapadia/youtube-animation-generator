@@ -31,6 +31,37 @@ describe('createRevealSchedule', () => {
     expect(createRevealSchedule({durationInFrames: 120, fps: 30, total: 0})).toEqual([]);
     expect(createRevealSchedule({durationInFrames: 120, fps: 30, total: 1})).toEqual([10]);
   });
+
+  it('converts speech offsets to exact reveal frames', () => {
+    expect(
+      createRevealSchedule({
+        durationInFrames: 120,
+        fps: 30,
+        itemStartMs: [0, 250, 1_000, 2_100],
+        total: 4,
+      }),
+    ).toEqual([0, 8, 30, 63]);
+  });
+
+  it('clamps speech offsets and falls back when anchor counts do not match', () => {
+    expect(
+      createRevealSchedule({
+        durationInFrames: 120,
+        fps: 30,
+        itemStartMs: [-500, 9_000],
+        total: 2,
+      }),
+    ).toEqual([0, 119]);
+
+    expect(
+      createRevealSchedule({
+        durationInFrames: 120,
+        fps: 30,
+        itemStartMs: [0],
+        total: 2,
+      }),
+    ).toEqual(createRevealSchedule({durationInFrames: 120, fps: 30, total: 2}));
+  });
 });
 
 describe('createConnectionWindow', () => {

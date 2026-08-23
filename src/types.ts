@@ -19,7 +19,7 @@ export const subtitleCueSchema = z.object({
 
 export type SubtitleCue = z.infer<typeof subtitleCueSchema>;
 
-export const animationSuggestionSchema = z.object({
+const animationContentSchema = z.object({
   startCue: z.number().int().positive(),
   endCue: z.number().int().positive(),
   template: animationTemplateSchema,
@@ -31,18 +31,93 @@ export const animationSuggestionSchema = z.object({
   reason: z.string().min(1).max(180),
 });
 
+export const animationSuggestionSchema = animationContentSchema.extend({
+  primaryItemStartCues: z.array(z.number().int().positive()).max(6),
+  secondaryItemStartCues: z.array(z.number().int().positive()).max(6),
+});
+
 export const animationPlanResponseSchema = z.object({
   animations: z.array(animationSuggestionSchema).max(12),
 });
 
 export type AnimationSuggestion = z.infer<typeof animationSuggestionSchema>;
 
-export const animationClipSchema = animationSuggestionSchema.extend({
+export const speechItemTimingSchema = z.object({
+  cueIndex: z.number().int().positive(),
+  startMs: z.number().int().nonnegative(),
+});
+
+export type SpeechItemTiming = z.infer<typeof speechItemTimingSchema>;
+
+const addSpeechTimingIssues = (
+  timings: SpeechItemTiming[] | undefined,
+  items: string[],
+  clip: {durationMs: number; endCue: number; startCue: number},
+  path: string,
+  context: z.core.$RefinementCtx,
+): void => {
+  if (timings === undefined) {
+    return;
+  }
+
+  if (timings.length !== items.length) {
+    context.addIssue({
+      code: 'custom',
+      message: `${path} must contain one entry for each matching item.`,
+      path: [path],
+    });
+  }
+
+  let previousStartMs = -1;
+  for (const [index, timing] of timings.entries()) {
+    if (timing.cueIndex < clip.startCue || timing.cueIndex > clip.endCue) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Speech timing cue must be inside the clip cue range.',
+        path: [path, index, 'cueIndex'],
+      });
+    }
+    if (timing.startMs >= clip.durationMs) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Speech timing must start before the clip ends.',
+        path: [path, index, 'startMs'],
+      });
+    }
+    if (timing.startMs < previousStartMs) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Speech timings must be in chronological order.',
+        path: [path, index, 'startMs'],
+      });
+    }
+    previousStartMs = timing.startMs;
+  }
+};
+
+export const animationClipSchema = animationContentSchema.extend({
   id: z.string().min(1),
   sourceStartMs: z.number().int().nonnegative(),
   sourceEndMs: z.number().int().positive(),
   durationMs: z.number().int().positive(),
   transcript: z.string().min(1),
+  primaryItemTimings: z.array(speechItemTimingSchema).max(6).optional(),
+  secondaryItemTimings: z.array(speechItemTimingSchema).max(6).optional(),
+}).superRefine((clip, context) => {
+  addSpeechTimingIssues(
+    clip.primaryItemTimings,
+    clip.primaryItems,
+    clip,
+    'primaryItemTimings',
+    context,
+  );
+  addSpeechTimingIssues(
+    clip.secondaryItemTimings,
+    clip.secondaryItems,
+    clip,
+    'secondaryItemTimings',
+    context,
+  );
 });
 
 export type AnimationClip = z.infer<typeof animationClipSchema>;
@@ -52,6 +127,7 @@ export const savedPlanSchema = z.object({
   sourceSubtitle: z.string().min(1),
   generatedAt: z.string().min(1),
   model: z.string().min(1),
+  planningWarnings: z.array(z.string().min(1)).optional(),
   clips: z.array(animationClipSchema),
 });
 

@@ -222,6 +222,7 @@ const ProcessFlow = ({clip}: {clip: AnimationClipSpec}) => {
   const revealFrames = createRevealSchedule({
     durationInFrames,
     fps,
+    itemStartMs: clip.primaryItemTimings?.map((timing) => timing.startMs),
     total: clip.primaryItems.length,
   });
 
@@ -366,13 +367,37 @@ const ComparisonItem = ({
 const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
   const {durationInFrames, fps} = useVideoConfig();
   const rowCount = Math.max(clip.primaryItems.length, clip.secondaryItems.length);
-  const revealFrames = createRevealSchedule({
+  const fallbackFrames = createRevealSchedule({
     durationInFrames,
     fps,
     total: rowCount + 1,
   });
-  const columnDelay = revealFrames[0] ?? 0;
-  const itemDelays = revealFrames.slice(1);
+  const fallbackItemDelays = fallbackFrames.slice(1);
+  const primaryItemDelays = clip.primaryItemTimings
+    ? createRevealSchedule({
+        durationInFrames,
+        fps,
+        itemStartMs: clip.primaryItemTimings.map((timing) => timing.startMs),
+        total: clip.primaryItems.length,
+      })
+    : fallbackItemDelays;
+  const secondaryItemDelays = clip.secondaryItemTimings
+    ? createRevealSchedule({
+        durationInFrames,
+        fps,
+        itemStartMs: clip.secondaryItemTimings.map((timing) => timing.startMs),
+        total: clip.secondaryItems.length,
+      })
+    : fallbackItemDelays;
+  const hasSpeechTiming =
+    clip.primaryItemTimings !== undefined ||
+    clip.secondaryItemTimings !== undefined;
+  const firstItemDelay = Math.min(
+    ...[...primaryItemDelays, ...secondaryItemDelays],
+  );
+  const columnDelay = hasSpeechTiming && Number.isFinite(firstItemDelay)
+    ? Math.max(0, firstItemDelay - getBeatTransitionFrames(fps))
+    : (fallbackFrames[0] ?? 0);
 
   return (
     <ClipCanvas>
@@ -382,7 +407,7 @@ const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
           <ComparisonColumn
             accent={COLORS.blue}
             columnDelay={columnDelay}
-            itemDelays={itemDelays}
+            itemDelays={primaryItemDelays}
             items={clip.primaryItems}
             label={clip.leftLabel}
             side={0}
@@ -390,7 +415,7 @@ const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
           <ComparisonColumn
             accent={COLORS.violet}
             columnDelay={columnDelay}
-            itemDelays={itemDelays}
+            itemDelays={secondaryItemDelays}
             items={clip.secondaryItems}
             label={clip.rightLabel}
             side={1}
@@ -407,6 +432,7 @@ const Timeline = ({clip}: {clip: AnimationClipSpec}) => {
   const revealFrames = createRevealSchedule({
     durationInFrames,
     fps,
+    itemStartMs: clip.primaryItemTimings?.map((timing) => timing.startMs),
     total: clip.primaryItems.length,
   });
   const lineProgress = createSteppedProgress({
@@ -532,12 +558,24 @@ const TimelineItem = ({
 
 const Callout = ({clip}: {clip: AnimationClipSpec}) => {
   const {durationInFrames, fps} = useVideoConfig();
-  const revealFrames = createRevealSchedule({
+  const fallbackFrames = createRevealSchedule({
     durationInFrames,
     fps,
     total: clip.primaryItems.length + 1,
   });
-  const entrance = useEntrance(revealFrames[0] ?? 0);
+  const itemDelays = clip.primaryItemTimings
+    ? createRevealSchedule({
+        durationInFrames,
+        fps,
+        itemStartMs: clip.primaryItemTimings.map((timing) => timing.startMs),
+        total: clip.primaryItems.length,
+      })
+    : fallbackFrames.slice(1);
+  const firstItemDelay = itemDelays[0];
+  const containerDelay = clip.primaryItemTimings && firstItemDelay !== undefined
+    ? Math.max(0, firstItemDelay - getBeatTransitionFrames(fps))
+    : (fallbackFrames[0] ?? 0);
+  const entrance = useEntrance(containerDelay);
   return (
     <ClipCanvas>
       <div
@@ -571,7 +609,7 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
           >
             {clip.primaryItems.map((item, index) => (
               <CalloutItem
-                delay={revealFrames[index + 1] ?? revealFrames[0] ?? 0}
+                delay={itemDelays[index] ?? containerDelay}
                 item={item}
                 key={`${item}-${index}`}
               />

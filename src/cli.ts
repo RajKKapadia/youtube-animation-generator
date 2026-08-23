@@ -192,6 +192,13 @@ const main = async () => {
     }
   }
 
+  if (plan.planningWarnings?.length) {
+    console.warn('Planning warnings:');
+    for (const warning of plan.planningWarnings) {
+      console.warn(`  - ${warning}`);
+    }
+  }
+
   if (values['plan-only']) {
     return;
   }

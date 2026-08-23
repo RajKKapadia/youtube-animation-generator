@@ -1,19 +1,21 @@
 export interface RevealScheduleOptions {
   durationInFrames: number;
   fps: number;
+  itemStartMs?: readonly number[] | undefined;
   total: number;
   endFraction?: number;
 }
 
 /**
- * Spreads content reveals across the clip's actual subtitle-derived duration.
- * The first item arrives quickly, while the remaining items use most of the
- * available interval and leave a final hold for the completed graphic.
+ * Converts speech-aligned millisecond offsets when they are available.
+ * Legacy plans fall back to spreading reveals across the clip's actual
+ * subtitle-derived duration, with a final hold for the completed graphic.
  */
 export const createRevealSchedule = ({
   durationInFrames,
   endFraction = 0.72,
   fps,
+  itemStartMs,
   total,
 }: RevealScheduleOptions): number[] => {
   if (total <= 0) {
@@ -21,6 +23,15 @@ export const createRevealSchedule = ({
   }
 
   const safeDuration = Math.max(1, durationInFrames);
+  if (itemStartMs?.length === total) {
+    return itemStartMs.map((startMs) =>
+      Math.max(
+        0,
+        Math.min(safeDuration - 1, Math.round((startMs / 1_000) * fps)),
+      ),
+    );
+  }
+
   const firstFrame = Math.min(
     Math.round(fps * 1.2),
     Math.max(2, Math.round(safeDuration * 0.08)),
