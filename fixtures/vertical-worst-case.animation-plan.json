@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "sourceSubtitle": "/fixtures/vertical-worst-case.srt",
+  "generatedAt": "2026-08-23T00:00:00.000Z",
+  "model": "offline-fixture",
+  "clips": [
+    {
+      "id": "process-flow-worst-case",
+      "startCue": 1,
+      "endCue": 6,
+      "sourceStartMs": 0,
+      "sourceEndMs": 9000,
+      "durationMs": 9000,
+      "transcript": "A long six-stage process.",
+      "template": "process-flow",
+      "title": "A Complete Request Processing Pipeline with Six Distinct Stages",
+      "primaryItems": [
+        "Browser Client Application",
+        "Authentication Gateway Service",
+        "Durable Message Queue",
+        "Background Processing Worker",
+        "Vector Search and Ranking Engine",
+        "Transactional Result Database"
+      ],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Worst-case vertical process layout.",
+      "primaryItemTimings": [
+        {"cueIndex": 1, "startMs": 300},
+        {"cueIndex": 2, "startMs": 1600},
+        {"cueIndex": 3, "startMs": 2900},
+        {"cueIndex": 4, "startMs": 4200},
+        {"cueIndex": 5, "startMs": 5500},
+        {"cueIndex": 6, "startMs": 6800}
+      ],
+      "secondaryItemTimings": []
+    },
+    {
+      "id": "comparison-worst-case",
+      "startCue": 7,
+      "endCue": 12,
+      "sourceStartMs": 10000,
+      "sourceEndMs": 19000,
+      "durationMs": 9000,
+      "transcript": "Two long six-item comparison panels.",
+      "template": "comparison",
+      "title": "Synchronous Processing Compared with Event-Driven Architecture",
+      "primaryItems": [
+        "Immediate Coupling Between Services",
+        "Caller Waits for Every Dependency",
+        "Failures Propagate Through the Chain",
+        "Scaling Requires Coordinated Capacity",
+        "Simple End-to-End Request Tracing",
+        "Lower Operational Component Count"
+      ],
+      "secondaryItems": [
+        "Independent Producers and Consumers",
+        "Work Persists Until It Is Processed",
+        "Retries Stay Within Worker Boundaries",
+        "Consumers Scale at Their Own Rate",
+        "Correlation IDs Connect Distributed Work",
+        "More Infrastructure to Operate Safely"
+      ],
+      "leftLabel": "Synchronous Request Chain",
+      "rightLabel": "Event-Driven Queue",
+      "reason": "Worst-case vertical comparison layout.",
+      "primaryItemTimings": [
+        {"cueIndex": 7, "startMs": 300},
+        {"cueIndex": 8, "startMs": 1600},
+        {"cueIndex": 9, "startMs": 2900},
+        {"cueIndex": 10, "startMs": 4200},
+        {"cueIndex": 11, "startMs": 5500},
+        {"cueIndex": 12, "startMs": 6800}
+      ],
+      "secondaryItemTimings": [
+        {"cueIndex": 7, "startMs": 300},
+        {"cueIndex": 8, "startMs": 1600},
+        {"cueIndex": 9, "startMs": 2900},
+        {"cueIndex": 10, "startMs": 4200},
+        {"cueIndex": 11, "startMs": 5500},
+        {"cueIndex": 12, "startMs": 6800}
+      ]
+    },
+    {
+      "id": "timeline-worst-case",
+      "startCue": 13,
+      "endCue": 18,
+      "sourceStartMs": 20000,
+      "sourceEndMs": 29000,
+      "durationMs": 9000,
+      "transcript": "A long six-stage timeline.",
+      "template": "timeline",
+      "title": "Six Stages from Incoming Request to a Verified Final Response",
+      "primaryItems": [
+        "Receive and Validate Input",
+        "Authorize the Request Context",
+        "Persist Work in the Queue",
+        "Execute the Background Operation",
+        "Verify and Store the Result",
+        "Notify the Original Requester"
+      ],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Worst-case vertical timeline layout.",
+      "primaryItemTimings": [
+        {"cueIndex": 13, "startMs": 300},
+        {"cueIndex": 14, "startMs": 1600},
+        {"cueIndex": 15, "startMs": 2900},
+        {"cueIndex": 16, "startMs": 4200},
+        {"cueIndex": 17, "startMs": 5500},
+        {"cueIndex": 18, "startMs": 6800}
+      ],
+      "secondaryItemTimings": []
+    },
+    {
+      "id": "callout-worst-case",
+      "startCue": 19,
+      "endCue": 24,
+      "sourceStartMs": 30000,
+      "sourceEndMs": 39000,
+      "durationMs": 9000,
+      "transcript": "Six detailed takeaways.",
+      "template": "callout",
+      "title": "The Operational Principles That Keep Asynchronous Systems Reliable",
+      "primaryItems": [
+        "Make every consumer operation idempotent",
+        "Persist correlation identifiers end to end",
+        "Use bounded retries with dead-letter handling",
+        "Measure queue age as well as queue depth",
+        "Apply backpressure before dependencies fail",
+        "Design explicit recovery and replay procedures"
+      ],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Worst-case vertical callout layout.",
+      "primaryItemTimings": [
+        {"cueIndex": 19, "startMs": 300},
+        {"cueIndex": 20, "startMs": 1600},
+        {"cueIndex": 21, "startMs": 2900},
+        {"cueIndex": 22, "startMs": 4200},
+        {"cueIndex": 23, "startMs": 5500},
+        {"cueIndex": 24, "startMs": 6800}
+      ],
+      "secondaryItemTimings": []
+    }
+  ]
+}
