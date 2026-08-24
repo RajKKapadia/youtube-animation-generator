@@ -21,7 +21,11 @@ export const NarratedVideo = ({
     {plan.scenes[0] ? (
       <SceneBackdrop mode="ambient" scene={plan.scenes[0]} />
     ) : null}
-    <Audio src={staticFile(audioFile)} />
+    <Audio
+      playbackRate={plan.voiceoverPlaybackRate}
+      preservePitch
+      src={staticFile(audioFile)}
+    />
     {plan.scenes.map((scene) => {
       const clip: VisualClip = {
         id: scene.id,

@@ -2,7 +2,11 @@ import {access, mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
-import {materializeTimedNarration, synthesizeNarration} from './narration-audio.js';
+import {
+  materializeTimedNarration,
+  stableSupertonicSpeed,
+  synthesizeNarration,
+} from './narration-audio.js';
 import {draftNarratedPlanSchema, timedNarratedPlanSchema} from './types.js';
 
 const draft = draftNarratedPlanSchema.parse({
@@ -128,6 +132,7 @@ describe('materializeTimedNarration', () => {
       },
     ]);
     expect(timed.voiceoverFile).toBe('flow.audio/voiceover.wav');
+    expect(timed.voiceoverPlaybackRate).toBe(1);
     expect(() =>
       timedNarratedPlanSchema.parse({
         ...timed,
@@ -137,6 +142,78 @@ describe('materializeTimedNarration', () => {
         }],
       }),
     ).toThrow('one entry for every matching visual item');
+  });
+
+  it('scales sample-derived timings for pitch-preserving high-speed playback', () => {
+    const timed = materializeTimedNarration({
+      audioDirectoryName: 'flow.audio',
+      draft,
+      playbackRate: 1.25,
+      result: {
+        sampleRate: 1_000,
+        totalSamples: 1_500,
+        voiceoverFile: 'voiceover.wav',
+        scenes: [{
+          id: 'flow',
+          startSample: 0,
+          sampleCount: 1_500,
+          beats: [
+            {
+              id: 'a',
+              file: 'beats/a.wav',
+              startSample: 300,
+              sampleCount: 400,
+              phrases: [{id: 'a-starts', startSample: 300, sampleCount: 400}],
+            },
+            {
+              id: 'b',
+              file: 'beats/b.wav',
+              startSample: 850,
+              sampleCount: 350,
+              phrases: [
+                {id: 'then', startSample: 850, sampleCount: 150},
+                {id: 'b-finishes', startSample: 1_050, sampleCount: 150},
+              ],
+            },
+          ],
+        }],
+      },
+      speed: 1.5,
+      steps: 8,
+      voice: 'M1',
+    });
+
+    expect(timed).toMatchObject({
+      durationMs: 1_200,
+      totalSamples: 1_500,
+      ttsSpeed: 1.5,
+      voiceoverPlaybackRate: 1.25,
+    });
+    expect(timed.scenes[0]!.primaryItemTimings).toEqual([
+      {beatId: 'a', startMs: 240},
+      {beatId: 'b', startMs: 680},
+    ]);
+    expect(timed.scenes[0]!.beats[1]!.phrases[1]).toMatchObject({
+      startMs: 840,
+      durationMs: 120,
+      sampleCount: 150,
+    });
+  });
+});
+
+describe('stableSupertonicSpeed', () => {
+  it('uses direct synthesis for normal speeds', () => {
+    expect(stableSupertonicSpeed(1.2)).toEqual({
+      synthesisSpeed: 1.2,
+      playbackRate: 1,
+    });
+  });
+
+  it('caps the model generation speed and preserves the requested final speed', () => {
+    expect(stableSupertonicSpeed(1.5)).toEqual({
+      synthesisSpeed: 1.3,
+      playbackRate: 1.5 / 1.3,
+    });
   });
 });
 
@@ -159,6 +236,7 @@ describe('synthesizeNarration promotion', () => {
         voice: 'M1',
       },
       async (job) => {
+        expect(job.speed).toBe(1.05);
         expect(job.scenes[0]?.beats.map(({expression}) => expression)).toEqual([
           'breath',
           'none',
@@ -200,6 +278,66 @@ describe('synthesizeNarration promotion', () => {
     );
     expect(timed.voiceoverFile).toBe('flow.audio/voiceover.wav');
     await expect(access(resolve(output, 'flow.audio/voiceover.wav'))).resolves.toBeUndefined();
+  });
+
+  it('uses stable synthesis plus final playback tempo for high speeds', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'narration-audio-'));
+    temporaryDirectories.push(root);
+    const assets = resolve(root, 'assets');
+    const output = resolve(root, 'output');
+    await createFakeAssets(assets);
+    const timed = await synthesizeNarration(
+      {
+        assetsDirectory: assets,
+        audioDirectoryName: 'flow.audio',
+        draft,
+        force: false,
+        outputDirectory: output,
+        speed: 1.5,
+        steps: 8,
+        voice: 'M1',
+      },
+      async (job) => {
+        expect(job.speed).toBe(1.3);
+        await mkdir(resolve(job.outputDirectory, 'beats'), {recursive: true});
+        await writeFile(resolve(job.outputDirectory, 'voiceover.wav'), 'fixture');
+        await writeFile(resolve(job.outputDirectory, 'beats/a.wav'), 'fixture');
+        await writeFile(resolve(job.outputDirectory, 'beats/b.wav'), 'fixture');
+        return {
+          sampleRate: 1_000,
+          totalSamples: 1_500,
+          voiceoverFile: 'voiceover.wav',
+          scenes: [{
+            id: 'flow',
+            startSample: 0,
+            sampleCount: 1_500,
+            beats: [
+              {
+                id: 'a',
+                file: 'beats/a.wav',
+                startSample: 300,
+                sampleCount: 400,
+                phrases: [{id: 'a-starts', startSample: 300, sampleCount: 400}],
+              },
+              {
+                id: 'b',
+                file: 'beats/b.wav',
+                startSample: 850,
+                sampleCount: 350,
+                phrases: [
+                  {id: 'then', startSample: 850, sampleCount: 150},
+                  {id: 'b-finishes', startSample: 1_050, sampleCount: 150},
+                ],
+              },
+            ],
+          }],
+        };
+      },
+    );
+
+    expect(timed.ttsSpeed).toBe(1.5);
+    expect(timed.voiceoverPlaybackRate).toBeCloseTo(1.5 / 1.3);
+    expect(timed.durationMs).toBe(1_300);
   });
 
   it('cleans staging and leaves the final target absent when the worker fails', async () => {

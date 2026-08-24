@@ -63,6 +63,7 @@ const defaultNarratedProps: NarratedRenderInput = {
     voice: 'M1',
     ttsSpeed: 1.05,
     ttsSteps: 8,
+    voiceoverPlaybackRate: 1,
     voiceoverFile: 'voiceover.wav',
     durationMs: 6_000,
     totalSamples: 264_600,

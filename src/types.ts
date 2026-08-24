@@ -428,6 +428,7 @@ export const timedNarratedPlanSchema = z.object({
   voice: z.string().min(1),
   ttsSpeed: z.number().positive(),
   ttsSteps: z.number().int().positive(),
+  voiceoverPlaybackRate: z.number().positive().default(1),
   voiceoverFile: z.string().min(1),
   durationMs: z.number().int().positive(),
   totalSamples: z.number().int().positive(),

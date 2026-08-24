@@ -23,16 +23,36 @@ const pathExists = async (filePath: string): Promise<boolean> => {
   }
 };
 
-const samplesToMilliseconds = (samples: number, sampleRate: number): number =>
-  Math.round((samples / sampleRate) * 1_000);
+export const MAX_DIRECT_SUPERTONIC_SPEED = 1.3;
+
+export const stableSupertonicSpeed = (
+  requestedSpeed: number,
+): {playbackRate: number; synthesisSpeed: number} => {
+  const synthesisSpeed = Math.min(requestedSpeed, MAX_DIRECT_SUPERTONIC_SPEED);
+  return {
+    synthesisSpeed,
+    playbackRate: requestedSpeed / synthesisSpeed,
+  };
+};
+
+const samplesToMilliseconds = (
+  samples: number,
+  sampleRate: number,
+  playbackRate: number,
+): number => Math.round((samples / sampleRate / playbackRate) * 1_000);
 
 const sampleIntervalToTiming = (
   startSample: number,
   sampleCount: number,
   sampleRate: number,
+  playbackRate: number,
 ) => {
-  const startMs = samplesToMilliseconds(startSample, sampleRate);
-  const endMs = samplesToMilliseconds(startSample + sampleCount, sampleRate);
+  const startMs = samplesToMilliseconds(startSample, sampleRate, playbackRate);
+  const endMs = samplesToMilliseconds(
+    startSample + sampleCount,
+    sampleRate,
+    playbackRate,
+  );
   return {startMs, durationMs: Math.max(1, endMs - startMs)};
 };
 
@@ -40,6 +60,7 @@ export const materializeTimedNarration = ({
   audioDirectoryName,
   draft,
   result,
+  playbackRate = 1,
   speed,
   steps,
   voice,
@@ -47,6 +68,7 @@ export const materializeTimedNarration = ({
   audioDirectoryName: string;
   draft: DraftNarratedPlan;
   result: SupertonicResult;
+  playbackRate?: number;
   speed: number;
   steps: number;
   voice: SupertonicVoice;
@@ -74,6 +96,7 @@ export const materializeTimedNarration = ({
         beatStartSample,
         beatTiming.sampleCount,
         result.sampleRate,
+        playbackRate,
       );
       return {
         ...beat,
@@ -86,6 +109,7 @@ export const materializeTimedNarration = ({
             phraseTiming.startSample - timing.startSample,
             phraseTiming.sampleCount,
             result.sampleRate,
+            playbackRate,
           );
           return {
             ...phrase,
@@ -115,6 +139,7 @@ export const materializeTimedNarration = ({
         startMs: samplesToMilliseconds(
           beatTiming.startSample - timing.startSample,
           result.sampleRate,
+          playbackRate,
         ),
       };
     });
@@ -123,6 +148,7 @@ export const materializeTimedNarration = ({
       timing.startSample,
       timing.sampleCount,
       result.sampleRate,
+      playbackRate,
     );
     return {
       id: scene.id,
@@ -154,10 +180,15 @@ export const materializeTimedNarration = ({
     voice,
     ttsSpeed: speed,
     ttsSteps: steps,
+    voiceoverPlaybackRate: playbackRate,
     voiceoverFile: `${audioDirectoryName}/${result.voiceoverFile}`,
     durationMs: Math.max(
       1,
-      samplesToMilliseconds(result.totalSamples, result.sampleRate),
+      samplesToMilliseconds(
+        result.totalSamples,
+        result.sampleRate,
+        playbackRate,
+      ),
     ),
     totalSamples: result.totalSamples,
     scenes,
@@ -195,12 +226,13 @@ export const synthesizeNarration = async (
     resolve(options.outputDirectory, '.supertonic-staging-'),
   );
   try {
+    const {playbackRate, synthesisSpeed} = stableSupertonicSpeed(options.speed);
     const result = await runWorker({
       assetsDirectory: resolve(options.assetsDirectory),
       outputDirectory: stagingDirectory,
       voice: options.voice,
       language: supertonicLanguageSchema.parse(options.draft.language),
-      speed: options.speed,
+      speed: synthesisSpeed,
       steps: options.steps,
       scenes: options.draft.scenes.map((scene) => ({
         id: scene.id,
@@ -218,6 +250,7 @@ export const synthesizeNarration = async (
       audioDirectoryName: options.audioDirectoryName,
       draft: options.draft,
       result,
+      playbackRate,
       speed: options.speed,
       steps: options.steps,
       voice: options.voice,
