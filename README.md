@@ -178,6 +178,13 @@ Scene boundaries, phrase-caption windows, and item reveal timestamps are calcula
 
 Audio is staged in a temporary directory and promoted only after all beats and the combined voiceover succeed.
 
+For requested speeds above `1.3`, synthesis is capped at `1.3` to keep
+Supertonic's generation window from dropping or clipping phrase-final words.
+Remotion applies the remaining speed-up with pitch-preserving playback, and all
+scene, reveal, and caption timings are scaled from the original PCM offsets.
+The timed plan records this as `voiceoverPlaybackRate`; older timed plans default
+to `1` and render unchanged.
+
 ## Subtitle animation overlays
 
 Generate green-background H.264 clips from `.srt` or `.vtt`:
