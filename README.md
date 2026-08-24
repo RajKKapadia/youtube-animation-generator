@@ -1,6 +1,15 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos include exact phrase captions and animated ambient scene backgrounds by default.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos include sample-derived phrase captions, speech-aligned visual reveals, animated scene backgrounds, and optional subtle voice expressions.
+
+The current CLI supports two workflows:
+
+| Input | Command | Result |
+| --- | --- | --- |
+| `.srt` or `.vtt` subtitles | `youtube-animations episode.srt` | Separate editor-ready overlay clips plus a placement manifest |
+| `.txt` or `.md` source text | `youtube-animations create summary.md` | A planned, voiced, captioned, and rendered narrated video |
+
+Commands in this README use `pnpm run animations` to execute the TypeScript source from the repository. After `pnpm build`, the same arguments can be passed to `node dist/cli.js` or the configured `youtube-animations` binary.
 
 ## What it creates
 
@@ -49,11 +58,12 @@ Subtitle input keeps its existing editor-oriented output names. Vertical files i
 
 ## Requirements
 
-- Node.js 22.13 or newer
-- pnpm 11.22
-- an OpenAI API key for new plans
-- Google Chrome or Chromium for Remotion rendering
-- Git LFS for the one-time Supertonic model checkout
+- Node.js 22.13 or newer and pnpm 11.22
+- an OpenAI API key when creating a new plan or generating an uncached scene image
+- Google Chrome or Chromium when rendering video
+- Git LFS and the local Supertonic 3 model when synthesizing narrated audio
+
+Planning-only and saved-plan workflows skip the dependencies they do not use. For example, `--plan-only` does not need Chrome or Supertonic, and a timed narrated plan with ambient backgrounds can be rerendered without OpenAI or Supertonic.
 
 Remotion has separate license terms. Confirm that your use qualifies for its free license or obtain the appropriate license: [Remotion license](https://www.remotion.dev/license).
 
@@ -130,12 +140,20 @@ pnpm run animations create \
   --aspect-ratio both
 ```
 
-A timed plan can also be rendered again without planning or Supertonic. Ambient renders need no OpenAI call; generated renders reuse the cache and request only missing assets:
+A timed plan can also be rendered again without planning or Supertonic. Use `--force` to replace an existing video, or choose a new `--output-dir` to preserve it:
 
 ```bash
 pnpm run animations create \
-  --render-plan summary-video/summary.narration-timed.json
+  --render-plan summary-video/summary.narration-timed.json \
+  --force
+
+pnpm run animations create \
+  --render-plan summary-video/summary.narration-timed.json \
+  --scene-background generated \
+  --force
 ```
+
+The first command uses the default deterministic ambient background and makes no OpenAI call. The second reuses matching images from `summary.backgrounds/` and requests only missing generated assets.
 
 Narrated output is H.264 video with AAC voiceover audio. Planning and TTS happen once; `both` performs two independent Remotion render passes.
 
@@ -144,6 +162,8 @@ Narrated output is H.264 video with AAC voiceover audio. Planning and TTS happen
 Narrated plans support `none`, `laugh`, `breath`, and `sigh` at the semantic-beat level. The planner defaults to `none`, never places expressions on consecutive beats, and allows at most one non-neutral expression per roughly 30 seconds, capped at three for longer videos. `laugh` and `sigh` are reserved for source-supported emotional moments; `breath` can emphasize a hook, pivot, or conclusion.
 
 Expression metadata stays separate from spoken text and captions. The Supertonic tag is added only at synthesis time, before the first phrase in its beat, so plan editing and on-screen captions remain clean.
+
+After creating a draft with `--plan-only`, you can change a beat's `expression` in `summary.narration-plan.json` before synthesis. Use one of the supported values instead of adding `<laugh>`, `<breath>`, or `<sigh>` to phrase text.
 
 ## Exact voice-derived timing
 
@@ -200,15 +220,17 @@ Landscape remains 1920×1080 and preserves the original layouts.
 ```text
 --aspect-ratio <16:9|9:16|both>  Output orientation (default: 16:9)
 --output-dir <path>               Override the output directory
---model <model>                   Override OPENAI_MODEL
+--model <model>                   Default: OPENAI_MODEL or gpt-5.6
 --fps <number>                    Frames per second (default: 30)
---plan-only                       Save or validate without rendering
---render-plan <path>              Continue from a saved plan
---force                           Replace generated files
+--plan-only                       Save or validate without synthesis/rendering
+--render-plan <path>              Load a saved plan without text planning
+--force                           Replace existing generated outputs
+--help                            Show CLI help
+--version                         Show the CLI version
 
 Subtitle overlays:
 --format <prores|webm|green>      Output format (default: green)
---max-suggestions <number>        Maximum overlays (default: 6)
+--max-suggestions <number>        Maximum overlays (default: 6; max: 12)
 
 Narrated videos:
 --supertonic-assets-dir <path>    Default: models/supertonic-3
@@ -221,10 +243,10 @@ Narrated videos:
 --scene-background <mode>         ambient or generated; default: ambient
 --image-model <model>             Default: OPENAI_IMAGE_MODEL or gpt-image-2
 --image-quality <quality>         low, medium, or high; default: medium
---regenerate-backgrounds          Refresh matching cached generated assets
+--regenerate-backgrounds          Refresh cached assets; requires generated mode
 ```
 
-Every requested output is checked before rendering. Existing generated files are never replaced unless `--force` is supplied.
+Subtitle inputs default to an adjacent `animations/` directory. Narrated source inputs default to `<source-stem>-video/`, while a loaded plan defaults to its own directory. Every requested output is checked before rendering, and existing generated files are never replaced unless `--force` is supplied. Matching generated-background cache entries remain reusable unless `--regenerate-backgrounds` is also supplied.
 
 ## Templates and visual behavior
 
