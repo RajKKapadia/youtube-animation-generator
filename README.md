@@ -98,7 +98,7 @@ pnpm run animations create summary.md --aspect-ratio 9:16
 pnpm run animations create summary.md --aspect-ratio both
 ```
 
-The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. Every visible item is anchored to exactly one semantic narration beat, and every beat contains short ordered subtitle phrases. The complete spoken copy is also saved as `summary.narration-script.md` for review.
+The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. Every visible item is anchored to exactly one semantic narration beat, and every beat contains short ordered subtitle phrases. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
 
 Phrase captions are enabled by default and can be disabled for a clean export:
 
@@ -138,6 +138,12 @@ pnpm run animations create \
 ```
 
 Narrated output is H.264 video with AAC voiceover audio. Planning and TTS happen once; `both` performs two independent Remotion render passes.
+
+### Subtle voice expressions
+
+Narrated plans support `none`, `laugh`, `breath`, and `sigh` at the semantic-beat level. The planner defaults to `none`, never places expressions on consecutive beats, and allows at most one non-neutral expression per roughly 30 seconds, capped at three for longer videos. `laugh` and `sigh` are reserved for source-supported emotional moments; `breath` can emphasize a hook, pivot, or conclusion.
+
+Expression metadata stays separate from spoken text and captions. The Supertonic tag is added only at synthesis time, before the first phrase in its beat, so plan editing and on-screen captions remain clean.
 
 ## Exact voice-derived timing
 
@@ -229,7 +235,7 @@ Every requested output is checked before rendering. Existing generated files are
 
 Titles and labels are measured and fitted into their bounds. Larger technology badges come from the installed Simple Icons catalog when a product brand is recognized, then fall back to Lucide icons across authentication, security, users, documents, messaging, email, cache, storage, analytics, monitoring, payments, mobile, networking, webhooks, events, retries, scheduling, transforms, uploads/downloads, errors, and the existing technical concepts.
 
-Narrated plan files are version 2. Version-1 narrated draft and timed plans remain loadable: each legacy beat becomes one timed phrase and receives a deterministic ambient background prompt. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
+Narrated plan files are version 3. Version-2 narrated plans remain loadable with neutral expressions. Version-1 narrated draft and timed plans also remain loadable: each legacy beat becomes one timed phrase, receives a neutral expression, and gets a deterministic ambient background prompt. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
 
 Ambient backgrounds are generated entirely in Remotion from deterministic gradients, moving light fields, a subtle grid, and a vignette. Generated backgrounds use native `2048×1152` and `1152×2048` JPEG assets, add a slow pan/zoom plus readability overlays, and never silently fall back to ambient when generation was requested.
 
@@ -264,7 +270,10 @@ Render narrated MP4 fixtures with captions in both orientations. The second comm
 ```bash
 pnpm fixtures:narrated -- /tmp/youtube-animation-narrated ambient
 pnpm fixtures:narrated -- /tmp/youtube-animation-narrated-generated generated
+pnpm fixtures:voice-expressions -- /tmp/youtube-animation-voice-expressions
 ```
+
+The voice-expression fixture renders plain, laugh, breath, and sigh WAVs from the same sentence for listening QA. Its JSON manifest records exact sample counts and durations; optional second and third arguments override the Supertonic assets directory and voice.
 
 An offline overlay plan remains available for a full media render:
 

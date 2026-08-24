@@ -6,7 +6,7 @@ import {materializeTimedNarration, synthesizeNarration} from './narration-audio.
 import {draftNarratedPlanSchema, timedNarratedPlanSchema} from './types.js';
 
 const draft = draftNarratedPlanSchema.parse({
-  version: 2,
+  version: 3,
   kind: 'narrated-video',
   stage: 'draft',
   sourceText: 'A then B.',
@@ -28,12 +28,14 @@ const draft = draftNarratedPlanSchema.parse({
     beats: [
       {
         id: 'a',
+        expression: 'breath',
         phrases: [{id: 'a-starts', text: 'A starts.'}],
         primaryItemIndices: [0],
         secondaryItemIndices: [],
       },
       {
         id: 'b',
+        expression: 'none',
         phrases: [
           {id: 'then', text: 'Then'},
           {id: 'b-finishes', text: 'B finishes.'},
@@ -157,6 +159,10 @@ describe('synthesizeNarration promotion', () => {
         voice: 'M1',
       },
       async (job) => {
+        expect(job.scenes[0]?.beats.map(({expression}) => expression)).toEqual([
+          'breath',
+          'none',
+        ]);
         await mkdir(resolve(job.outputDirectory, 'beats'), {recursive: true});
         await writeFile(resolve(job.outputDirectory, 'voiceover.wav'), 'fixture');
         await writeFile(resolve(job.outputDirectory, 'beats/a.wav'), 'fixture');

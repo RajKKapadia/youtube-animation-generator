@@ -3,7 +3,7 @@ import {narrationScriptMarkdown} from './narration-planner.js';
 import {draftNarratedPlanSchema, narratedPlanSchema} from './types.js';
 
 const validPlan = {
-  version: 2 as const,
+  version: 3 as const,
   kind: 'narrated-video' as const,
   stage: 'draft' as const,
   sourceText: 'Queues let producers and consumers operate independently.',
@@ -26,6 +26,7 @@ const validPlan = {
       beats: [
         {
           id: 'producer',
+          expression: 'none' as const,
           phrases: [
             {id: 'producer-submits', text: 'The producer submits work.'},
           ],
@@ -34,6 +35,7 @@ const validPlan = {
         },
         {
           id: 'queue-consumer',
+          expression: 'none' as const,
           phrases: [
             {id: 'queue-holds', text: 'The queue lets the consumer'},
             {id: 'consumer-independent', text: 'process it independently.'},
@@ -74,6 +76,54 @@ describe('draftNarratedPlanSchema', () => {
     );
   });
 
+  it('keeps raw Supertonic tags out of subtitle phrases', () => {
+    const invalid = structuredClone(validPlan);
+    invalid.scenes[0]!.beats[0]!.phrases[0]!.text = '<laugh> Surprise.';
+    expect(() => draftNarratedPlanSchema.parse(invalid)).toThrow(
+      'expression field',
+    );
+  });
+
+  it('limits expressions and rejects consecutive expressive beats', () => {
+    const consecutive = structuredClone(validPlan);
+    consecutive.scenes[0]!.beats[0]!.expression = 'breath';
+    consecutive.scenes[0]!.beats[1]!.expression = 'laugh';
+    expect(() => draftNarratedPlanSchema.parse(consecutive)).toThrow(
+      'cannot be used on consecutive narration beats',
+    );
+
+    const tooMany = structuredClone(validPlan);
+    tooMany.targetDurationSeconds = 15;
+    tooMany.scenes[0]!.beats[0]!.expression = 'breath';
+    tooMany.scenes[0]!.beats.push({
+      id: 'conclusion',
+      expression: 'sigh',
+      phrases: [{id: 'conclusion-phrase', text: 'That is the result.'}],
+      primaryItemIndices: [],
+      secondaryItemIndices: [],
+    });
+    expect(() => draftNarratedPlanSchema.parse(tooMany)).toThrow(
+      'at most 1 voice expression',
+    );
+  });
+
+  it('normalizes version-2 phrase plans with neutral expressions', () => {
+    const legacyV2 = {
+      ...validPlan,
+      version: 2 as const,
+      scenes: validPlan.scenes.map((scene) => ({
+        ...scene,
+        beats: scene.beats.map(({expression: _expression, ...beat}) => beat),
+      })),
+    };
+    const parsed = narratedPlanSchema.parse(JSON.parse(JSON.stringify(legacyV2)));
+    expect(parsed.version).toBe(3);
+    expect(parsed.scenes[0]!.beats.map((beat) => beat.expression)).toEqual([
+      'none',
+      'none',
+    ]);
+  });
+
   it('normalizes version-1 beats into one phrase and supplies a background prompt', () => {
     const legacy = {
       ...validPlan,
@@ -91,11 +141,12 @@ describe('draftNarratedPlanSchema', () => {
     };
     const raw = JSON.parse(JSON.stringify(legacy));
     const parsed = narratedPlanSchema.parse(raw);
-    expect(parsed.version).toBe(2);
+    expect(parsed.version).toBe(3);
     expect(parsed.scenes[0]!.backgroundPrompt).toContain('A queue decouples work');
     expect(parsed.scenes[0]!.beats[0]!.phrases).toEqual([
       {id: 'producer-phrase-1', text: 'The producer submits work.'},
     ]);
+    expect(parsed.scenes[0]!.beats[0]!.expression).toBe('none');
   });
 
   it('normalizes version-1 timed beats without changing their sample timing', () => {
@@ -170,11 +221,13 @@ describe('draftNarratedPlanSchema', () => {
 });
 
 describe('narrationScriptMarkdown', () => {
-  it('writes the complete spoken script in scene order', () => {
-    expect(narrationScriptMarkdown(draftNarratedPlanSchema.parse(validPlan))).toBe(
+  it('writes the complete spoken script with reviewable expression cues', () => {
+    const expressive = structuredClone(validPlan);
+    expressive.scenes[0]!.beats[0]!.expression = 'breath';
+    expect(narrationScriptMarkdown(draftNarratedPlanSchema.parse(expressive))).toBe(
       '# Why queues help\n\n' +
         '## Scene 1: A queue decouples work\n\n' +
-        'The producer submits work. The queue lets the consumer process it independently.\n',
+        '*[breath]* The producer submits work. The queue lets the consumer process it independently.\n',
     );
   });
 });

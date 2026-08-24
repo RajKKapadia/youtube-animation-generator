@@ -23,6 +23,7 @@ const scene = draftNarrationSceneSchema.parse({
   reason: 'Shows decoupling.',
   beats: [{
     id: 'flow',
+    expression: 'none',
     phrases: [{id: 'flow-phrase', text: 'Work moves through the queue.'}],
     primaryItemIndices: [0, 1, 2],
     secondaryItemIndices: [],

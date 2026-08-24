@@ -4,6 +4,7 @@ import {z} from 'zod';
 import {
   draftNarrationSceneSchema,
   draftNarratedPlanSchema,
+  maxNarrationExpressionsForDuration,
   type DraftNarratedPlan,
   type NarrationPhrase,
 } from './types.js';
@@ -24,6 +25,8 @@ Use at most six scenes and only these visual templates:
 - callout: primaryItems are concise takeaways and secondaryItems is empty.
 
 Divide every scene's spoken narration into semantic beats. Divide each beat into short, complete subtitle phrases, normally two to eight spoken words and never more than 120 characters. Phrase ids must be unique inside the scene. Together, the phrases are the entire spoken narration: do not add a separate beat-level narration field.
+
+Give every beat an expression value: none, laugh, breath, or sigh. Use none by default. Use laugh only when the source genuinely supports a light or celebratory moment. Use sigh only when the source supports frustration, weariness, or relief. Use breath sparingly before an important hook, pivot, or conclusion. Never use expressions on consecutive beats. Expressions are nonverbal delivery cues and must not introduce an emotion that is absent from the source. Keep raw tags such as <laugh> out of narration phrases.
 
 Each visual item must be assigned to exactly one beat using its zero-based index. Indices must appear once, in increasing visual order across the beats. A beat may reveal several items. Never put an item index in two beats. Use empty index arrays when a beat reveals nothing in that lane.
 
@@ -48,6 +51,9 @@ export const planNarratedVideo = async (
   }
 
   const targetWords = Math.max(40, Math.round(options.targetDurationSeconds * 2.15));
+  const expressionLimit = maxNarrationExpressionsForDuration(
+    options.targetDurationSeconds,
+  );
   const client = new OpenAI({apiKey: process.env.OPENAI_API_KEY});
   const response = await client.responses.parse({
     model: options.model,
@@ -58,7 +64,9 @@ export const planNarratedVideo = async (
         role: 'user',
         content:
           `Create a roughly ${options.targetDurationSeconds}-second video in language code ` +
-          `"${options.language}". Aim for about ${targetWords} spoken words.\n\n` +
+          `"${options.language}". Aim for about ${targetWords} spoken words. ` +
+          `Use no more than ${expressionLimit} non-neutral voice ` +
+          `expression${expressionLimit === 1 ? '' : 's'} across the complete video.\n\n` +
           `SOURCE:\n${options.sourceText}`,
       },
     ],
@@ -72,7 +80,7 @@ export const planNarratedVideo = async (
   }
 
   return draftNarratedPlanSchema.parse({
-    version: 2,
+    version: 3,
     kind: 'narrated-video',
     stage: 'draft',
     sourceText: options.sourceText,
@@ -92,7 +100,12 @@ export const joinNarrationPhrases = (
 export const narrationScriptMarkdown = (plan: DraftNarratedPlan): string => {
   const sections = plan.scenes.map((scene, sceneIndex) => {
     const narration = scene.beats
-      .map((beat) => joinNarrationPhrases(beat.phrases, plan.language))
+      .map((beat) => {
+        const text = joinNarrationPhrases(beat.phrases, plan.language);
+        return beat.expression === 'none'
+          ? text
+          : `*[${beat.expression}]* ${text}`;
+      })
       .join(plan.language === 'ja' ? '' : ' ');
     return `## Scene ${sceneIndex + 1}: ${scene.title}\n\n${narration}`;
   });

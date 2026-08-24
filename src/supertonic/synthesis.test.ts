@@ -43,6 +43,7 @@ describe('Supertonic worker JSON jobs', () => {
         id: 'scene',
         beats: [{
           id: 'beat',
+          expression: 'none',
           phrases: [{id: 'greeting', text: 'नमस्ते'}],
         }],
       }],
@@ -80,12 +81,17 @@ describe('synthesizeJob', () => {
             beats: [
               {
                 id: 'one',
+                expression: 'breath',
                 phrases: [
                   {id: 'one-a', text: 'One'},
                   {id: 'one-b', text: 'again'},
                 ],
               },
-              {id: 'two', phrases: [{id: 'two-a', text: 'Two'}]},
+              {
+                id: 'two',
+                expression: 'none',
+                phrases: [{id: 'two-a', text: 'Two'}],
+              },
             ],
           },
         ],
@@ -103,7 +109,7 @@ describe('synthesizeJob', () => {
       },
     );
 
-    expect(calls).toEqual(['One', 'again', 'Two']);
+    expect(calls).toEqual(['<breath> One', 'again', 'Two']);
     expect(maxActive).toBe(1);
     expect(result.scenes[0]).toMatchObject({
       startSample: 0,
@@ -145,8 +151,16 @@ describe('synthesizeJob', () => {
           scenes: [{
             id: 'scene',
             beats: [
-              {id: 'one', phrases: [{id: 'one-a', text: 'One'}]},
-              {id: 'two', phrases: [{id: 'two-a', text: 'Two'}]},
+              {
+                id: 'one',
+                expression: 'none',
+                phrases: [{id: 'one-a', text: 'One'}],
+              },
+              {
+                id: 'two',
+                expression: 'none',
+                phrases: [{id: 'two-a', text: 'Two'}],
+              },
             ],
           }],
         },

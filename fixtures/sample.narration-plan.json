@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "kind": "narrated-video",
   "stage": "draft",
   "sourceText": "A durable queue lets a producer submit work without waiting for a consumer to finish it. The consumer can retry independently, while the queue preserves pending work.",
@@ -22,6 +22,7 @@
       "beats": [
         {
           "id": "producer-submits",
+          "expression": "breath",
           "phrases": [
             {
               "id": "producer-submits-1",
@@ -37,6 +38,7 @@
         },
         {
           "id": "consumer-processes",
+          "expression": "none",
           "phrases": [
             {
               "id": "consumer-processes-1",

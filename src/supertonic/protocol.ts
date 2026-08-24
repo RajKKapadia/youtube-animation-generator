@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {narrationExpressionSchema} from './expressions.js';
 
 export const supertonicVoiceSchema = z.enum([
   'M1',
@@ -34,6 +35,7 @@ export const supertonicJobSchema = z.object({
       beats: z.array(
         z.object({
           id: z.string().min(1),
+          expression: narrationExpressionSchema,
           phrases: z.array(
             z.object({id: z.string().min(1), text: z.string().min(1)}),
           ).min(1).max(12),
