@@ -29,6 +29,9 @@ export const FittedText = ({
   style,
   text,
 }: FittedTextProps) => {
+  const textTransform = style?.textTransform as
+    | Parameters<typeof measureText>[0]['textTransform']
+    | undefined;
   const layout = fitTextToBox({
     lineHeight,
     maxFontSize,
@@ -42,6 +45,7 @@ export const FittedText = ({
         fontWeight,
         letterSpacing: `${letterSpacing}px`,
         text: value,
+        ...(textTransform === undefined ? {} : {textTransform}),
         validateFontIsLoaded: false,
       }).width,
     text,
