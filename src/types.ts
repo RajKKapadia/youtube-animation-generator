@@ -3,9 +3,13 @@ import {
   narrationExpressionSchema,
   type NarrationExpression,
 } from './supertonic/expressions.js';
+import {
+  videoPaletteSchema,
+  type VideoPalette,
+} from './visual-palettes.js';
 
-export {narrationExpressionSchema};
-export type {NarrationExpression};
+export {narrationExpressionSchema, videoPaletteSchema};
+export type {NarrationExpression, VideoPalette};
 
 export const animationTemplateSchema = z.enum([
   'process-flow',
@@ -306,7 +310,7 @@ const addNarratedPlanIssues = (
 };
 
 export const draftNarratedPlanSchema = z.object({
-  version: z.literal(3),
+  version: z.literal(4),
   kind: z.literal('narrated-video'),
   stage: z.literal('draft'),
   sourceText: z.string().min(1),
@@ -315,6 +319,7 @@ export const draftNarratedPlanSchema = z.object({
   targetDurationSeconds: z.number().positive(),
   language: z.string().min(1),
   title: z.string().min(1).max(100),
+  palette: videoPaletteSchema,
   scenes: z.array(draftNarrationSceneSchema).min(1).max(6),
 }).superRefine(addNarratedPlanIssues);
 
@@ -415,7 +420,7 @@ export const timedNarrationSceneSchema = visualContentSchema.extend({
 export type TimedNarrationScene = z.infer<typeof timedNarrationSceneSchema>;
 
 export const timedNarratedPlanSchema = z.object({
-  version: z.literal(3),
+  version: z.literal(4),
   kind: z.literal('narrated-video'),
   stage: z.literal('timed'),
   sourceText: z.string().min(1),
@@ -424,6 +429,7 @@ export const timedNarratedPlanSchema = z.object({
   targetDurationSeconds: z.number().positive(),
   language: z.string().min(1),
   title: z.string().min(1).max(100),
+  palette: videoPaletteSchema,
   sampleRate: z.number().int().positive(),
   voice: z.string().min(1),
   ttsSpeed: z.number().positive(),
@@ -587,6 +593,40 @@ const legacyV2TimedNarratedPlanSchema = z.object({
   scenes: z.array(legacyV2TimedNarrationSceneSchema).min(1).max(6),
 });
 
+const legacyV3DraftNarratedPlanSchema = z.object({
+  version: z.literal(3),
+  kind: z.literal('narrated-video'),
+  stage: z.literal('draft'),
+  sourceText: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  targetDurationSeconds: z.number().positive(),
+  language: z.string().min(1),
+  title: z.string().min(1).max(100),
+  scenes: z.array(draftNarrationSceneSchema).min(1).max(6),
+});
+
+const legacyV3TimedNarratedPlanSchema = z.object({
+  version: z.literal(3),
+  kind: z.literal('narrated-video'),
+  stage: z.literal('timed'),
+  sourceText: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  targetDurationSeconds: z.number().positive(),
+  language: z.string().min(1),
+  title: z.string().min(1).max(100),
+  sampleRate: z.number().int().positive(),
+  voice: z.string().min(1),
+  ttsSpeed: z.number().positive(),
+  ttsSteps: z.number().int().positive(),
+  voiceoverPlaybackRate: z.number().positive().default(1),
+  voiceoverFile: z.string().min(1),
+  durationMs: z.number().int().positive(),
+  totalSamples: z.number().int().positive(),
+  scenes: z.array(timedNarrationSceneSchema).min(1).max(6),
+});
+
 export const defaultSceneBackgroundPrompt = (scene: VisualContent): string =>
   `Abstract technical atmosphere for ${scene.title}. ${scene.reason}`.slice(0, 600);
 
@@ -596,7 +636,8 @@ const normalizeLegacyDraft = (
   plan: z.infer<typeof legacyDraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 3,
+  version: 4,
+  palette: 'cyan',
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     backgroundPrompt: defaultSceneBackgroundPrompt(scene),
@@ -612,7 +653,8 @@ const normalizeLegacyTimed = (
   plan: z.infer<typeof legacyTimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 3,
+  version: 4,
+  palette: 'cyan',
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     backgroundPrompt: defaultSceneBackgroundPrompt(scene),
@@ -634,7 +676,8 @@ const normalizeLegacyV2Draft = (
   plan: z.infer<typeof legacyV2DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 3,
+  version: 4,
+  palette: 'cyan',
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     beats: scene.beats.map((beat) => ({
@@ -648,7 +691,8 @@ const normalizeLegacyV2Timed = (
   plan: z.infer<typeof legacyV2TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 3,
+  version: 4,
+  palette: 'cyan',
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     beats: scene.beats.map((beat) => ({
@@ -658,9 +702,27 @@ const normalizeLegacyV2Timed = (
   })),
 });
 
+const normalizeLegacyV3Draft = (
+  plan: z.infer<typeof legacyV3DraftNarratedPlanSchema>,
+): DraftNarratedPlan => draftNarratedPlanSchema.parse({
+  ...plan,
+  version: 4,
+  palette: 'cyan',
+});
+
+const normalizeLegacyV3Timed = (
+  plan: z.infer<typeof legacyV3TimedNarratedPlanSchema>,
+): TimedNarratedPlan => timedNarratedPlanSchema.parse({
+  ...plan,
+  version: 4,
+  palette: 'cyan',
+});
+
 export const narratedPlanSchema = z.union([
   draftNarratedPlanSchema,
   timedNarratedPlanSchema,
+  legacyV3DraftNarratedPlanSchema.transform(normalizeLegacyV3Draft),
+  legacyV3TimedNarratedPlanSchema.transform(normalizeLegacyV3Timed),
   legacyV2DraftNarratedPlanSchema.transform(normalizeLegacyV2Draft),
   legacyV2TimedNarratedPlanSchema.transform(normalizeLegacyV2Timed),
   legacyDraftNarratedPlanSchema.transform(normalizeLegacyDraft),
@@ -669,15 +731,9 @@ export const narratedPlanSchema = z.union([
 
 export type NarratedPlan = z.infer<typeof narratedPlanSchema>;
 
-export const publishAccentSchema = z.enum([
-  'cyan',
-  'violet',
-  'amber',
-  'emerald',
-  'rose',
-]);
+export const publishAccentSchema = videoPaletteSchema;
 
-export type PublishAccent = z.infer<typeof publishAccentSchema>;
+export type PublishAccent = VideoPalette;
 
 const youtubePublishMetadataSchema = z.object({
   title: z.string().trim().min(1).max(70),
@@ -781,6 +837,7 @@ export const renderInputSchema = z.object({
   background: renderBackgroundSchema,
   contentBottomInset: z.number().int().nonnegative().optional(),
   fps: z.number().int().positive(),
+  palette: videoPaletteSchema.default('cyan'),
   profile: renderProfileSchema,
   technologyIcons: z.record(z.string(), technologyBrandIconSchema).default({}),
 });

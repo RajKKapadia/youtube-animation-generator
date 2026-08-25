@@ -10,34 +10,7 @@ import {
   TechnologyBadge,
   TechnologyIconsProvider,
 } from './TechnologyBadge.js';
-
-const ACCENTS: Record<PublishAccent, {bright: string; glow: string; soft: string}> = {
-  cyan: {
-    bright: '#22D3EE',
-    glow: 'rgba(34, 211, 238, 0.46)',
-    soft: 'rgba(34, 211, 238, 0.14)',
-  },
-  violet: {
-    bright: '#A78BFA',
-    glow: 'rgba(167, 139, 250, 0.46)',
-    soft: 'rgba(167, 139, 250, 0.14)',
-  },
-  amber: {
-    bright: '#FBBF24',
-    glow: 'rgba(251, 191, 36, 0.44)',
-    soft: 'rgba(251, 191, 36, 0.14)',
-  },
-  emerald: {
-    bright: '#34D399',
-    glow: 'rgba(52, 211, 153, 0.44)',
-    soft: 'rgba(52, 211, 153, 0.14)',
-  },
-  rose: {
-    bright: '#FB7185',
-    glow: 'rgba(251, 113, 133, 0.44)',
-    soft: 'rgba(251, 113, 133, 0.14)',
-  },
-};
+import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 
 const ItemCard = ({
   accent,
@@ -78,7 +51,16 @@ const ItemCard = ({
   </div>
 );
 
-const accentFor = (accent: PublishAccent) => ACCENTS[accent];
+const accentFor = (accent: PublishAccent) => {
+  const palette = videoPaletteFor(accent);
+  return {
+    background: palette.background,
+    bright: palette.accents.primary,
+    glow: hexToRgba(palette.accents.primary, 0.46),
+    secondaryGlow: hexToRgba(palette.accents.secondary, 0.36),
+    soft: hexToRgba(palette.accents.primary, 0.14),
+  };
+};
 
 const Panel = ({
   accent,
@@ -248,11 +230,11 @@ const SceneMotif = ({
 );
 
 const StaticBackdrop = ({accent}: {accent: ReturnType<typeof accentFor>}) => (
-  <AbsoluteFill style={{backgroundColor: '#020617'}}>
+  <AbsoluteFill style={{backgroundColor: accent.background.start}}>
     <AbsoluteFill
       style={{
         background:
-          'radial-gradient(circle at 18% 14%, rgba(30,64,175,0.36), transparent 42%), linear-gradient(145deg, #020617 4%, #07142B 52%, #0A1023 100%)',
+          `radial-gradient(circle at 18% 14%, ${accent.glow}, transparent 42%), linear-gradient(145deg, ${accent.background.start} 4%, ${accent.background.middle} 52%, ${accent.background.end} 100%)`,
       }}
     />
     <div
@@ -270,7 +252,7 @@ const StaticBackdrop = ({accent}: {accent: ReturnType<typeof accentFor>}) => (
     />
     <div
       style={{
-        background: 'rgba(124,58,237,0.32)',
+        background: accent.secondaryGlow,
         borderRadius: '50%',
         bottom: '-20%',
         filter: 'blur(120px)',
@@ -291,7 +273,7 @@ const StaticBackdrop = ({accent}: {accent: ReturnType<typeof accentFor>}) => (
     />
     <AbsoluteFill
       style={{
-        background: 'radial-gradient(circle at center, transparent 28%, rgba(2,6,23,0.7) 100%)',
+        background: `radial-gradient(circle at center, transparent 28%, ${hexToRgba(accent.background.start, 0.7)} 100%)`,
       }}
     />
   </AbsoluteFill>
@@ -307,7 +289,9 @@ export const NarratedThumbnail = ({
   const accent = accentFor(publish.thumbnail.accent);
   return (
     <TechnologyIconsProvider icons={technologyIcons}>
-      <AbsoluteFill style={{backgroundColor: '#020617', overflow: 'hidden'}}>
+      <AbsoluteFill
+        style={{backgroundColor: accent.background.start, overflow: 'hidden'}}
+      >
         <StaticBackdrop accent={accent} />
         <div
           style={{

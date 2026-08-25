@@ -5,6 +5,7 @@ import {
   draftNarrationSceneSchema,
   draftNarratedPlanSchema,
   maxNarrationExpressionsForDuration,
+  videoPaletteSchema,
   type DraftNarratedPlan,
 } from './types.js';
 import {joinNarrationPhrases} from './narration-text.js';
@@ -13,6 +14,7 @@ export {joinNarrationPhrases} from './narration-text.js';
 
 const narrationResponseSchema = z.object({
   title: z.string().min(1).max(100),
+  palette: videoPaletteSchema,
   scenes: z.array(draftNarrationSceneSchema).min(1).max(6),
 });
 
@@ -36,7 +38,15 @@ Each visual item must be assigned to exactly one beat using its zero-based index
 
 Visible text must be concise enough for video cards. Narration may be more complete, but each beat should contain one coherent spoken thought. Scene ids, beat ids, and phrase ids must be stable lowercase kebab-case strings.
 
-For every scene, write a concise backgroundPrompt describing an abstract, cinematic visual metaphor for that scene. It must request no text, logos, user interfaces, or prominent people; it must keep the center and bottom low-detail for overlays; and it must suit a dark navy, cyan, and violet technical palette.`;
+Choose exactly one palette for the complete video based on the source's dominant subject and tone:
+- cyan for infrastructure, clarity, precision, and technical subjects.
+- violet for artificial intelligence, creativity, abstraction, and future-facing ideas.
+- emerald for growth, optimization, reliability, and sustainable systems.
+- amber for cost, urgency, caution, tradeoffs, and consequential decisions.
+- rose for human impact, conflict, risk, and emotionally significant subjects.
+Use cyan when no other palette is clearly more appropriate. Do not vary the palette between scenes.
+
+For every scene, write a concise backgroundPrompt describing an abstract, cinematic visual metaphor for that scene. Keep it color-neutral because the renderer adds the selected palette. It must request no text, logos, user interfaces, or prominent people, and it must keep the center and bottom low-detail for overlays.`;
 
 export interface NarrationPlanOptions {
   language: string;
@@ -84,7 +94,7 @@ export const planNarratedVideo = async (
   }
 
   return draftNarratedPlanSchema.parse({
-    version: 3,
+    version: 4,
     kind: 'narrated-video',
     stage: 'draft',
     sourceText: options.sourceText,

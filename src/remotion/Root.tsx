@@ -19,6 +19,7 @@ import {PUBLISH_COVER_PROFILES} from '../publish-profile.js';
 const defaultProps: RenderInput = {
   background: 'transparent',
   fps: 30,
+  palette: 'cyan',
   profile: RENDER_PROFILES['16:9'],
   technologyIcons: {},
   clip: {
@@ -60,7 +61,7 @@ const defaultNarratedProps: NarratedRenderInput = {
   profile: RENDER_PROFILES['16:9'],
   technologyIcons: {},
   plan: {
-    version: 3,
+    version: 4,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText: 'A request moves through a queue.',
@@ -69,6 +70,7 @@ const defaultNarratedProps: NarratedRenderInput = {
     targetDurationSeconds: 6,
     language: 'en',
     title: 'Request flow',
+    palette: 'cyan',
     sampleRate: 44_100,
     voice: 'M1',
     ttsSpeed: 1.05,
@@ -79,7 +81,7 @@ const defaultNarratedProps: NarratedRenderInput = {
     totalSamples: 264_600,
     scenes: [{
       id: 'request-flow',
-      backgroundPrompt: 'Abstract request pipeline with flowing cyan data trails.',
+      backgroundPrompt: 'Abstract request pipeline with flowing data trails.',
       startMs: 0,
       durationMs: 6_000,
       template: 'process-flow',

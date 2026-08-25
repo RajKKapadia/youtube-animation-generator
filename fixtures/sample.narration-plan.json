@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "kind": "narrated-video",
   "stage": "draft",
   "sourceText": "A durable queue lets a producer submit work without waiting for a consumer to finish it. The consumer can retry independently, while the queue preserves pending work.",
@@ -8,10 +8,11 @@
   "targetDurationSeconds": 15,
   "language": "en",
   "title": "Why durable queues help",
+  "palette": "cyan",
   "scenes": [
     {
       "id": "decoupled-flow",
-      "backgroundPrompt": "An abstract durable data queue connecting a producer to a consumer with calm cyan light paths.",
+      "backgroundPrompt": "An abstract durable data queue connecting a producer to a consumer with calm light paths.",
       "template": "process-flow",
       "title": "A queue separates submission from processing",
       "primaryItems": ["Producer", "Durable Queue", "Consumer"],

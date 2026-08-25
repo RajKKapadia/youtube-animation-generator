@@ -13,8 +13,10 @@ import type {
   RenderProfile,
   SceneBackgroundMode,
   TimedNarrationScene,
+  VideoPalette,
 } from '../types.js';
 import {isVerticalDimensions} from '../render-profile.js';
+import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
 
 const clamp = {
@@ -88,10 +90,12 @@ const ambientOrbStyle = ({
 export const SceneBackdrop = ({
   asset,
   mode,
+  palette,
   scene,
 }: {
   asset?: string | undefined;
   mode: SceneBackgroundMode;
+  palette: VideoPalette;
   scene: TimedNarrationScene;
 }) => {
   if (mode === 'generated' && !asset) {
@@ -102,6 +106,7 @@ export const SceneBackdrop = ({
   const seed = seedFor(scene.id);
   const opacity = useSceneOpacity();
   const progress = frame / Math.max(1, durationInFrames - 1);
+  const theme = videoPaletteFor(palette);
   const generatedScale = interpolate(progress, [0, 1], [1.055, 1.115], clamp);
   const generatedX = interpolate(
     progress,
@@ -111,7 +116,7 @@ export const SceneBackdrop = ({
   );
 
   return (
-    <AbsoluteFill style={{backgroundColor: '#020617', opacity}}>
+    <AbsoluteFill style={{backgroundColor: theme.background.start, opacity}}>
       {mode === 'generated' && asset ? (
         <Img
           src={staticFile(asset)}
@@ -127,13 +132,13 @@ export const SceneBackdrop = ({
           <AbsoluteFill
             style={{
               background:
-                'radial-gradient(circle at 50% 18%, rgba(30,64,175,0.24), transparent 48%), linear-gradient(145deg, #020617 8%, #07142B 48%, #0A1023 100%)',
+                `radial-gradient(circle at 50% 18%, ${hexToRgba(theme.accents.primary, 0.24)}, transparent 48%), linear-gradient(145deg, ${theme.background.start} 8%, ${theme.background.middle} 48%, ${theme.background.end} 100%)`,
             }}
           />
           <div
             style={{
               ...ambientOrbStyle({
-                color: 'rgba(14, 165, 233, 0.74)',
+                color: hexToRgba(theme.accents.primary, 0.74),
                 frame,
                 phase: 0.7,
                 seed,
@@ -146,7 +151,7 @@ export const SceneBackdrop = ({
           <div
             style={{
               ...ambientOrbStyle({
-                color: 'rgba(124, 58, 237, 0.74)',
+                color: hexToRgba(theme.accents.secondary, 0.74),
                 frame,
                 phase: 2.3,
                 seed: seed >>> 3,

@@ -1,6 +1,6 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos include beat-aligned phrase captions, speech-aligned visual reveals, animated scene backgrounds, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos include beat-aligned phrase captions, speech-aligned visual reveals, summary-aware cinematic palettes, animated scene backgrounds, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
 
 The current CLI supports three workflows:
 
@@ -121,7 +121,9 @@ pnpm run animations create summary.md --aspect-ratio 9:16
 pnpm run animations create summary.md --aspect-ratio both
 ```
 
-The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. Every visible item is anchored to exactly one semantic narration beat. A beat is one coherent utterance that can be spoken in a natural breath; its short ordered phrases are caption and reveal boundaries, not separate TTS calls. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
+The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. It also selects one dark cinematic palette—`cyan`, `violet`, `emerald`, `amber`, or `rose`—from the source's dominant subject and tone. The saved `palette` field drives every scene and makes rerenders deterministic; edit that field in the draft or timed plan to override the automatic choice.
+
+Every visible item is anchored to exactly one semantic narration beat. A beat is one coherent utterance that can be spoken in a natural breath; its short ordered phrases are caption and reveal boundaries, not separate TTS calls. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
 
 Phrase captions are enabled by default and can be disabled for a clean export:
 
@@ -186,7 +188,7 @@ The command makes one source-grounded Structured Outputs request, then saves:
 - `summary.thumbnail.png` — 1280×720 YouTube thumbnail
 - `summary.cover-9x16.png` — 1080×1920 vertical cover
 
-The metadata contains one recommended title, two alternatives, 15–20 tags, a concise description, separate hashtags, a short cover headline, and the narration scene used for the supporting diagram. The prompt receives the original source and final narration, rejects invented links or claims, and treats source text as content rather than instructions.
+The metadata contains one recommended title, two alternatives, 15–20 tags, a concise description, separate hashtags, a short cover headline, and the narration scene used for the supporting diagram. Newly generated covers inherit the narration plan's palette, while an existing edited publish JSON can still override its saved `thumbnail.accent`. The prompt receives the original source and final narration, rejects invented links or claims, and treats source text as content rather than instructions.
 
 Generate only the editable sidecars without starting Chrome:
 
@@ -317,9 +319,9 @@ Subtitle inputs default to an adjacent `animations/` directory. Narrated source 
 
 Titles and labels are measured and fitted into their bounds. Larger technology badges come from the installed Simple Icons catalog when a product brand is recognized, then fall back to Lucide icons across authentication, security, users, documents, messaging, email, cache, storage, analytics, monitoring, payments, mobile, networking, webhooks, events, retries, scheduling, transforms, uploads/downloads, errors, and the existing technical concepts.
 
-Narrated plan files are version 3. Version-2 narrated plans remain loadable with neutral expressions. Version-1 narrated draft and timed plans also remain loadable: each legacy beat becomes one timed phrase, receives a neutral expression, and gets a deterministic ambient background prompt. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
+Narrated plan files are version 4 and store one summary-aware palette for the complete video. Version-3 plans remain loadable with the compatibility `cyan` palette. Version-2 plans also normalize to `cyan` with neutral expressions. Version-1 narrated draft and timed plans remain loadable: each legacy beat becomes one timed phrase, receives a neutral expression, gets a deterministic ambient background prompt, and uses `cyan`. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
 
-Ambient backgrounds are generated entirely in Remotion from deterministic gradients, moving light fields, a subtle grid, and a vignette. Generated backgrounds use native `2048×1152` and `1152×2048` JPEG assets, add a slow pan/zoom plus readability overlays, and never silently fall back to ambient when generation was requested.
+Ambient backgrounds are generated entirely in Remotion from palette-driven deterministic gradients, moving light fields, a subtle grid, and a vignette. The same palette drives diagram accents and new publish covers. Generated backgrounds use native `2048×1152` and `1152×2048` JPEG assets, receive the stored palette direction in their prompt, add a slow pan/zoom plus neutral readability overlays, and never silently fall back to ambient when generation was requested. Changing the palette changes the prompt hash, so cached images cannot silently retain the previous color family.
 
 The OpenAI Responses API uses Zod Structured Outputs with response storage disabled (`store: false`). OpenAI selects and fills these templates; it does not generate arbitrary React code.
 
@@ -356,7 +358,7 @@ pnpm fixtures:publish -- /tmp/youtube-animation-publish
 pnpm fixtures:voice-expressions -- /tmp/youtube-animation-voice-expressions
 ```
 
-The publish fixture uses saved local narration and metadata plans. It renders both PNG cover orientations without an API call so typography, safe areas, diagram density, and mobile readability can be inspected directly.
+The narrated fixture accepts an optional palette after the background mode, for example `ambient emerald`. The publish fixture accepts an optional palette after its output directory. Run it once for each of `cyan`, `violet`, `emerald`, `amber`, and `rose` to compare both cover orientations without an API call. These fixtures make typography, safe areas, diagram density, color consistency, and mobile readability inspectable directly.
 
 The voice-expression fixture renders plain, laugh, breath, and sigh WAVs from the same sentence for listening QA. Its JSON manifest records exact sample counts and durations; optional second and third arguments override the Supertonic assets directory and voice.
 

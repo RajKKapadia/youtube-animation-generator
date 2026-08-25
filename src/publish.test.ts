@@ -9,7 +9,7 @@ import {publishCoverOutputPaths} from './publish-render.js';
 import {narratedPlanSchema, narratedPublishPlanSchema} from './types.js';
 
 const narration = narratedPlanSchema.parse({
-  version: 3,
+  version: 4,
   kind: 'narrated-video',
   stage: 'draft',
   sourceText: 'Queues let producers and consumers work independently.',
@@ -18,6 +18,7 @@ const narration = narratedPlanSchema.parse({
   targetDurationSeconds: 30,
   language: 'en',
   title: 'Why queues help',
+  palette: 'violet',
   scenes: [{
     id: 'queue-flow',
     backgroundPrompt: 'Abstract queue flow.',
@@ -74,7 +75,6 @@ const response = {
     headline: 'Queues Make Systems Flow',
     eyebrow: 'System Design',
     sceneId: 'queue-flow',
-    accent: 'cyan' as const,
   },
 };
 
@@ -84,6 +84,7 @@ describe('narrated publish metadata', () => {
       generatedAt: '2026-08-25T00:00:00.000Z',
       language: 'en',
       model: 'fixture',
+      palette: narration.palette,
       response,
       sourcePlan: '/videos/queue.narration-plan.json',
     });
@@ -98,6 +99,7 @@ describe('narrated publish metadata', () => {
     expect(plan.youtube.description).toContain(
       '#Queues #SystemDesign #BackendDevelopment',
     );
+    expect(plan.thumbnail.accent).toBe('violet');
     expect(narratedPublishPlanSchema.parse(plan)).toEqual(plan);
   });
 
@@ -106,6 +108,7 @@ describe('narrated publish metadata', () => {
       generatedAt: '2026-08-25T00:00:00.000Z',
       language: 'en',
       model: 'fixture',
+      palette: narration.palette,
       response,
       sourcePlan: 'queue.narration-plan.json',
     });
@@ -129,6 +132,7 @@ describe('narrated publish metadata', () => {
       generatedAt: '2026-08-25T00:00:00.000Z',
       language: 'en',
       model: 'fixture',
+      palette: narration.palette,
       response: {
         ...response,
         thumbnail: {...response.thumbnail, sceneId: 'invented-scene'},
