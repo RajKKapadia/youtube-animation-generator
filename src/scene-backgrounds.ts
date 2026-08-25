@@ -12,7 +12,9 @@ import {
   type DraftNarrationScene,
   type ImageQuality,
   type RenderAspectRatio,
+  type VideoPalette,
 } from './types.js';
+import {videoPaletteFor} from './visual-palettes.js';
 
 const backgroundManifestEntrySchema = z.object({
   sceneId: z.string().min(1),
@@ -58,6 +60,7 @@ const safeFilenamePart = (value: string): string =>
 export const sceneBackgroundPrompt = (
   scene: Pick<DraftNarrationScene, 'backgroundPrompt' | 'title'>,
   aspectRatio: RenderAspectRatio,
+  palette: VideoPalette,
 ): string => {
   const orientation = aspectRatio === '16:9'
     ? 'wide cinematic 16:9 landscape composition'
@@ -65,7 +68,8 @@ export const sceneBackgroundPrompt = (
   return [
     scene.backgroundPrompt.trim(),
     `${orientation}.`,
-    'Abstract cinematic educational-video background in a dark navy, cyan, and violet technical palette.',
+    'Abstract cinematic educational-video background.',
+    videoPaletteFor(palette).generatedImageDirection,
     'No text, letters, numbers, logos, watermarks, user-interface panels, or prominent people.',
     'Keep the center and lower caption area low-detail and high-contrast for foreground diagrams and subtitles.',
   ].join(' ');
@@ -182,6 +186,7 @@ export interface MaterializeSceneBackgroundsOptions {
   generateImage?: GenerateSceneImage;
   model: string;
   outputDirectory: string;
+  palette: VideoPalette;
   quality: ImageQuality;
   regenerate: boolean;
   scenes: DraftNarrationScene[];
@@ -198,7 +203,11 @@ export const materializeSceneBackgrounds = async (
   const existingManifest = await readManifest(finalDirectory);
   const requested = profilesForSelection(options.aspectRatio).flatMap((profile) =>
     options.scenes.map((scene) => {
-      const prompt = sceneBackgroundPrompt(scene, profile.aspectRatio);
+      const prompt = sceneBackgroundPrompt(
+        scene,
+        profile.aspectRatio,
+        options.palette,
+      );
       const promptHash = sceneBackgroundCacheKey({
         aspectRatio: profile.aspectRatio,
         model: options.model,

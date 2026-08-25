@@ -6,6 +6,7 @@ import {
   narratedPlanSchema,
   narratedPublishPlanSchema,
   publishSceneSchema,
+  videoPaletteSchema,
 } from './types.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -15,14 +16,19 @@ const main = async () => {
   const outputDirectory = resolve(
     process.argv[2] ?? '/tmp/youtube-animation-publish-fixtures',
   );
+  const palette = videoPaletteSchema.parse(process.argv[3] ?? 'cyan');
   const narration = narratedPlanSchema.parse(JSON.parse(await readFile(
     resolve(repositoryRoot, 'fixtures/sample.narration-plan.json'),
     'utf8',
   )));
-  const publish = narratedPublishPlanSchema.parse(JSON.parse(await readFile(
+  const savedPublish = narratedPublishPlanSchema.parse(JSON.parse(await readFile(
     resolve(repositoryRoot, 'fixtures/sample.publish.json'),
     'utf8',
   )));
+  const publish = narratedPublishPlanSchema.parse({
+    ...savedPublish,
+    thumbnail: {...savedPublish.thumbnail, accent: palette},
+  });
   const selected = narration.scenes.find(({id}) => id === publish.thumbnail.sceneId);
   if (!selected) throw new Error('Fixture publish plan references a missing scene.');
 
@@ -33,7 +39,7 @@ const main = async () => {
     outputDirectory,
     publish,
     scene: publishSceneSchema.parse(selected),
-    stem: 'sample',
+    stem: `sample-${palette}`,
   });
   console.log(`Rendered ${outputs.length} publish-cover fixtures to ${outputDirectory}`);
 };

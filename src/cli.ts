@@ -287,6 +287,7 @@ const resolveSceneBackgrounds = async ({
     aspectRatio,
     model: visual.imageModel,
     outputDirectory,
+    palette: plan.palette,
     quality: visual.imageQuality,
     regenerate: visual.regenerateBackgrounds,
     scenes: plan.scenes,

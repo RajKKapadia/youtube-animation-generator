@@ -6,6 +6,7 @@ import {
   PhraseCaption,
   SceneBackdrop,
 } from './NarratedSceneLayer.js';
+import {videoPaletteFor} from '../visual-palettes.js';
 
 export const NarratedVideo = ({
   audioFile,
@@ -17,9 +18,15 @@ export const NarratedVideo = ({
   sceneBackground,
   technologyIcons,
 }: NarratedRenderInput) => (
-  <AbsoluteFill style={{backgroundColor: '#020617'}}>
+  <AbsoluteFill
+    style={{backgroundColor: videoPaletteFor(plan.palette).background.start}}
+  >
     {plan.scenes[0] ? (
-      <SceneBackdrop mode="ambient" scene={plan.scenes[0]} />
+      <SceneBackdrop
+        mode="ambient"
+        palette={plan.palette}
+        scene={plan.scenes[0]}
+      />
     ) : null}
     <Audio
       playbackRate={plan.voiceoverPlaybackRate}
@@ -51,6 +58,7 @@ export const NarratedVideo = ({
             <SceneBackdrop
               asset={backgroundAssets[scene.id]}
               mode={sceneBackground}
+              palette={plan.palette}
               scene={scene}
             />
             <AnimationClip
@@ -58,6 +66,7 @@ export const NarratedVideo = ({
               clip={clip}
               contentBottomInset={captionBottomInset(captions, profile)}
               fps={fps}
+              palette={plan.palette}
               profile={profile}
               technologyIcons={technologyIcons}
             />

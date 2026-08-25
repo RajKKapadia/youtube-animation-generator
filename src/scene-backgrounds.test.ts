@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {
   materializeSceneBackgrounds,
+  sceneBackgroundCacheKey,
   sceneBackgroundPrompt,
   withTransientImageRetries,
 } from './scene-backgrounds.js';
@@ -47,13 +48,29 @@ const makeOutputDirectory = async () => {
 
 describe('scene background prompts', () => {
   it('adds orientation and readability constraints without changing the plan prompt', () => {
-    const prompt = sceneBackgroundPrompt(scene, '9:16');
+    const prompt = sceneBackgroundPrompt(scene, '9:16', 'emerald');
     expect(prompt).toContain('tall cinematic 9:16 portrait');
+    expect(prompt).toContain('deep teal-green palette');
     expect(prompt).toContain('No text');
     expect(prompt).toContain('lower caption area low-detail');
     expect(scene.backgroundPrompt).toBe(
       'A glowing queue carrying durable work between two systems.',
     );
+  });
+
+  it('changes generated-image prompts and cache keys with the stored palette', () => {
+    const cyan = sceneBackgroundPrompt(scene, '16:9', 'cyan');
+    const amber = sceneBackgroundPrompt(scene, '16:9', 'amber');
+    expect(amber).toContain('deep amber-brown palette');
+    expect(amber).not.toBe(cyan);
+    const keyFor = (prompt: string) => sceneBackgroundCacheKey({
+      aspectRatio: '16:9',
+      model: 'gpt-image-2',
+      prompt,
+      quality: 'medium',
+      sceneId: scene.id,
+    });
+    expect(keyFor(amber)).not.toBe(keyFor(cyan));
   });
 });
 
@@ -69,6 +86,7 @@ describe('materializeSceneBackgrounds', () => {
       },
       model: 'gpt-image-2',
       outputDirectory,
+      palette: 'emerald',
       quality: 'medium',
       regenerate: false,
       scenes: [scene],
@@ -89,6 +107,7 @@ describe('materializeSceneBackgrounds', () => {
       },
       model: 'gpt-image-2',
       outputDirectory,
+      palette: 'emerald',
       quality: 'medium',
       regenerate: false,
       scenes: [scene],
@@ -109,6 +128,7 @@ describe('materializeSceneBackgrounds', () => {
       generateImage,
       model: 'gpt-image-2',
       outputDirectory,
+      palette: 'emerald',
       quality: 'medium',
       regenerate: false,
       scenes: [scene],
@@ -119,6 +139,7 @@ describe('materializeSceneBackgrounds', () => {
       generateImage,
       model: 'gpt-image-2',
       outputDirectory,
+      palette: 'emerald',
       quality: 'medium',
       regenerate: false,
       scenes: [{...scene, backgroundPrompt: `${scene.backgroundPrompt} New direction.`}],
@@ -129,6 +150,7 @@ describe('materializeSceneBackgrounds', () => {
       generateImage,
       model: 'gpt-image-2',
       outputDirectory,
+      palette: 'emerald',
       quality: 'medium',
       regenerate: true,
       scenes: [{...scene, backgroundPrompt: `${scene.backgroundPrompt} New direction.`}],
@@ -153,6 +175,7 @@ describe('materializeSceneBackgrounds', () => {
       },
       model: 'gpt-image-2',
       outputDirectory,
+      palette: 'emerald',
       quality: 'medium',
       regenerate: false,
       scenes: [scene],
@@ -168,6 +191,7 @@ describe('materializeSceneBackgrounds', () => {
       generateImage: async () => Buffer.from('stable image'),
       model: 'gpt-image-2',
       outputDirectory,
+      palette: 'emerald',
       quality: 'medium',
       regenerate: false,
       scenes: [scene],
@@ -182,6 +206,7 @@ describe('materializeSceneBackgrounds', () => {
       },
       model: 'gpt-image-2',
       outputDirectory,
+      palette: 'emerald',
       quality: 'medium',
       regenerate: true,
       scenes: [scene],

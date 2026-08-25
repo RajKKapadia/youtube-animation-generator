@@ -5,9 +5,9 @@ import {z} from 'zod';
 import {joinNarrationPhrases} from './narration-planner.js';
 import {
   narratedPublishPlanSchema,
-  publishAccentSchema,
   type NarratedPlan,
   type NarratedPublishPlan,
+  type VideoPalette,
 } from './types.js';
 
 const youtubePublishResponseSchema = z.object({
@@ -22,7 +22,6 @@ const youtubePublishResponseSchema = z.object({
     headline: z.string().min(1).max(56),
     eyebrow: z.string().min(1).max(32),
     sceneId: z.string().min(1).max(80),
-    accent: publishAccentSchema,
   }),
 });
 
@@ -40,7 +39,6 @@ Create:
 - A thumbnail headline of three to six words when the language uses spaces. Keep it concrete, readable, and different from a sentence-length title.
 - A short thumbnail eyebrow that identifies the content category or topic.
 - One exact scene id from the supplied scene list whose visual items best support the headline.
-- One accent color from the allowed enum.
 
 The thumbnail is rendered from typography, shapes, diagrams, and existing icons. Do not describe, request, or imply generated imagery.`;
 
@@ -75,12 +73,14 @@ export const materializePublishPlan = ({
   generatedAt,
   language,
   model,
+  palette,
   response,
   sourcePlan,
 }: {
   generatedAt: string;
   language: string;
   model: string;
+  palette: VideoPalette;
   response: YoutubePublishResponse;
   sourcePlan: string;
 }): NarratedPublishPlan => {
@@ -110,7 +110,7 @@ export const materializePublishPlan = ({
       headline: response.thumbnail.headline.trim(),
       eyebrow: response.thumbnail.eyebrow.trim(),
       sceneId: response.thumbnail.sceneId.trim(),
-      accent: response.thumbnail.accent,
+      accent: palette,
     },
   });
 };
@@ -190,6 +190,7 @@ export const generateNarratedPublishPlan = async (
     generatedAt: new Date().toISOString(),
     language: options.plan.language,
     model: options.model,
+    palette: options.plan.palette,
     response: response.output_parsed,
     sourcePlan: options.sourcePlan,
   });

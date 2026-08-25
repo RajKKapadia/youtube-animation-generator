@@ -20,15 +20,15 @@ import {
   createSteppedProgress,
   getBeatTransitionFrames,
 } from './timing.js';
+import {videoPaletteFor} from '../visual-palettes.js';
 
 const COLORS = {
   ink: '#F8FAFC',
   muted: '#CBD5E1',
   panel: 'rgba(15, 23, 42, 0.94)',
   panelLight: 'rgba(30, 41, 59, 0.94)',
-  blue: '#38BDF8',
-  violet: '#A78BFA',
-  green: '#34D399',
+  primary: 'var(--video-primary)',
+  secondary: 'var(--video-secondary)',
   border: 'rgba(148, 163, 184, 0.32)',
 };
 
@@ -222,7 +222,7 @@ const VerticalFlowArrow = ({
     <div style={{height: 52, position: 'relative', width: 44}}>
       <div
         style={{
-          background: `linear-gradient(180deg, ${COLORS.blue}, ${COLORS.violet})`,
+          background: `linear-gradient(180deg, ${COLORS.primary}, ${COLORS.secondary})`,
           borderRadius: 999,
           height: 35,
           left: 19,
@@ -237,7 +237,7 @@ const VerticalFlowArrow = ({
         style={{
           borderLeft: '13px solid transparent',
           borderRight: '13px solid transparent',
-          borderTop: `18px solid ${COLORS.violet}`,
+          borderTop: `18px solid ${COLORS.secondary}`,
           bottom: 0,
           left: 9,
           opacity: progress,
@@ -259,7 +259,7 @@ const FlowArrow = ({endFrame, startFrame}: {endFrame: number; startFrame: number
     <div style={{height: 44, position: 'relative', width: 86}}>
       <div
         style={{
-          background: `linear-gradient(90deg, ${COLORS.blue}, ${COLORS.violet})`,
+          background: `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.secondary})`,
           borderRadius: 999,
           height: 6,
           left: 0,
@@ -273,7 +273,7 @@ const FlowArrow = ({endFrame, startFrame}: {endFrame: number; startFrame: number
       <div
         style={{
           borderBottom: '13px solid transparent',
-          borderLeft: `18px solid ${COLORS.violet}`,
+          borderLeft: `18px solid ${COLORS.secondary}`,
           borderTop: '13px solid transparent',
           opacity: progress,
           position: 'absolute',
@@ -537,7 +537,7 @@ const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
           }}
         >
           <ComparisonColumn
-            accent={COLORS.blue}
+            accent={COLORS.primary}
             columnDelay={columnDelay}
             itemDelays={primaryItemDelays}
             items={clip.primaryItems}
@@ -546,7 +546,7 @@ const Comparison = ({clip}: {clip: AnimationClipSpec}) => {
             vertical={vertical}
           />
           <ComparisonColumn
-            accent={COLORS.violet}
+            accent={COLORS.secondary}
             columnDelay={columnDelay}
             itemDelays={secondaryItemDelays}
             items={clip.secondaryItems}
@@ -596,7 +596,7 @@ const Timeline = ({clip}: {clip: AnimationClipSpec}) => {
             />
             <div
               style={{
-                background: `linear-gradient(180deg, ${COLORS.blue}, ${COLORS.violet})`,
+                background: `linear-gradient(180deg, ${COLORS.primary}, ${COLORS.secondary})`,
                 borderRadius: 999,
                 height: lineHeight,
                 left: 465,
@@ -641,7 +641,7 @@ const Timeline = ({clip}: {clip: AnimationClipSpec}) => {
           />
           <div
             style={{
-              background: `linear-gradient(90deg, ${COLORS.blue}, ${COLORS.violet})`,
+              background: `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.secondary})`,
               borderRadius: 999,
               height: 7,
               left: 100,
@@ -699,7 +699,7 @@ const TimelineItem = ({
         <div
           style={{
             alignItems: 'center',
-            background: index % 2 === 0 ? COLORS.blue : COLORS.violet,
+            background: index % 2 === 0 ? COLORS.primary : COLORS.secondary,
             border: '7px solid rgba(15, 23, 42, 0.98)',
             borderRadius: 999,
             color: '#07111F',
@@ -763,7 +763,7 @@ const TimelineItem = ({
       <div
         style={{
           alignItems: 'center',
-          background: index % 2 === 0 ? COLORS.blue : COLORS.violet,
+          background: index % 2 === 0 ? COLORS.primary : COLORS.secondary,
           border: '8px solid rgba(15, 23, 42, 0.95)',
           borderRadius: 999,
           color: '#07111F',
@@ -835,7 +835,7 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
       <div
         style={{
           background: COLORS.panel,
-          border: `3px solid ${COLORS.blue}`,
+          border: `3px solid ${COLORS.primary}`,
           borderRadius: 38,
           boxShadow: '0 30px 90px rgba(0,0,0,0.42)',
           maxWidth: vertical ? 936 : 1380,
@@ -847,7 +847,7 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
       >
         <div
           style={{
-            background: `linear-gradient(90deg, ${COLORS.blue}, ${COLORS.violet})`,
+            background: `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.secondary})`,
             height: 12,
           }}
         />
@@ -923,9 +923,11 @@ export const AnimationClip = ({
   background,
   clip,
   contentBottomInset = 0,
+  palette,
   profile,
   technologyIcons,
 }: RenderInput) => {
+  const theme = videoPaletteFor(palette);
   const content = (() => {
     switch (clip.template) {
       case 'process-flow':
@@ -942,13 +944,15 @@ export const AnimationClip = ({
   return (
     <AbsoluteFill
       style={{
+        '--video-primary': theme.accents.primary,
+        '--video-secondary': theme.accents.secondary,
         backgroundColor:
           background === 'green'
             ? '#00FF00'
             : background === 'dark'
-              ? '#020617'
+              ? theme.background.start
               : 'transparent',
-      }}
+      } as CSSProperties}
     >
       <RenderProfileContext.Provider value={profile}>
         <ContentBottomInsetContext.Provider value={contentBottomInset}>

@@ -3,7 +3,7 @@ import {narrationScriptMarkdown} from './narration-planner.js';
 import {draftNarratedPlanSchema, narratedPlanSchema} from './types.js';
 
 const validPlan = {
-  version: 3 as const,
+  version: 4 as const,
   kind: 'narrated-video' as const,
   stage: 'draft' as const,
   sourceText: 'Queues let producers and consumers operate independently.',
@@ -12,6 +12,7 @@ const validPlan = {
   targetDurationSeconds: 60,
   language: 'en',
   title: 'Why queues help',
+  palette: 'emerald' as const,
   scenes: [
     {
       id: 'queue-flow',
@@ -50,7 +51,18 @@ const validPlan = {
 
 describe('draftNarratedPlanSchema', () => {
   it('accepts exactly-once semantic item anchors', () => {
-    expect(draftNarratedPlanSchema.parse(validPlan).scenes).toHaveLength(1);
+    const parsed = draftNarratedPlanSchema.parse(validPlan);
+    expect(parsed.scenes).toHaveLength(1);
+    expect(parsed.palette).toBe('emerald');
+  });
+
+  it('accepts only curated video palettes', () => {
+    for (const palette of ['cyan', 'violet', 'emerald', 'amber', 'rose'] as const) {
+      expect(draftNarratedPlanSchema.parse({...validPlan, palette}).palette)
+        .toBe(palette);
+    }
+    expect(() => draftNarratedPlanSchema.parse({...validPlan, palette: 'random'}))
+      .toThrow();
   });
 
   it('rejects duplicate, missing, and unordered anchors', () => {
@@ -117,11 +129,23 @@ describe('draftNarratedPlanSchema', () => {
       })),
     };
     const parsed = narratedPlanSchema.parse(JSON.parse(JSON.stringify(legacyV2)));
-    expect(parsed.version).toBe(3);
+    expect(parsed.version).toBe(4);
+    expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.beats.map((beat) => beat.expression)).toEqual([
       'none',
       'none',
     ]);
+  });
+
+  it('normalizes version-3 expression plans to the compatibility palette', () => {
+    const {palette: _palette, ...withoutPalette} = validPlan;
+    const parsed = narratedPlanSchema.parse({
+      ...withoutPalette,
+      version: 3,
+    });
+    expect(parsed.version).toBe(4);
+    expect(parsed.palette).toBe('cyan');
+    expect(parsed.scenes[0]!.beats[0]!.expression).toBe('none');
   });
 
   it('normalizes version-1 beats into one phrase and supplies a background prompt', () => {
@@ -141,7 +165,8 @@ describe('draftNarratedPlanSchema', () => {
     };
     const raw = JSON.parse(JSON.stringify(legacy));
     const parsed = narratedPlanSchema.parse(raw);
-    expect(parsed.version).toBe(3);
+    expect(parsed.version).toBe(4);
+    expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.backgroundPrompt).toContain('A queue decouples work');
     expect(parsed.scenes[0]!.beats[0]!.phrases).toEqual([
       {id: 'producer-phrase-1', text: 'The producer submits work.'},
