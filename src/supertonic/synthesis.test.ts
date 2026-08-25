@@ -2,6 +2,10 @@ import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
+import {
+  allocateNarrationPhraseSamples,
+  joinNarrationPhrases,
+} from '../narration-text.js';
 import {synthesizeJob} from './synthesis.js';
 import {trimSynthesizedWaveform} from './wav.js';
 import {supertonicJobSchema} from './protocol.js';
@@ -27,6 +31,36 @@ describe('trimSynthesizedWaveform', () => {
     expect(() => trimSynthesizedWaveform([0], 1, 1_000)).toThrow(
       'reported 1000 samples',
     );
+  });
+});
+
+describe('beat utterance timing', () => {
+  it('joins caption phrases without turning them into speech boundaries', () => {
+    const phrases = [
+      {text: 'Engineering decisions are moving'},
+      {text: 'out of the IDE'},
+      {text: 'and into team conversations.'},
+    ];
+
+    expect(joinNarrationPhrases(phrases, 'en')).toBe(
+      'Engineering decisions are moving out of the IDE and into team conversations.',
+    );
+    expect(joinNarrationPhrases([{text: '前半'}, {text: '後半。'}], 'ja')).toBe(
+      '前半後半。',
+    );
+  });
+
+  it('partitions every beat sample into positive text-weighted caption windows', () => {
+    const allocations = allocateNarrationPhraseSamples([
+      {text: 'Engineering decisions are moving'},
+      {text: 'out of the IDE'},
+      {text: 'and into team conversations.'},
+    ], 10_000);
+
+    expect(allocations.reduce((sum, samples) => sum + samples, 0)).toBe(10_000);
+    expect(allocations.every((samples) => samples > 0)).toBe(true);
+    expect(allocations[0]).toBeGreaterThan(allocations[1]!);
+    expect(allocations[2]).toBeGreaterThan(allocations[1]!);
   });
 });
 
@@ -109,28 +143,28 @@ describe('synthesizeJob', () => {
       },
     );
 
-    expect(calls).toEqual(['<breath> One', 'again', 'Two']);
+    expect(calls).toEqual(['<breath> One again', 'Two']);
     expect(maxActive).toBe(1);
     expect(result.scenes[0]).toMatchObject({
       startSample: 0,
-      sampleCount: 809,
+      sampleCount: 756,
       beats: [
         {
           startSample: 300,
-          sampleCount: 56,
+          sampleCount: 3,
           phrases: [
-            {id: 'one-a', startSample: 300, sampleCount: 3},
-            {id: 'one-b', startSample: 353, sampleCount: 3},
+            {id: 'one-a', startSample: 300, sampleCount: 1},
+            {id: 'one-b', startSample: 301, sampleCount: 2},
           ],
         },
         {
-          startSample: 506,
+          startSample: 453,
           sampleCount: 3,
-          phrases: [{id: 'two-a', startSample: 506, sampleCount: 3}],
+          phrases: [{id: 'two-a', startSample: 453, sampleCount: 3}],
         },
       ],
     });
-    expect(result.totalSamples).toBe(809);
+    expect(result.totalSamples).toBe(756);
     const voiceover = await readFile(resolve(directory, 'voiceover.wav'));
     expect(voiceover.readUInt32LE(40)).toBe(result.totalSamples * 2);
   });

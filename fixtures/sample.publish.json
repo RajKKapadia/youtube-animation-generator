@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "kind": "narrated-publish-kit",
+  "sourcePlan": "sample.narration-plan.json",
+  "generatedAt": "2026-08-25T00:00:00.000Z",
+  "model": "offline-fixture",
+  "language": "en",
+  "youtube": {
+    "title": "Durable Queues Explained with One Simple Visual Flow",
+    "alternateTitles": [
+      "How Durable Queues Keep Background Work Moving Safely",
+      "Understand Producer Queue Consumer Architecture Visually"
+    ],
+    "description": "See how a durable queue separates submission from processing so consumers can retry independently.\n\nWhat you'll learn:\n- Why producers should not wait for consumers\n- How queues preserve pending work\n- Where independent retries fit\n\n#MessageQueues #SystemDesign #BackendDevelopment",
+    "tags": [
+      "programming",
+      "technology",
+      "software tutorial",
+      "message queues",
+      "durable queues",
+      "system design",
+      "backend development",
+      "producer consumer pattern",
+      "asynchronous processing",
+      "distributed systems",
+      "software architecture",
+      "queue tutorial",
+      "message broker basics",
+      "background job processing",
+      "learn system design visually"
+    ],
+    "hashtags": [
+      "MessageQueues",
+      "SystemDesign",
+      "BackendDevelopment"
+    ]
+  },
+  "thumbnail": {
+    "headline": "Queues Keep Work Moving",
+    "eyebrow": "System Design",
+    "sceneId": "decoupled-flow",
+    "accent": "cyan"
+  }
+}

@@ -3,9 +3,12 @@ import {resolve} from 'node:path';
 import type {SupertonicJob, SupertonicResult} from './protocol.js';
 import {applyNarrationExpression} from './expressions.js';
 import {trimSynthesizedWaveform, writePcm16Wav} from './wav.js';
+import {
+  allocateNarrationPhraseSamples,
+  joinNarrationPhrases,
+} from '../narration-text.js';
 
 export const SCENE_PRE_ROLL_SECONDS = 0.3;
-export const BETWEEN_PHRASES_SECONDS = 0.05;
 export const BETWEEN_BEATS_SECONDS = 0.15;
 export const SCENE_POST_ROLL_SECONDS = 0.3;
 
@@ -29,7 +32,6 @@ export const synthesizeJob = async (
   const beatsDirectory = resolve(job.outputDirectory, 'beats');
   await mkdir(beatsDirectory, {recursive: true});
   const preRollSamples = Math.round(SCENE_PRE_ROLL_SECONDS * engine.sampleRate);
-  const betweenPhraseSamples = Math.round(BETWEEN_PHRASES_SECONDS * engine.sampleRate);
   const betweenBeatSamples = Math.round(BETWEEN_BEATS_SECONDS * engine.sampleRate);
   const postRollSamples = Math.round(SCENE_POST_ROLL_SECONDS * engine.sampleRate);
   const audioChunks: Float32Array[] = [];
@@ -52,45 +54,36 @@ export const synthesizeJob = async (
         appendSilence(betweenBeatSamples);
       }
       const beatStartSample = cursor;
-      const beatAudioChunks: Float32Array[] = [];
-      const phrases: SupertonicResult['scenes'][number]['beats'][number]['phrases'] = [];
-      for (const [phraseIndex, phrase] of beat.phrases.entries()) {
-        if (phraseIndex > 0) {
-          const silence = new Float32Array(betweenPhraseSamples);
-          beatAudioChunks.push(silence);
-          audioChunks.push(silence);
-          cursor += silence.length;
-        }
-        const synthesis = await engine.synthesize(
-          applyNarrationExpression(
-            phrase.text,
-            phraseIndex === 0 ? beat.expression : 'none',
-          ),
-          job.language,
-          job.steps,
-          job.speed,
-        );
-        const audio = trimSynthesizedWaveform(
-          synthesis.audio,
-          synthesis.durationSeconds,
-          engine.sampleRate,
-        );
-        phrases.push({
+      const utterance = joinNarrationPhrases(beat.phrases, job.language);
+      const synthesis = await engine.synthesize(
+        applyNarrationExpression(utterance, beat.expression),
+        job.language,
+        job.steps,
+        job.speed,
+      );
+      const beatAudio = trimSynthesizedWaveform(
+        synthesis.audio,
+        synthesis.durationSeconds,
+        engine.sampleRate,
+      );
+      const phraseSampleCounts = allocateNarrationPhraseSamples(
+        beat.phrases,
+        beatAudio.length,
+      );
+      let phraseStartSample = beatStartSample;
+      const phrases = beat.phrases.map((phrase, phraseIndex) => {
+        const sampleCount = phraseSampleCounts[phraseIndex]!;
+        const timing = {
           id: phrase.id,
-          startSample: cursor,
-          sampleCount: audio.length,
-        });
-        beatAudioChunks.push(audio);
-        audioChunks.push(audio);
-        cursor += audio.length;
-      }
-      const beatSampleCount = cursor - beatStartSample;
-      const beatAudio = new Float32Array(beatSampleCount);
-      let beatWriteOffset = 0;
-      for (const chunk of beatAudioChunks) {
-        beatAudio.set(chunk, beatWriteOffset);
-        beatWriteOffset += chunk.length;
-      }
+          startSample: phraseStartSample,
+          sampleCount,
+        };
+        phraseStartSample += sampleCount;
+        return timing;
+      });
+      audioChunks.push(beatAudio);
+      cursor += beatAudio.length;
+      const beatSampleCount = beatAudio.length;
       beatNumber += 1;
       const file = `beats/${String(beatNumber).padStart(3, '0')}-${safeFilenamePart(beat.id)}.wav`;
       await writePcm16Wav(

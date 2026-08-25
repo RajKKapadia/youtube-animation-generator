@@ -2,9 +2,19 @@ import type {CalculateMetadataFunction} from 'remotion';
 import {Composition} from 'remotion';
 import {AnimationClip} from './AnimationClip.js';
 import {NarratedVideo} from './NarratedVideo.js';
-import type {NarratedRenderInput, RenderInput} from '../types.js';
-import {narratedRenderInputSchema, renderInputSchema} from '../types.js';
+import {NarratedThumbnail} from './NarratedThumbnail.js';
+import type {
+  NarratedRenderInput,
+  PublishCoverInput,
+  RenderInput,
+} from '../types.js';
+import {
+  narratedRenderInputSchema,
+  publishCoverInputSchema,
+  renderInputSchema,
+} from '../types.js';
 import {RENDER_PROFILES} from '../render-profile.js';
+import {PUBLISH_COVER_PROFILES} from '../publish-profile.js';
 
 const defaultProps: RenderInput = {
   background: 'transparent',
@@ -136,6 +146,73 @@ const calculateNarratedMetadata: CalculateMetadataFunction<NarratedRenderInput> 
   };
 };
 
+const defaultPublishCoverProps: PublishCoverInput = {
+  profile: PUBLISH_COVER_PROFILES['16:9'],
+  publish: {
+    version: 1,
+    kind: 'narrated-publish-kit',
+    sourcePlan: 'preview.narration-plan.json',
+    generatedAt: '2026-08-25T00:00:00.000Z',
+    model: 'preview',
+    language: 'en',
+    youtube: {
+      title: 'Understand Queues with One Simple Request Flow',
+      alternateTitles: [
+        'How Queues Keep Producers and Consumers Independent',
+        'Message Queues Explained with a Practical Visual Flow',
+      ],
+      description: 'See how a queue separates producers from consumers.\n\n#Queues #SystemDesign #Programming',
+      tags: [
+        'programming',
+        'technology',
+        'software tutorial',
+        'message queues',
+        'queue architecture',
+        'system design',
+        'backend development',
+        'producer consumer pattern',
+        'asynchronous processing',
+        'distributed systems',
+        'software architecture',
+        'queue tutorial',
+        'message broker basics',
+        'decouple application services',
+        'learn system design visually',
+      ],
+      hashtags: ['Queues', 'SystemDesign', 'Programming'],
+    },
+    thumbnail: {
+      headline: 'Queues Make Systems Flow',
+      eyebrow: 'System Design',
+      sceneId: 'request-flow',
+      accent: 'cyan',
+    },
+  },
+  scene: {
+    id: 'request-flow',
+    template: 'process-flow',
+    title: 'A queue decouples work',
+    primaryItems: ['Producer', 'Queue', 'Consumer'],
+    secondaryItems: [],
+    leftLabel: '',
+    rightLabel: '',
+    reason: 'Shows how work moves independently.',
+  },
+  technologyIcons: {},
+};
+
+const calculatePublishCoverMetadata: CalculateMetadataFunction<PublishCoverInput> = async ({
+  props,
+}) => {
+  const input = publishCoverInputSchema.parse(props);
+  return {
+    durationInFrames: 1,
+    fps: 30,
+    width: input.profile.width,
+    height: input.profile.height,
+  };
+};
+
 export const RemotionRoot = () => (
   <>
     <Composition
@@ -157,6 +234,16 @@ export const RemotionRoot = () => (
       height={1080}
       defaultProps={defaultNarratedProps}
       calculateMetadata={calculateNarratedMetadata}
+    />
+    <Composition
+      id="NarratedThumbnail"
+      component={NarratedThumbnail}
+      durationInFrames={1}
+      fps={30}
+      width={1280}
+      height={720}
+      defaultProps={defaultPublishCoverProps}
+      calculateMetadata={calculatePublishCoverMetadata}
     />
   </>
 );

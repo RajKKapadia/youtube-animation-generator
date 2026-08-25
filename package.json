@@ -1,6 +1,6 @@
 {
   "name": "youtube-animations",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Generate narrated videos and editor-ready animation clips from text or subtitles.",
   "private": true,
   "bin": {
@@ -12,6 +12,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "fixtures:layouts": "node --import tsx src/render-layout-fixtures.ts",
     "fixtures:narrated": "node --import tsx src/render-narrated-fixture.ts",
+    "fixtures:publish": "node --import tsx src/render-publish-fixture.ts",
     "fixtures:voice-expressions": "node --import tsx src/render-voice-expression-fixture.ts",
     "test": "vitest run"
   },

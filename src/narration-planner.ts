@@ -6,8 +6,10 @@ import {
   draftNarratedPlanSchema,
   maxNarrationExpressionsForDuration,
   type DraftNarratedPlan,
-  type NarrationPhrase,
 } from './types.js';
+import {joinNarrationPhrases} from './narration-text.js';
+
+export {joinNarrationPhrases} from './narration-text.js';
 
 const narrationResponseSchema = z.object({
   title: z.string().min(1).max(100),
@@ -24,9 +26,11 @@ Use at most six scenes and only these visual templates:
 - timeline: primaryItems are ordered stages and secondaryItems is empty.
 - callout: primaryItems are concise takeaways and secondaryItems is empty.
 
-Divide every scene's spoken narration into semantic beats. Divide each beat into short, complete subtitle phrases, normally two to eight spoken words and never more than 120 characters. Phrase ids must be unique inside the scene. Together, the phrases are the entire spoken narration: do not add a separate beat-level narration field.
+Divide every scene's spoken narration into semantic beats. Each beat must be one coherent utterance that can be spoken comfortably in a single breath, normally one sentence of roughly eight to twenty-four words. A beat is the speech boundary: start a new beat only where a natural spoken pause belongs.
 
-Give every beat an expression value: none, laugh, breath, or sigh. Use none by default. Use laugh only when the source genuinely supports a light or celebratory moment. Use sigh only when the source supports frustration, weariness, or relief. Use breath sparingly before an important hook, pivot, or conclusion. Never use expressions on consecutive beats. Expressions are nonverbal delivery cues and must not introduce an emotion that is absent from the source. Keep raw tags such as <laugh> out of narration phrases.
+Divide each beat into short ordered caption phrases, normally two to eight spoken words and never more than 120 characters. Caption phrases are display boundaries only: they are concatenated and synthesized as one continuous utterance without pauses between them. Make the concatenated phrases read as natural prose, and normally put sentence-ending punctuation only on the beat's final phrase. Phrase ids must be unique inside the scene. Together, the phrases are the entire spoken narration: do not add a separate beat-level narration field.
+
+Give every beat an expression value: none, laugh, breath, or sigh. Use none by default. Use laugh only when the source genuinely supports a light or celebratory moment. Use sigh only when the source supports frustration, weariness, or relief. Use breath only when the delivery genuinely calls for an audible inhale; do not add it merely because a beat is the opening hook, a pivot, or a conclusion. Never use expressions on consecutive beats. Expressions are nonverbal delivery cues and must not introduce an emotion that is absent from the source. Keep raw tags such as <laugh> out of narration phrases.
 
 Each visual item must be assigned to exactly one beat using its zero-based index. Indices must appear once, in increasing visual order across the beats. A beat may reveal several items. Never put an item index in two beats. Use empty index arrays when a beat reveals nothing in that lane.
 
@@ -91,11 +95,6 @@ export const planNarratedVideo = async (
     ...response.output_parsed,
   });
 };
-
-export const joinNarrationPhrases = (
-  phrases: NarrationPhrase[],
-  language: string,
-): string => phrases.map(({text}) => text.trim()).join(language === 'ja' ? '' : ' ');
 
 export const narrationScriptMarkdown = (plan: DraftNarratedPlan): string => {
   const sections = plan.scenes.map((scene, sceneIndex) => {

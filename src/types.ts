@@ -669,6 +669,83 @@ export const narratedPlanSchema = z.union([
 
 export type NarratedPlan = z.infer<typeof narratedPlanSchema>;
 
+export const publishAccentSchema = z.enum([
+  'cyan',
+  'violet',
+  'amber',
+  'emerald',
+  'rose',
+]);
+
+export type PublishAccent = z.infer<typeof publishAccentSchema>;
+
+const youtubePublishMetadataSchema = z.object({
+  title: z.string().trim().min(1).max(70),
+  alternateTitles: z.array(z.string().trim().min(1).max(70)).length(2),
+  description: z.string().trim().min(1).max(2_000),
+  tags: z.array(z.string().trim().min(1).max(80)).min(15).max(20),
+  hashtags: z.array(
+    z.string().trim().min(1).max(32).regex(
+      /^[\p{L}\p{N}_]+$/u,
+      'Hashtags must omit the leading # and contain only letters, numbers, or underscores.',
+    ),
+  ).min(3).max(5),
+}).superRefine((metadata, context) => {
+  const titles = [metadata.title, ...metadata.alternateTitles]
+    .map((title) => title.toLocaleLowerCase());
+  if (new Set(titles).size !== titles.length) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Recommended and alternate titles must be unique.',
+      path: ['alternateTitles'],
+    });
+  }
+
+  const tags = metadata.tags.map((tag) => tag.toLocaleLowerCase());
+  if (new Set(tags).size !== tags.length) {
+    context.addIssue({
+      code: 'custom',
+      message: 'YouTube tags must be unique.',
+      path: ['tags'],
+    });
+  }
+
+  const hashtags = metadata.hashtags.map((hashtag) => hashtag.toLocaleLowerCase());
+  if (new Set(hashtags).size !== hashtags.length) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Description hashtags must be unique.',
+      path: ['hashtags'],
+    });
+  }
+});
+
+const publishThumbnailMetadataSchema = z.object({
+  headline: z.string().trim().min(1).max(56),
+  eyebrow: z.string().trim().min(1).max(32),
+  sceneId: z.string().trim().min(1).max(80),
+  accent: publishAccentSchema,
+});
+
+export const narratedPublishPlanSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal('narrated-publish-kit'),
+  sourcePlan: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  language: z.string().min(1),
+  youtube: youtubePublishMetadataSchema,
+  thumbnail: publishThumbnailMetadataSchema,
+});
+
+export type NarratedPublishPlan = z.infer<typeof narratedPublishPlanSchema>;
+
+export const publishSceneSchema = visualContentSchema.extend({
+  id: z.string().min(1).max(80),
+});
+
+export type PublishScene = z.infer<typeof publishSceneSchema>;
+
 export const renderBackgroundSchema = z.enum(['transparent', 'green', 'dark']);
 export type RenderBackground = z.infer<typeof renderBackgroundSchema>;
 
@@ -689,6 +766,15 @@ export const technologyBrandIconSchema = z.object({
 });
 
 export type TechnologyBrandIcon = z.infer<typeof technologyBrandIconSchema>;
+
+export const publishCoverInputSchema = z.object({
+  publish: narratedPublishPlanSchema,
+  scene: publishSceneSchema,
+  profile: renderProfileSchema,
+  technologyIcons: z.record(z.string(), technologyBrandIconSchema).default({}),
+});
+
+export type PublishCoverInput = z.infer<typeof publishCoverInputSchema>;
 
 export const renderInputSchema = z.object({
   clip: visualClipSchema,

@@ -13,6 +13,7 @@ import {
   type SceneBackgroundAssets,
 } from './scene-backgrounds.js';
 import {planAnimations} from './planner.js';
+import {runPublishWorkflow} from './publish-workflow.js';
 import {aspectSuffix, profilesForSelection} from './render-profile.js';
 import {renderClips} from './render.js';
 import {readSubtitleFile} from './subtitles.js';
@@ -40,7 +41,7 @@ import {
   type SupertonicVoice,
 } from './supertonic/protocol.js';
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const FORMATS = new Set<OutputFormat>(['prores', 'webm', 'green']);
 
 const help = `youtube-animations ${VERSION}
@@ -50,6 +51,7 @@ Generate editor-ready subtitle overlays or a complete narrated video from text.
 Usage:
   youtube-animations <subtitle.srt|subtitle.vtt> [options]
   youtube-animations create <source.txt|source.md> [options]
+  youtube-animations publish <narrated-plan.json> [options]
   youtube-animations --render-plan <plan.json> [options]
   youtube-animations create --render-plan <narrated-plan.json> [options]
 
@@ -78,6 +80,11 @@ Narrated video options:
   --image-model <model>             Image model (default: OPENAI_IMAGE_MODEL or gpt-image-2)
   --image-quality <quality>         low, medium, or high (default: medium)
   --regenerate-backgrounds          Replace matching cached scene images
+
+Publish-kit options:
+  --cover-aspect <16:9|9:16|both>   Cover orientation (default: both)
+  --metadata-only                   Save or validate metadata without rendering covers
+  --render-publish <publish.json>   Render edited metadata without calling OpenAI
   --help                            Show this help
   --version                         Show the version
 
@@ -86,6 +93,8 @@ Examples:
   youtube-animations create summary.md
   youtube-animations create summary.md --aspect-ratio 9:16
   youtube-animations create --render-plan summary-video/summary.narration-plan.json
+  youtube-animations publish summary-video/summary.narration-timed.json
+  youtube-animations publish summary-video/summary.narration-plan.json --metadata-only
 `;
 
 const parsePositiveInteger = (
@@ -132,6 +141,14 @@ const parseAspectRatio = (value: string | undefined): AspectRatioSelection => {
   const parsed = aspectRatioSelectionSchema.safeParse(value);
   if (!parsed.success) {
     throw new Error('--aspect-ratio must be one of: 16:9, 9:16, both.');
+  }
+  return parsed.data;
+};
+
+const parseCoverAspect = (value: string | undefined): AspectRatioSelection => {
+  const parsed = aspectRatioSelectionSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error('--cover-aspect must be one of: 16:9, 9:16, both.');
   }
   return parsed.data;
 };
@@ -558,6 +575,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     options: {
       'aspect-ratio': {type: 'string', default: '16:9'},
       captions: {type: 'string', default: 'on'},
+      'cover-aspect': {type: 'string', default: 'both'},
       force: {type: 'boolean', default: false},
       format: {type: 'string', default: 'green'},
       fps: {type: 'string'},
@@ -566,10 +584,12 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       'image-quality': {type: 'string', default: 'medium'},
       language: {type: 'string', default: 'en'},
       'max-suggestions': {type: 'string'},
+      'metadata-only': {type: 'boolean', default: false},
       model: {type: 'string'},
       'output-dir': {type: 'string'},
       'plan-only': {type: 'boolean', default: false},
       'render-plan': {type: 'string'},
+      'render-publish': {type: 'string'},
       'regenerate-backgrounds': {type: 'boolean', default: false},
       'scene-background': {type: 'string', default: 'ambient'},
       'supertonic-assets-dir': {type: 'string', default: 'models/supertonic-3'},
@@ -597,6 +617,42 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   const aspectRatio = parseAspectRatio(values['aspect-ratio']);
   const fps = parsePositiveInteger(values.fps, 30, '--fps');
   const model = values.model ?? process.env.OPENAI_MODEL ?? 'gpt-5.6';
+  const publishCommand = positionals[0] === 'publish';
+  const renderPublishPath = values['render-publish']
+    ? resolve(values['render-publish'])
+    : undefined;
+  const usedPublishOnlyOption = tokens.some(
+    (token) => token.kind === 'option' && [
+      'cover-aspect',
+      'metadata-only',
+      'render-publish',
+    ].includes(token.name),
+  );
+  if (publishCommand) {
+    if (positionals.length !== 2) {
+      throw new Error('Provide exactly one narrated plan path after publish.');
+    }
+    if (values['render-plan'] || values['plan-only']) {
+      throw new Error(
+        'Publish uses --render-publish and --metadata-only instead of narration plan flags.',
+      );
+    }
+    await runPublishWorkflow({
+      aspectRatio: parseCoverAspect(values['cover-aspect']),
+      force: values.force,
+      metadataOnly: values['metadata-only'],
+      model,
+      ...(values['output-dir']
+        ? {outputDirectory: resolve(values['output-dir'])}
+        : {}),
+      planPath: resolve(positionals[1]!),
+      ...(renderPublishPath ? {renderPublishPath} : {}),
+    });
+    return;
+  }
+  if (usedPublishOnlyOption) {
+    throw new Error('Publish-kit options can only be used with the publish command.');
+  }
   const visual: NarratedVisualOptions = {
     captions: parseCaptionMode(values.captions),
     imageModel: values['image-model'] ?? process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2',

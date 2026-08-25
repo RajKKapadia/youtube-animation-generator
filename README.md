@@ -1,13 +1,14 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos include sample-derived phrase captions, speech-aligned visual reveals, animated scene backgrounds, and optional subtle voice expressions.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos include beat-aligned phrase captions, speech-aligned visual reveals, animated scene backgrounds, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
 
-The current CLI supports two workflows:
+The current CLI supports three workflows:
 
 | Input | Command | Result |
 | --- | --- | --- |
 | `.srt` or `.vtt` subtitles | `youtube-animations episode.srt` | Separate editor-ready overlay clips plus a placement manifest |
 | `.txt` or `.md` source text | `youtube-animations create summary.md` | A planned, voiced, captioned, and rendered narrated video |
+| Narrated plan JSON | `youtube-animations publish summary.narration-timed.json` | Copy-ready title, description, tags, thumbnail, and vertical cover |
 
 Commands in this README use `pnpm run animations` to execute the TypeScript source from the repository. After `pnpm build`, the same arguments can be passed to `node dist/cli.js` or the configured `youtube-animations` binary.
 
@@ -32,6 +33,16 @@ Default output:
 │       ├── 001-hook.wav
 │       └── ...
 └── summary.mp4
+```
+
+Running the optional `publish` workflow adds the following beside the narration plan:
+
+```text
+summary-video/
+├── summary.publish.json
+├── summary.publish.md
+├── summary.thumbnail.png
+└── summary.cover-9x16.png
 ```
 
 With generated scene backgrounds, a reusable cache is added beside those files:
@@ -59,11 +70,13 @@ Subtitle input keeps its existing editor-oriented output names. Vertical files i
 ## Requirements
 
 - Node.js 22.13 or newer and pnpm 11.22
-- an OpenAI API key when creating a new plan or generating an uncached scene image
+- an OpenAI API key when creating a new narration/overlay plan, new publish metadata, or an uncached scene image
 - Google Chrome or Chromium when rendering video
 - Git LFS and the local Supertonic 3 model when synthesizing narrated audio
 
 Planning-only and saved-plan workflows skip the dependencies they do not use. For example, `--plan-only` does not need Chrome or Supertonic, and a timed narrated plan with ambient backgrounds can be rerendered without OpenAI or Supertonic.
+
+Publish metadata needs OpenAI only when creating a new publish plan. Rendering an edited publish plan needs Chrome but makes no OpenAI request. Publish covers use only Remotion typography, shapes, diagrams, Lucide icons, and the installed Simple Icons catalog; the publish workflow never calls the Image API.
 
 Remotion has separate license terms. Confirm that your use qualifies for its free license or obtain the appropriate license: [Remotion license](https://www.remotion.dev/license).
 
@@ -108,7 +121,7 @@ pnpm run animations create summary.md --aspect-ratio 9:16
 pnpm run animations create summary.md --aspect-ratio both
 ```
 
-The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. Every visible item is anchored to exactly one semantic narration beat, and every beat contains short ordered subtitle phrases. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
+The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. Every visible item is anchored to exactly one semantic narration beat. A beat is one coherent utterance that can be spoken in a natural breath; its short ordered phrases are caption and reveal boundaries, not separate TTS calls. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
 
 Phrase captions are enabled by default and can be disabled for a clean export:
 
@@ -157,24 +170,59 @@ The first command uses the default deterministic ambient background and makes no
 
 Narrated output is H.264 video with AAC voiceover audio. Planning and TTS happen once; `both` performs two independent Remotion render passes.
 
+## Create a narrated-video publish kit
+
+Create copy-ready YouTube metadata and both cover orientations from a draft or timed narration plan:
+
+```bash
+pnpm run animations publish \
+  summary-video/summary.narration-timed.json
+```
+
+The command makes one source-grounded Structured Outputs request, then saves:
+
+- `summary.publish.json` — editable metadata and cover direction
+- `summary.publish.md` — copy-ready recommended title, alternatives, description, tags, and hashtags
+- `summary.thumbnail.png` — 1280×720 YouTube thumbnail
+- `summary.cover-9x16.png` — 1080×1920 vertical cover
+
+The metadata contains one recommended title, two alternatives, 15–20 tags, a concise description, separate hashtags, a short cover headline, and the narration scene used for the supporting diagram. The prompt receives the original source and final narration, rejects invented links or claims, and treats source text as content rather than instructions.
+
+Generate only the editable sidecars without starting Chrome:
+
+```bash
+pnpm run animations publish \
+  summary-video/summary.narration-plan.json \
+  --metadata-only
+```
+
+After editing `summary.publish.json`, render its covers without another OpenAI request:
+
+```bash
+pnpm run animations publish \
+  summary-video/summary.narration-plan.json \
+  --render-publish summary-video/summary.publish.json
+```
+
+Use `--cover-aspect 16:9` or `--cover-aspect 9:16` to render one orientation. The default is `both`. Existing metadata and images are protected unless `--force` is supplied. `--output-dir` moves the complete publish-kit output when generating new metadata and moves cover output when rerendering an edited publish plan.
+
 ### Subtle voice expressions
 
-Narrated plans support `none`, `laugh`, `breath`, and `sigh` at the semantic-beat level. The planner defaults to `none`, never places expressions on consecutive beats, and allows at most one non-neutral expression per roughly 30 seconds, capped at three for longer videos. `laugh` and `sigh` are reserved for source-supported emotional moments; `breath` can emphasize a hook, pivot, or conclusion.
+Narrated plans support `none`, `laugh`, `breath`, and `sigh` at the semantic-beat level. The planner defaults to `none`, never places expressions on consecutive beats, and allows at most one non-neutral expression per roughly 30 seconds, capped at three for longer videos. `laugh` and `sigh` are reserved for source-supported emotional moments; `breath` is reserved for a deliberately audible inhale and is not added merely because a beat is a hook, pivot, or conclusion.
 
-Expression metadata stays separate from spoken text and captions. The Supertonic tag is added only at synthesis time, before the first phrase in its beat, so plan editing and on-screen captions remain clean.
+Expression metadata stays separate from spoken text and captions. The Supertonic tag is added only at synthesis time, before the beat's complete utterance, so plan editing and on-screen captions remain clean.
 
 After creating a draft with `--plan-only`, you can change a beat's `expression` in `summary.narration-plan.json` before synthesis. Use one of the supported values instead of adding `<laugh>`, `<breath>`, or `<sigh>` to phrase text.
 
-## Exact voice-derived timing
+## Voice-derived timing
 
-Supertonic returns float PCM and a predicted voiced duration for each phrase. The worker trims each waveform to that duration, combines phrases into the existing per-beat WAV files, writes mono 44.1 kHz PCM16 audio, and records the exact number of written samples. The combined voiceover adds:
+The worker concatenates every beat's caption phrases into one natural utterance and calls Supertonic once for that complete beat. It trims the returned float PCM to Supertonic's predicted voiced duration, writes the existing per-beat mono 44.1 kHz PCM16 files, and records the exact number of written samples. There is no inserted silence or prosody reset at a caption boundary. The combined voiceover adds:
 
 - 300 ms before each scene
-- 50 ms between phrases
 - 150 ms between semantic beats
 - 300 ms after each scene
 
-Scene boundaries, phrase-caption windows, and item reveal timestamps are calculated from those integer sample offsets—not estimated from word counts. Captions show one active phrase at a time and reserve a safe lower lane in both orientations. The aspect-independent timed plan is passed unchanged to both orientations, so their audio, captions, and reveal timeline are identical within one render frame.
+Scene boundaries, beat boundaries, and item reveal timestamps are calculated from exact integer sample offsets. Because Supertonic does not expose word timestamps, caption phrases deterministically partition their beat's exact PCM interval using text-length and punctuation weights. These internal caption boundaries are estimates, but they are contiguous and never introduce audio gaps. Captions show one active phrase at a time and reserve a safe lower lane in both orientations. The aspect-independent timed plan is passed unchanged to both orientations, so their audio, captions, and reveal timeline are identical within one render frame.
 
 Audio is staged in a temporary directory and promoted only after all beats and the combined voiceover succeed.
 
@@ -251,6 +299,11 @@ Narrated videos:
 --image-model <model>             Default: OPENAI_IMAGE_MODEL or gpt-image-2
 --image-quality <quality>         low, medium, or high; default: medium
 --regenerate-backgrounds          Refresh cached assets; requires generated mode
+
+Publish kits:
+--cover-aspect <16:9|9:16|both>   Default: both
+--metadata-only                   Save or validate metadata without rendering covers
+--render-publish <publish.json>   Render edited metadata without calling OpenAI
 ```
 
 Subtitle inputs default to an adjacent `animations/` directory. Narrated source inputs default to `<source-stem>-video/`, while a loaded plan defaults to its own directory. Every requested output is checked before rendering, and existing generated files are never replaced unless `--force` is supplied. Matching generated-background cache entries remain reusable unless `--regenerate-backgrounds` is also supplied.
@@ -270,7 +323,7 @@ Ambient backgrounds are generated entirely in Remotion from deterministic gradie
 
 The OpenAI Responses API uses Zod Structured Outputs with response storage disabled (`store: false`). OpenAI selects and fills these templates; it does not generate arbitrary React code.
 
-Optional scene imagery uses the OpenAI Image API. GPT Image access can depend on account and organization availability; see the [official image-generation guide](https://developers.openai.com/api/docs/guides/image-generation).
+Optional scene imagery uses the OpenAI Image API. This is separate from publish covers, which are always code-native and never use that API. GPT Image access can depend on account and organization availability; see the [official image-generation guide](https://developers.openai.com/api/docs/guides/image-generation).
 
 ## Supertonic terms and project notice
 
@@ -299,8 +352,11 @@ Render narrated MP4 fixtures with captions in both orientations. The second comm
 ```bash
 pnpm fixtures:narrated -- /tmp/youtube-animation-narrated ambient
 pnpm fixtures:narrated -- /tmp/youtube-animation-narrated-generated generated
+pnpm fixtures:publish -- /tmp/youtube-animation-publish
 pnpm fixtures:voice-expressions -- /tmp/youtube-animation-voice-expressions
 ```
+
+The publish fixture uses saved local narration and metadata plans. It renders both PNG cover orientations without an API call so typography, safe areas, diagram density, and mobile readability can be inspected directly.
 
 The voice-expression fixture renders plain, laugh, breath, and sigh WAVs from the same sentence for listening QA. Its JSON manifest records exact sample counts and durations; optional second and third arguments override the Supertonic assets directory and voice.
 
