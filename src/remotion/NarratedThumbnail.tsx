@@ -234,8 +234,13 @@ const SceneMotif = ({
         maxFontSize={vertical ? 30 : 22}
         maxHeight={vertical ? 36 : 28}
         maxLines={1}
-        maxWidth={vertical ? 720 : 390}
-        style={{color: '#CBD5E1', textTransform: 'uppercase'}}
+        maxWidth={vertical ? 720 : 370}
+        style={{
+          color: '#CBD5E1',
+          flex: 1,
+          minWidth: 0,
+          textTransform: 'uppercase',
+        }}
         text={scene.title}
       />
     </div>
