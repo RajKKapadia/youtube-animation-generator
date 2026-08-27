@@ -40,7 +40,7 @@ const clamp = {
 const RenderProfileContext = createContext<RenderProfile>(
   RENDER_PROFILES['16:9'],
 );
-const ContentBottomInsetContext = createContext(0);
+const ContentTopInsetContext = createContext(0);
 
 const useClipOpacity = (): number => {
   const frame = useCurrentFrame();
@@ -99,7 +99,7 @@ const ClipCanvas = ({children}: {children: ReactNode}) => {
   const {height, width} = useVideoConfig();
   const vertical = isVerticalDimensions(width, height);
   const profile = useContext(RenderProfileContext);
-  const contentBottomInset = useContext(ContentBottomInsetContext);
+  const contentTopInset = useContext(ContentTopInsetContext);
   return (
     <AbsoluteFill
       style={{
@@ -110,8 +110,8 @@ const ClipCanvas = ({children}: {children: ReactNode}) => {
         opacity,
         boxSizing: 'border-box',
         padding: vertical
-          ? `${profile.safeArea.top}px ${profile.safeArea.right}px ${profile.safeArea.bottom + contentBottomInset}px ${profile.safeArea.left}px`
-          : `0 0 ${contentBottomInset}px`,
+          ? `${profile.safeArea.top + contentTopInset}px ${profile.safeArea.right}px ${profile.safeArea.bottom}px ${profile.safeArea.left}px`
+          : `${contentTopInset}px 0 0`,
       }}
     >
       {children}
@@ -922,7 +922,7 @@ const CalloutItem = ({
 export const AnimationClip = ({
   background,
   clip,
-  contentBottomInset = 0,
+  contentTopInset = 0,
   palette,
   profile,
   technologyIcons,
@@ -955,11 +955,11 @@ export const AnimationClip = ({
       } as CSSProperties}
     >
       <RenderProfileContext.Provider value={profile}>
-        <ContentBottomInsetContext.Provider value={contentBottomInset}>
+        <ContentTopInsetContext.Provider value={contentTopInset}>
           <TechnologyIconsProvider icons={technologyIcons}>
             {content}
           </TechnologyIconsProvider>
-        </ContentBottomInsetContext.Provider>
+        </ContentTopInsetContext.Provider>
       </RenderProfileContext.Provider>
     </AbsoluteFill>
   );
