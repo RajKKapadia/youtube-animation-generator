@@ -1,6 +1,6 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos include beat-aligned phrase captions, speech-aligned visual reveals, summary-aware cinematic palettes, animated scene backgrounds, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos combine deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, and curated local Lottie assets. They retain beat-aligned phrase captions, speech-aligned reveals, summary-aware cinematic palettes, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
 
 The current CLI supports three workflows:
 
@@ -76,6 +76,8 @@ Subtitle input keeps its existing editor-oriented output names. Vertical files i
 
 Planning-only and saved-plan workflows skip the dependencies they do not use. For example, `--plan-only` does not need Chrome or Supertonic, and a timed narrated plan with ambient backgrounds can be rerendered without OpenAI or Supertonic.
 
+Saved-plan rendering never downloads a logo or animation. It validates the checked-in asset manifests, copies only referenced files into Remotion's temporary public directory, and removes that staging directory after the render.
+
 Publish metadata needs OpenAI only when creating a new publish plan. Rendering an edited publish plan needs Chrome but makes no OpenAI request. Publish covers use only Remotion typography, shapes, diagrams, Lucide icons, and the installed Simple Icons catalog; the publish workflow never calls the Image API.
 
 Remotion has separate license terms. Confirm that your use qualifies for its free license or obtain the appropriate license: [Remotion license](https://www.remotion.dev/license).
@@ -124,6 +126,8 @@ pnpm run animations create summary.md --aspect-ratio both
 The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. It also selects one dark cinematic palette—`cyan`, `violet`, `emerald`, `amber`, or `rose`—from the source's dominant subject and tone. The saved `palette` field drives every scene and makes rerenders deterministic; edit that field in the draft or timed plan to override the automatic choice.
 
 Every visible item is anchored to exactly one semantic narration beat. A beat is one coherent utterance that can be spoken in a natural breath; its short ordered phrases are caption and reveal boundaries, not separate TTS calls. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
+
+Every version-5 scene also persists an editable `visual` object. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated local Lottie asset or remains `null` for code-native motion. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. If truthful source material cannot support that variety, the saved plan receives a warning instead of being rejected or padded with invented content.
 
 Phrase captions are enabled by default and can be disabled for a clean export:
 
@@ -317,13 +321,39 @@ Subtitle inputs default to an adjacent `animations/` directory. Narrated source 
 - `timeline` — ordered stages or events
 - `callout` — definitions, concepts, and important statistics
 
-Titles and labels are measured and fitted into their bounds. Larger technology badges come from the installed Simple Icons catalog when a product brand is recognized, then fall back to Lucide icons across authentication, security, users, documents, messaging, email, cache, storage, analytics, monitoring, payments, mobile, networking, webhooks, events, retries, scheduling, transforms, uploads/downloads, errors, and the existing technical concepts.
+These four layouts remain available under `visual.kind: "diagram"`. Narrated videos add five responsive treatments:
 
-Narrated plan files are version 4 and store one summary-aware palette for the complete video. Version-3 plans remain loadable with the compatibility `cyan` palette. Version-2 plans also normalize to `cyan` with neutral expressions. Version-1 narrated draft and timed plans remain loadable: each legacy beat becomes one timed phrase, receives a neutral expression, gets a deterministic ambient background prompt, and uses `cyan`. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
+- `agent-workflow` — one central agent, surrounding tools, and beat-driven request/result activity
+- `brand-showcase` — exact product or company marks with staggered entrances and very slow drift
+- `network-map` — hub-and-spoke relationships, drawn edges, and one traveling pulse
+- `metric-focus` — an exact source-backed number or claim with count-up and supporting context
+- `icon-spotlight` — one dominant semantic, brand, or local Lottie visual with supporting chips
+
+All treatments use the same motion grammar: beat-triggered entrances, stable hold frames, small ambient movement, and one dominant moving element. They do not use random motion, constant bouncing, rapid spinning, or effects behind the protected caption lane.
+
+Titles and labels are measured and fitted into their bounds. Brand resolution is deterministic: an exact Simple Icons name or explicit alias is tried first, an exact entry from `assets/brands/manifest.json` is tried second, and a Lucide semantic icon plus the visible company name is used last. Brand showcases do not use fuzzy matching. Missing or ambiguous logos produce a planning warning; brand names absent from the source and source-unsupported metric numbers are rejected before the plan is saved. The renderer never fabricates a mark or silently substitutes another company. Original logo colors are preserved unless a curated manifest explicitly allows monochrome use.
+
+Narrated plan files are version 5 and store one summary-aware palette plus the scene-level visual treatment. Version-4 plans retain their saved palette and normalize to `diagram`, `reveal`, `none`, and a null asset. Version-1 through version-3 plans remain loadable with the compatibility `cyan` palette and the same diagram visual default. Earlier phrase, expression, timing, and background-prompt compatibility behavior remains intact. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
 
 Ambient backgrounds are generated entirely in Remotion from palette-driven deterministic gradients, moving light fields, a subtle grid, and a vignette. The same palette drives diagram accents and new publish covers. Generated backgrounds use native `2048×1152` and `1152×2048` JPEG assets, receive the stored palette direction in their prompt, add a slow pan/zoom plus neutral readability overlays, and never silently fall back to ambient when generation was requested. Changing the palette changes the prompt hash, so cached images cannot silently retain the previous color family.
 
 The OpenAI Responses API uses Zod Structured Outputs with response storage disabled (`store: false`). OpenAI selects and fills these templates; it does not generate arbitrary React code.
+
+## Local motion and brand assets
+
+The built-in motion registry lives at `assets/motion/manifest.json`; the exact-logo registry lives at `assets/brands/manifest.json`. Motion entries record the local JSON path, motif keywords, original source, creator, license, attribution, loop behavior, playback rate, priority, and optional palette-token mapping. Brand entries record the canonical company name, exact aliases, local SVG path, official source, brand-guideline reference, license, and color policy.
+
+Version 1 accepts pure-vector Lottie JSON only. Validation rejects external image/file references, font or text layers, unsafe paths, duplicate IDs or aliases, missing files, and incomplete provenance. Expression-driven Lotties are flagged for a manual flicker review. Remotion playback uses scene-relative frames, explicit loop behavior, and local `staticFile()` URLs.
+
+Asset intake workflow:
+
+1. Obtain a logo SVG from the company's official brand or press kit, or obtain a Lottie from an approved source under a license that covers the intended video use. Never use an AI-generated company logo.
+2. Put the selected file under `assets/brands/` or `assets/motion/`. For a custom animation, Jitter, Lottielab, or SVGator can export Lottie from controlled SVG artwork.
+3. Add complete provenance and playback/color metadata to the matching manifest. For third-party assets, add the required notice or attribution to `THIRD_PARTY_NOTICES.md`.
+4. Run `pnpm assets:validate`, `pnpm test`, `pnpm check`, and `pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixtures` before assigning the asset ID to a scene.
+5. Inspect early, middle, and final frames in both orientations, then render the representative narrated MP4 fixture to check for flicker and caption collisions.
+
+LottieFiles is an approved intake source when the individual asset's license and attribution are recorded. Lordicon and IconScout are optional licensed sources; note that Lordicon free assets require attribution. Paid assets can be used when the user supplies the licensed file. Rive remains deferred for state-driven character work. Brandfetch is intentionally not integrated because its hotlinking model conflicts with reproducible offline rendering.
 
 Optional scene imagery uses the OpenAI Image API. This is separate from publish covers, which are always code-native and never use that API. GPT Image access can depend on account and organization availability; see the [official image-generation guide](https://developers.openai.com/api/docs/guides/image-generation).
 
@@ -345,9 +375,10 @@ Render early, middle, and completed stress-test frames for all four templates an
 
 ```bash
 pnpm fixtures:layouts -- /tmp/youtube-animation-layout-fixtures
+pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixtures
 ```
 
-The fixture uses six long primary and secondary items. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping and unsafe positioning.
+Together, these commands cover the four diagram templates and all five narrated treatments with early, middle, and completed states in both orientations. The fixtures use long titles, six items, and a caption lane. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping, logo distortion, Lottie flicker, and unsafe positioning.
 
 Render narrated MP4 fixtures with captions in both orientations. The second command uses local mock artwork to exercise the generated-image rendering path without an API call:
 
@@ -358,7 +389,7 @@ pnpm fixtures:publish -- /tmp/youtube-animation-publish
 pnpm fixtures:voice-expressions -- /tmp/youtube-animation-voice-expressions
 ```
 
-The narrated fixture accepts an optional palette after the background mode, for example `ambient emerald`. The publish fixture accepts an optional palette after its output directory. Run it once for each of `cyan`, `violet`, `emerald`, `amber`, and `rose` to compare both cover orientations without an API call. These fixtures make typography, safe areas, diagram density, color consistency, and mobile readability inspectable directly.
+The narrated fixture contains six scenes and visibly exercises a legacy diagram, AI-agent workflow, exact company-logo scene, network map, metric focus, and Lottie spotlight. It accepts an optional palette after the background mode, for example `ambient emerald`. The publish fixture accepts an optional palette after its output directory. Run it once for each of `cyan`, `violet`, `emerald`, `amber`, and `rose` to compare both cover orientations without an API call. These fixtures make typography, safe areas, treatment variety, color consistency, and mobile readability inspectable directly.
 
 The voice-expression fixture renders plain, laugh, breath, and sigh WAVs from the same sentence for listening QA. Its JSON manifest records exact sample counts and durations; optional second and third arguments override the Supertonic assets directory and voice.
 

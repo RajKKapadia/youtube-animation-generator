@@ -86,11 +86,11 @@ describe('narrated CLI plan-only path', () => {
     ).rejects.toThrow('Narrated visual options cannot be used with subtitle overlays');
   });
 
-  it('documents the v0.4 narrated and publish-kit options', async () => {
+  it('documents the v0.5 narrated and publish-kit options', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     await runCli(['--help']);
     const output = String(log.mock.calls[0]?.[0]);
-    expect(output).toContain('youtube-animations 0.4.0');
+    expect(output).toContain('youtube-animations 0.5.0');
     expect(output).toContain('--captions <on|off>');
     expect(output).toContain('--scene-background <mode>');
     expect(output).toContain('--image-quality <quality>');

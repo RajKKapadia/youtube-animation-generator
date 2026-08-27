@@ -1,4 +1,5 @@
 import {createContext, useContext, type ReactNode} from 'react';
+import {Img, staticFile} from 'remotion';
 import {
   Activity,
   Archive,
@@ -36,13 +37,14 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import type {TechnologyBrandIcon} from '../types.js';
+import type {LocalBrandAsset, TechnologyBrandIcon} from '../types.js';
 import {
   technologyIconKindFor,
   type TechnologyIconKind,
 } from './technology.js';
 
 const TechnologyIconsContext = createContext<Record<string, TechnologyBrandIcon>>({});
+const LocalBrandAssetsContext = createContext<Record<string, LocalBrandAsset>>({});
 
 const usesDarkBadgeBackground = (icon: TechnologyBrandIcon | undefined): boolean => {
   if (!icon) {
@@ -64,6 +66,18 @@ export const TechnologyIconsProvider = ({
   <TechnologyIconsContext.Provider value={icons}>
     {children}
   </TechnologyIconsContext.Provider>
+);
+
+export const LocalBrandAssetsProvider = ({
+  assets,
+  children,
+}: {
+  assets: Record<string, LocalBrandAsset>;
+  children: ReactNode;
+}) => (
+  <LocalBrandAssetsContext.Provider value={assets}>
+    {children}
+  </LocalBrandAssetsContext.Provider>
 );
 
 const SEMANTIC_ICONS: Record<TechnologyIconKind, LucideIcon> = {
@@ -124,8 +138,10 @@ export const technologyBadgeSourceFor = (
 
 export const TechnologyBadge = ({label, size = 60}: {label: string; size?: number}) => {
   const icons = useContext(TechnologyIconsContext);
+  const localAssets = useContext(LocalBrandAssetsContext);
   const kind = technologyIconKindFor(label);
   const icon = icons[label];
+  const localAsset = localAssets[label];
   const darkBackground = usesDarkBadgeBackground(icon);
 
   return (
@@ -149,6 +165,12 @@ export const TechnologyBadge = ({label, size = 60}: {label: string; size?: numbe
         <svg aria-hidden="true" height="62%" viewBox="0 0 24 24" width="62%">
           <path d={icon.path} fill={`#${icon.hex}`} />
         </svg>
+      ) : localAsset ? (
+        <Img
+          alt=""
+          src={staticFile(localAsset.file)}
+          style={{height: '68%', objectFit: 'contain', width: '68%'}}
+        />
       ) : (
         <GenericGlyph kind={kind} />
       )}

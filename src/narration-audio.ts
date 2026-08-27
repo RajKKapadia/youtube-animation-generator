@@ -153,6 +153,7 @@ export const materializeTimedNarration = ({
     return {
       id: scene.id,
       backgroundPrompt: scene.backgroundPrompt,
+      visual: scene.visual,
       template: scene.template,
       title: scene.title,
       primaryItems: scene.primaryItems,

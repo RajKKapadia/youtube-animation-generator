@@ -1,5 +1,8 @@
 import {describe, expect, it} from 'vitest';
-import {resolveTechnologyBrandIcons} from '../technology-catalog.js';
+import {
+  exactTechnologyBrandIconFor,
+  resolveTechnologyBrandIcons,
+} from '../technology-catalog.js';
 import {technologyBadgeSourceFor} from './TechnologyBadge.js';
 import {technologyIconKindFor} from './technology.js';
 
@@ -34,5 +37,11 @@ describe('technologyIconKindFor', () => {
     expect(technologyIconKindFor(label)).toBe('generic');
     expect(technologyBadgeSourceFor(label, resolveTechnologyBrandIcons([label])))
       .toBe('brand');
+  });
+
+  it('keeps brand-showcase matching exact or explicitly aliased', () => {
+    expect(exactTechnologyBrandIconFor('React')?.slug).toBe('react');
+    expect(exactTechnologyBrandIconFor('React platform')).toBeUndefined();
+    expect(exactTechnologyBrandIconFor('Postgres')?.slug).toBe('postgresql');
   });
 });

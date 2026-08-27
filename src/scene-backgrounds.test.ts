@@ -22,6 +22,12 @@ const scene = draftNarrationSceneSchema.parse({
   leftLabel: '',
   rightLabel: '',
   reason: 'Shows decoupling.',
+  visual: {
+    kind: 'diagram',
+    motion: 'reveal',
+    motif: 'none',
+    assetId: null,
+  },
   beats: [{
     id: 'flow',
     expression: 'none',

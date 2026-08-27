@@ -14,9 +14,15 @@ importers:
       '@remotion/layout-utils':
         specifier: 4.0.515
         version: 4.0.515
+      '@remotion/lottie':
+        specifier: 4.0.515
+        version: 4.0.515(lottie-web@5.13.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@remotion/renderer':
         specifier: 4.0.515
         version: 4.0.515(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      lottie-web:
+        specifier: 5.13.0
+        version: 5.13.0
       lucide-react:
         specifier: 1.28.0
         version: 1.28.0(react@19.2.8)
@@ -492,6 +498,13 @@ packages:
 
   '@remotion/licensing@4.0.515':
     resolution: {integrity: sha512-0Yj+yHFx3aPp1Pc0awGZqORB4ErpTKNHK7oOYtzqGAFyMK02m2Gxt8+T38GSCSeT7n3qArzefN6rg7uR1aEGZA==}
+
+  '@remotion/lottie@4.0.515':
+    resolution: {integrity: sha512-2ILSv0NvJxZCr/10AOBTv7hpR3HE1tCUc+QXsc6EBX7SfnrHjtC0dkIcn3zl5YNhs6XdTTgzFhhtMOkhAxuaRQ==}
+    peerDependencies:
+      lottie-web: ^5
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
 
   '@remotion/media-parser@4.0.515':
     resolution: {integrity: sha512-lBGUnqjvqsNy5hnHvicMUroMCpKlb+gmEtY/eD5K2U/9OOo6QVvaXLbdiugoZjb3VjBn0eRPkQ8Sg03JkN4OHQ==}
@@ -1311,6 +1324,9 @@ packages:
     resolution: {integrity: sha512-DFEqQ3ihfS9blba08cLfYf1NRAIEm+dDjic073DRDc3/JspI/8wYmtDsHwd3+4hwvdxSK7PGaElfTmm0awWJ4w==}
     engines: {node: '>=6.11.5'}
 
+  lottie-web@5.13.0:
+    resolution: {integrity: sha512-+gfBXl6sxXMPe8tKQm7qzLnUy5DUPJPKIyRHwtpCpyUEYjHYRJC/5gjUvdkuO2c3JllrPtHXH5UJJK8LRYl5yQ==}
+
   lru-cache@6.0.0:
     resolution: {integrity: sha512-Jo6dJ04CmSjuznwJSS3pUeWmd/H0ffTlkXXgwZi+eq1UCmqQwCh+eLsYOYCwY991i2Fah4h1BEMCx4qThGbsiA==}
     engines: {node: '>=10'}
@@ -2089,6 +2105,13 @@ snapshots:
 
   '@remotion/licensing@4.0.515': {}
 
+  '@remotion/lottie@4.0.515(lottie-web@5.13.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      lottie-web: 5.13.0
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+      remotion: 4.0.515(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+
   '@remotion/media-parser@4.0.515': {}
 
   '@remotion/media-utils@4.0.515(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
@@ -2847,6 +2870,8 @@ snapshots:
       lightningcss-win32-x64-msvc: 1.33.0
 
   loader-runner@4.3.2: {}
+
+  lottie-web@5.13.0: {}
 
   lru-cache@6.0.0:
     dependencies:

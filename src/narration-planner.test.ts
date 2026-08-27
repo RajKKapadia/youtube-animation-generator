@@ -1,9 +1,14 @@
 import {describe, expect, it} from 'vitest';
-import {narrationScriptMarkdown} from './narration-planner.js';
+import {
+  assertSourceBackedNarratedVisuals,
+  narrationScriptMarkdown,
+  narratedVisualPlanningWarnings,
+} from './narration-planner.js';
 import {draftNarratedPlanSchema, narratedPlanSchema} from './types.js';
+import type {AssetRegistry} from './asset-registry.js';
 
 const validPlan = {
-  version: 4 as const,
+  version: 5 as const,
   kind: 'narrated-video' as const,
   stage: 'draft' as const,
   sourceText: 'Queues let producers and consumers operate independently.',
@@ -24,6 +29,12 @@ const validPlan = {
       leftLabel: '',
       rightLabel: '',
       reason: 'Shows the source flow.',
+      visual: {
+        kind: 'diagram' as const,
+        motion: 'reveal' as const,
+        motif: 'none' as const,
+        assetId: null,
+      },
       beats: [
         {
           id: 'producer',
@@ -129,12 +140,18 @@ describe('draftNarratedPlanSchema', () => {
       })),
     };
     const parsed = narratedPlanSchema.parse(JSON.parse(JSON.stringify(legacyV2)));
-    expect(parsed.version).toBe(4);
+    expect(parsed.version).toBe(5);
     expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.beats.map((beat) => beat.expression)).toEqual([
       'none',
       'none',
     ]);
+    expect(parsed.scenes[0]!.visual).toEqual({
+      kind: 'diagram',
+      motion: 'reveal',
+      motif: 'none',
+      assetId: null,
+    });
   });
 
   it('normalizes version-3 expression plans to the compatibility palette', () => {
@@ -143,7 +160,7 @@ describe('draftNarratedPlanSchema', () => {
       ...withoutPalette,
       version: 3,
     });
-    expect(parsed.version).toBe(4);
+    expect(parsed.version).toBe(5);
     expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.beats[0]!.expression).toBe('none');
   });
@@ -165,13 +182,38 @@ describe('draftNarratedPlanSchema', () => {
     };
     const raw = JSON.parse(JSON.stringify(legacy));
     const parsed = narratedPlanSchema.parse(raw);
-    expect(parsed.version).toBe(4);
+    expect(parsed.version).toBe(5);
     expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.backgroundPrompt).toContain('A queue decouples work');
     expect(parsed.scenes[0]!.beats[0]!.phrases).toEqual([
       {id: 'producer-phrase-1', text: 'The producer submits work.'},
     ]);
     expect(parsed.scenes[0]!.beats[0]!.expression).toBe('none');
+  });
+
+  it('normalizes version-4 palette plans to diagram visuals', () => {
+    const legacy = structuredClone(validPlan) as Record<string, unknown>;
+    legacy.version = 4;
+    const scenes = legacy.scenes as Array<Record<string, unknown>>;
+    delete scenes[0]!.visual;
+    const parsed = narratedPlanSchema.parse(legacy);
+    expect(parsed.version).toBe(5);
+    expect(parsed.palette).toBe('emerald');
+    expect(parsed.scenes[0]!.visual).toEqual({
+      kind: 'diagram',
+      motion: 'reveal',
+      motif: 'none',
+      assetId: null,
+    });
+  });
+
+  it('rejects incompatible visual treatment and motion combinations', () => {
+    const invalid = structuredClone(validPlan);
+    invalid.scenes[0]!.visual.kind = 'metric-focus' as 'diagram';
+    invalid.scenes[0]!.visual.motion = 'orbit' as 'reveal';
+    expect(() => draftNarratedPlanSchema.parse(invalid)).toThrow(
+      'orbit is not supported by metric-focus',
+    );
   });
 
   it('normalizes version-1 timed beats without changing their sample timing', () => {
@@ -242,6 +284,58 @@ describe('draftNarratedPlanSchema', () => {
     expect(() => narratedPlanSchema.parse(invalidTiming)).toThrow(
       'Phrase timing must fall inside its narration beat',
     );
+  });
+});
+
+describe('narrated visual planning warnings', () => {
+  const registry: AssetRegistry = {
+    assetRoot: '/tmp/assets',
+    brandAssets: [],
+    motionAssets: [],
+    warnings: [],
+  };
+
+  it('warns without rejecting truthful low-variety plans and unresolved brands', () => {
+    const scene = structuredClone(validPlan.scenes[0]!);
+    const scenes = [0, 1, 2, 3].map((index) => ({
+      ...scene,
+      id: `scene-${index}`,
+      visual: index === 3
+        ? {kind: 'brand-showcase' as const, motion: 'reveal' as const, motif: 'data' as const}
+        : {kind: 'diagram' as const, motion: 'reveal' as const, motif: 'none' as const},
+    }));
+    const warnings = narratedVisualPlanningWarnings({
+      registry,
+      scenes,
+      sourceText: 'Producer Queue Consumer',
+    });
+    expect(warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('fewer than three truthful visual treatments'),
+      expect.stringContaining('Adjacent scenes repeat'),
+      expect.stringContaining('No exact logo is registered'),
+    ]));
+  });
+
+  it('rejects invented company names and statistics before saving a plan', () => {
+    const scene = structuredClone(validPlan.scenes[0]!);
+    expect(() => assertSourceBackedNarratedVisuals({
+      sourceText: 'OpenAI reported 42%.',
+      scenes: [{
+        ...scene,
+        primaryItems: ['Invented Corp'],
+        beats: [{...scene.beats[0]!, primaryItemIndices: [0]}],
+        visual: {kind: 'brand-showcase', motion: 'reveal', motif: 'automation'},
+      }],
+    })).toThrow('not present in the source text');
+    expect(() => assertSourceBackedNarratedVisuals({
+      sourceText: 'OpenAI reported 42%.',
+      scenes: [{
+        ...scene,
+        primaryItems: ['73% improvement'],
+        beats: [{...scene.beats[0]!, primaryItemIndices: [0]}],
+        visual: {kind: 'metric-focus', motion: 'count-up', motif: 'analytics'},
+      }],
+    })).toThrow('source-unsupported number');
   });
 });
 

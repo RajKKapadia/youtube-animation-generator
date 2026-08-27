@@ -2,7 +2,11 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {renderNarratedVideo} from './narrated-render.js';
 import type {SceneBackgroundAssets} from './scene-backgrounds.js';
-import {timedNarratedPlanSchema, videoPaletteSchema} from './types.js';
+import {
+  timedNarratedPlanSchema,
+  videoPaletteSchema,
+  type NarratedSceneVisual,
+} from './types.js';
 import {writePcm16Wav} from './supertonic/wav.js';
 import {videoPaletteFor} from './visual-palettes.js';
 
@@ -10,19 +14,20 @@ const outputDirectory = resolve(
   process.argv[2] ?? '/tmp/youtube-animation-narrated-fixture',
 );
 const sceneBackground = process.argv[3] === 'generated' ? 'generated' : 'ambient';
-const palette = videoPaletteSchema.parse(process.argv[4] ?? 'emerald');
+const palette = videoPaletteSchema.parse(process.argv[4] ?? 'violet');
+const SCENE_IDS = ['diagram', 'agent', 'brands', 'network', 'metric', 'spotlight'];
 
 const writeGeneratedBackgroundFixtures = async (): Promise<SceneBackgroundAssets> => {
   const assets: SceneBackgroundAssets = {'16:9': {}, '9:16': {}};
   const theme = videoPaletteFor(palette);
   for (const aspectRatio of ['16:9', '9:16'] as const) {
     const [width, height] = aspectRatio === '16:9' ? [2048, 1152] : [1152, 2048];
-    for (const [sceneIndex, sceneId] of ['flow', 'takeaway'].entries()) {
+    for (const [sceneIndex, sceneId] of SCENE_IDS.entries()) {
       const path = resolve(
         outputDirectory,
         `fixture-${sceneId}-${aspectRatio.replace(':', 'x')}.svg`,
       );
-      const accent = sceneIndex === 0
+      const accent = sceneIndex % 2 === 0
         ? theme.accents.primary
         : theme.accents.secondary;
       await writeFile(path, `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
@@ -48,9 +53,64 @@ const writeGeneratedBackgroundFixtures = async (): Promise<SceneBackgroundAssets
   return assets;
 };
 
+const makeScene = ({
+  id,
+  items,
+  sceneIndex,
+  title,
+  visual,
+}: {
+  id: string;
+  items: string[];
+  sceneIndex: number;
+  title: string;
+  visual: NarratedSceneVisual;
+}) => ({
+  id,
+  backgroundPrompt: `Abstract low-detail visual metaphor for ${title}.`,
+  startMs: sceneIndex * 3_000,
+  durationMs: 3_000,
+  template: visual.kind === 'diagram' ? 'process-flow' as const : 'callout' as const,
+  title,
+  primaryItems: items,
+  secondaryItems: [],
+  leftLabel: '',
+  rightLabel: '',
+  reason: 'Varied narrated visual fixture.',
+  visual,
+  beats: [{
+    id: `${id}-beat`,
+    expression: sceneIndex === 0 ? 'breath' as const : 'none' as const,
+    phrases: [
+      {
+        id: `${id}-phrase-one`,
+        text: `This scene demonstrates ${title}`,
+        startMs: 300,
+        durationMs: 1_100,
+        sampleCount: 48_510,
+      },
+      {
+        id: `${id}-phrase-two`,
+        text: 'with stable beat-aligned motion.',
+        startMs: 1_500,
+        durationMs: 1_100,
+        sampleCount: 48_510,
+      },
+    ],
+    primaryItemIndices: items.map((_, index) => index),
+    secondaryItemIndices: [],
+    startMs: 300,
+    durationMs: 2_300,
+    audioFile: `beats/${id}.wav`,
+    sampleCount: 101_430,
+  }],
+  primaryItemTimings: items.map(() => ({beatId: `${id}-beat`, startMs: 300})),
+  secondaryItemTimings: [],
+});
+
 const main = async () => {
   const sampleRate = 44_100;
-  const totalSamples = sampleRate * 6;
+  const totalSamples = sampleRate * 18;
   const audioDirectory = resolve(outputDirectory, 'narrated-fixture.audio');
   await mkdir(audioDirectory, {recursive: true});
   const audio = Float32Array.from(
@@ -59,117 +119,67 @@ const main = async () => {
   );
   await writePcm16Wav(resolve(audioDirectory, 'voiceover.wav'), audio, sampleRate);
   const plan = timedNarratedPlanSchema.parse({
-    version: 4,
+    version: 5,
     kind: 'narrated-video',
     stage: 'timed',
-    sourceText: 'Fixture narration.',
-    generatedAt: '2026-08-23T00:00:00.000Z',
+    sourceText:
+      'A request passes through a queue. An AI agent uses Search, API, and Database tools. OpenAI, React, and PostgreSQL are named products. A Cloud Hub connects API, Queue, Worker, and Database. The source reports 73% faster retrieval. Document automation is the conclusion.',
+    generatedAt: '2026-08-27T00:00:00.000Z',
     model: 'offline-fixture',
-    targetDurationSeconds: 6,
+    targetDurationSeconds: 18,
     language: 'en',
-    title: 'Narrated render fixture',
+    title: 'Varied narrated render fixture',
     palette,
     sampleRate,
     voice: 'M1',
     ttsSpeed: 1.05,
     ttsSteps: 8,
     voiceoverFile: 'narrated-fixture.audio/voiceover.wav',
-    durationMs: 6_000,
+    durationMs: 18_000,
     totalSamples,
     scenes: [
-      {
-        id: 'flow',
-        backgroundPrompt: 'Abstract glowing data stream moving through a durable queue.',
-        startMs: 0,
-        durationMs: 3_000,
-        template: 'process-flow',
-        title: 'Work moves through a queue',
-        primaryItems: ['Producer', 'Queue', 'Consumer'],
-        secondaryItems: [],
-        leftLabel: '',
-        rightLabel: '',
-        reason: 'Fixture',
-        beats: [
-          {
-            id: 'flow-beat',
-            expression: 'breath',
-            phrases: [
-              {
-                id: 'flow-producer',
-                text: 'Work leaves the producer',
-                startMs: 300,
-                durationMs: 1_150,
-                sampleCount: 50_715,
-              },
-              {
-                id: 'flow-consumer',
-                text: 'and reaches the consumer.',
-                startMs: 1_500,
-                durationMs: 1_200,
-                sampleCount: 52_920,
-              },
-            ],
-            primaryItemIndices: [0, 1, 2],
-            secondaryItemIndices: [],
-            startMs: 300,
-            durationMs: 2_400,
-            audioFile: 'beats/flow.wav',
-            sampleCount: 105_840,
-          },
-        ],
-        primaryItemTimings: [
-          {beatId: 'flow-beat', startMs: 300},
-          {beatId: 'flow-beat', startMs: 300},
-          {beatId: 'flow-beat', startMs: 300},
-        ],
-        secondaryItemTimings: [],
-      },
-      {
-        id: 'takeaway',
-        backgroundPrompt: 'Abstract resilient system continuing independently through a calm light field.',
-        startMs: 3_000,
-        durationMs: 3_000,
-        template: 'callout',
-        title: 'The result',
-        primaryItems: ['Independent processing', 'Durable pending work'],
-        secondaryItems: [],
-        leftLabel: '',
-        rightLabel: '',
-        reason: 'Fixture',
-        beats: [
-          {
-            id: 'takeaway-beat',
-            expression: 'none',
-            phrases: [
-              {
-                id: 'takeaway-independent',
-                text: 'Processing stays independent',
-                startMs: 300,
-                durationMs: 1_150,
-                sampleCount: 50_715,
-              },
-              {
-                id: 'takeaway-durable',
-                text: 'while pending work remains durable.',
-                startMs: 1_500,
-                durationMs: 1_200,
-                sampleCount: 52_920,
-              },
-            ],
-            primaryItemIndices: [0, 1],
-            secondaryItemIndices: [],
-            startMs: 300,
-            durationMs: 2_400,
-            audioFile: 'beats/takeaway.wav',
-            sampleCount: 105_840,
-          },
-        ],
-        primaryItemTimings: [
-          {beatId: 'takeaway-beat', startMs: 300},
-          {beatId: 'takeaway-beat', startMs: 300},
-        ],
-        secondaryItemTimings: [],
-      },
+      makeScene({
+        id: 'diagram',
+        items: ['Producer', 'Queue', 'Consumer'],
+        sceneIndex: 0,
+        title: 'Existing process diagram',
+        visual: {kind: 'diagram', motion: 'reveal', motif: 'none', assetId: null},
+      }),
+      makeScene({
+        id: 'agent',
+        items: ['Search', 'API', 'Database'],
+        sceneIndex: 1,
+        title: 'AI agent coordinates tools',
+        visual: {kind: 'agent-workflow', motion: 'orbit', motif: 'ai-agent', assetId: 'ai-agent-pulse'},
+      }),
+      makeScene({
+        id: 'brands',
+        items: ['OpenAI', 'React', 'PostgreSQL'],
+        sceneIndex: 2,
+        title: 'Exact product marks',
+        visual: {kind: 'brand-showcase', motion: 'drift', motif: 'automation', assetId: null},
+      }),
+      makeScene({
+        id: 'network',
+        items: ['Cloud Hub', 'API', 'Queue', 'Worker', 'Database'],
+        sceneIndex: 3,
+        title: 'One hub connects the system',
+        visual: {kind: 'network-map', motion: 'flow', motif: 'cloud', assetId: null},
+      }),
+      makeScene({
+        id: 'metric',
+        items: ['73% faster retrieval', 'Source-backed benchmark', 'Measured result'],
+        sceneIndex: 4,
+        title: 'The exact claim stays visible',
+        visual: {kind: 'metric-focus', motion: 'count-up', motif: 'analytics', assetId: null},
+      }),
+      makeScene({
+        id: 'spotlight',
+        items: ['Document automation', 'Extract', 'Validate', 'Deliver'],
+        sceneIndex: 5,
+        title: 'One concept closes the story',
+        visual: {kind: 'icon-spotlight', motion: 'scan', motif: 'automation', assetId: 'ai-agent-pulse'},
+      }),
     ],
   });
   const backgroundAssets = sceneBackground === 'generated'

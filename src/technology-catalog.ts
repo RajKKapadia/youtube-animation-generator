@@ -25,6 +25,7 @@ const isSimpleIcon = (value: unknown): value is SimpleIcon =>
 
 const icons = Object.values(simpleIcons).filter(isSimpleIcon);
 const iconsBySlug = new Map(icons.map((icon) => [icon.slug, icon]));
+const iconsByTitle = new Map(icons.map((icon) => [normalize(icon.title), icon]));
 
 const IGNORED_TITLES = new Set([
   'answer',
@@ -79,6 +80,18 @@ const ALIASES: Array<{pattern: RegExp; slug: string}> = [
   {pattern: /\bgolang\b/i, slug: 'go'},
 ];
 
+const EXACT_ALIASES = new Map<string, string>([
+  ['pgvector', 'postgresql'],
+  ['postgres', 'postgresql'],
+  ['k8s', 'kubernetes'],
+  ['node js', 'nodedotjs'],
+  ['nextjs', 'nextdotjs'],
+  ['vuejs', 'vuedotjs'],
+  ['reactjs', 'react'],
+  ['fast api', 'fastapi'],
+  ['golang', 'go'],
+]);
+
 const titleCandidates = icons
   .map((icon) => ({icon, term: normalize(icon.title)}))
   .filter(({term}) => term.length >= 3 && !IGNORED_TITLES.has(term))
@@ -113,6 +126,17 @@ const toBrandIcon = (icon: SimpleIcon): TechnologyBrandIcon => ({
   path: icon.path,
   hex: icon.hex,
 });
+
+export const exactTechnologyBrandIconFor = (
+  label: string,
+): TechnologyBrandIcon | undefined => {
+  const normalizedLabel = normalize(label);
+  const aliasSlug = EXACT_ALIASES.get(normalizedLabel);
+  const icon = aliasSlug
+    ? iconsBySlug.get(aliasSlug)
+    : iconsByTitle.get(normalizedLabel);
+  return icon ? toBrandIcon(icon) : undefined;
+};
 
 export const technologyBrandIconFor = (
   label: string,
