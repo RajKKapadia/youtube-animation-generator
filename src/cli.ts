@@ -41,7 +41,7 @@ import {
   type SupertonicVoice,
 } from './supertonic/protocol.js';
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 const FORMATS = new Set<OutputFormat>(['prores', 'webm', 'green']);
 
 const help = `youtube-animations ${VERSION}
@@ -239,6 +239,12 @@ const narratedPlanStem = (filePath: string): string =>
 const readJson = async (filePath: string): Promise<unknown> =>
   JSON.parse(await readFile(filePath, 'utf8'));
 
+const printPlanningWarnings = (warnings: string[] | undefined): void => {
+  if (!warnings?.length) return;
+  console.warn('Planning warnings:');
+  for (const warning of warnings) console.warn(`  - ${warning}`);
+};
+
 const loadPlan = async (
   filePath: string,
 ): Promise<{kind: 'narrated'; plan: NarratedPlan} | {kind: 'subtitle'; plan: SavedPlan}> => {
@@ -342,8 +348,7 @@ const runSubtitleWorkflow = async ({
   }
 
   if (plan.planningWarnings?.length) {
-    console.warn('Planning warnings:');
-    for (const warning of plan.planningWarnings) console.warn(`  - ${warning}`);
+    printPlanningWarnings(plan.planningWarnings);
   }
   if (common.planOnly) return;
 
@@ -463,6 +468,7 @@ const runNarratedWorkflow = async ({
   if (planPath) {
     const loaded = await loadPlan(planPath);
     if (loaded.kind !== 'narrated') throw new Error('This is a subtitle animation plan.');
+    printPlanningWarnings(loaded.plan.planningWarnings);
     stem = narratedPlanStem(planPath);
     outputDirectory = common.outputDirectory ?? dirname(planPath);
     if (loaded.plan.stage === 'timed') {
@@ -516,6 +522,7 @@ const runNarratedWorkflow = async ({
       sourceText,
       targetDurationSeconds,
     });
+    printPlanningWarnings(draft.planningWarnings);
     await writeJson(draftPath, draft, common.force);
     await writeFile(scriptPath, narrationScriptMarkdown(draft), 'utf8');
     console.log(`Saved narration script: ${scriptPath}`);

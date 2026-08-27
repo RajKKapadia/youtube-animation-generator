@@ -19,6 +19,12 @@ const scene = timedNarrationSceneSchema.parse({
   leftLabel: '',
   rightLabel: '',
   reason: 'Fixture',
+  visual: {
+    kind: 'diagram',
+    motion: 'reveal',
+    motif: 'none',
+    assetId: null,
+  },
   beats: [{
     id: 'caption-beat',
     expression: 'breath',

@@ -1,6 +1,6 @@
 {
   "name": "youtube-animations",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Generate narrated videos and editor-ready animation clips from text or subtitles.",
   "private": true,
   "bin": {
@@ -8,10 +8,12 @@
   },
   "scripts": {
     "animations": "node --import tsx src/cli.ts",
+    "assets:validate": "node --import tsx src/validate-assets.ts",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "fixtures:layouts": "node --import tsx src/render-layout-fixtures.ts",
     "fixtures:narrated": "node --import tsx src/render-narrated-fixture.ts",
+    "fixtures:narrated-layouts": "node --import tsx src/render-narrated-layout-fixtures.ts",
     "fixtures:publish": "node --import tsx src/render-publish-fixture.ts",
     "fixtures:voice-expressions": "node --import tsx src/render-voice-expression-fixture.ts",
     "test": "vitest run"
@@ -24,7 +26,9 @@
   "dependencies": {
     "@remotion/bundler": "4.0.515",
     "@remotion/layout-utils": "4.0.515",
+    "@remotion/lottie": "4.0.515",
     "@remotion/renderer": "4.0.515",
+    "lottie-web": "5.13.0",
     "lucide-react": "1.28.0",
     "onnxruntime-node": "1.27.0",
     "openai": "7.5.0",

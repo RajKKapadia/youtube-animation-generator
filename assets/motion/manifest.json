@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "ai-agent-pulse",
+      "motifs": ["ai-agent", "automation"],
+      "keywords": ["AI agent", "automation", "thinking", "tool use"],
+      "file": "motion/ai-agent-pulse.json",
+      "sourceUrl": "https://github.com/RajKKapadia/youtube-animation-generator",
+      "creator": "YouTube Animations project",
+      "license": "Project-authored asset; all rights retained by the repository owner",
+      "licenseUrl": null,
+      "attribution": "YouTube Animations project",
+      "loop": "loop",
+      "playbackRate": 0.75,
+      "priority": 100,
+      "colorMap": {
+        "#A78BFA": "primary",
+        "#22D3EE": "secondary"
+      }
+    }
+  ]
+}

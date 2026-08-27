@@ -60,8 +60,10 @@ const defaultNarratedProps: NarratedRenderInput = {
   fps: 30,
   profile: RENDER_PROFILES['16:9'],
   technologyIcons: {},
+  localBrandAssets: {},
+  motionAssets: {},
   plan: {
-    version: 4,
+    version: 5,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText: 'A request moves through a queue.',
@@ -91,6 +93,12 @@ const defaultNarratedProps: NarratedRenderInput = {
       leftLabel: '',
       rightLabel: '',
       reason: 'Preview',
+      visual: {
+        kind: 'diagram',
+        motion: 'reveal',
+        motif: 'none',
+        assetId: null,
+      },
       beats: [
         {
           id: 'request',

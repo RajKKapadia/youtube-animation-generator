@@ -14,6 +14,12 @@ import type {
   TimedNarratedPlan,
 } from './types.js';
 import type {SceneBackgroundAssets} from './scene-backgrounds.js';
+import {
+  assetFilePath,
+  brandAssetForLabel,
+  loadAssetRegistry,
+  normalizeAssetLabel,
+} from './asset-registry.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -105,6 +111,97 @@ export const renderNarratedVideo = async (
         }
       }
     }
+    const registry = await loadAssetRegistry();
+    for (const warning of registry.warnings) {
+      console.warn(`Asset registry warning: ${warning}`);
+    }
+
+    const motionAssets: Record<string, {
+      id: string;
+      file: string;
+      loop: 'once' | 'loop';
+      playbackRate: number;
+      colorMap: Record<string, 'primary' | 'secondary'>;
+    }> = {};
+    for (const assetId of new Set(
+      options.plan.scenes.flatMap((scene) => scene.visual.assetId ? [scene.visual.assetId] : []),
+    )) {
+      const asset = registry.motionAssets.find(({id}) => id === assetId);
+      if (!asset) {
+        throw new Error(
+          `Narrated plan references unregistered motion asset "${assetId}". Add it to assets/motion/manifest.json before rendering.`,
+        );
+      }
+      const publicName = `motion-${asset.id}.json`;
+      await copyFile(assetFilePath(registry, asset.file), resolve(publicDirectory, publicName));
+      motionAssets[asset.id] = {
+        id: asset.id,
+        file: publicName,
+        loop: asset.loop,
+        playbackRate: asset.playbackRate,
+        colorMap: asset.colorMap,
+      };
+    }
+
+    const allLabels = options.plan.scenes.flatMap((scene) => [
+      ...scene.primaryItems,
+      ...scene.secondaryItems,
+    ]);
+    const brandLabels = new Set(
+      options.plan.scenes
+        .filter((scene) => scene.visual.kind === 'brand-showcase')
+        .flatMap((scene) => [...scene.primaryItems, ...scene.secondaryItems]),
+    );
+    const diagramLabels = new Set(
+      options.plan.scenes
+        .filter((scene) => scene.visual.kind === 'diagram')
+        .flatMap((scene) => [...scene.primaryItems, ...scene.secondaryItems]),
+    );
+    const normalizedSource = ` ${normalizeAssetLabel(options.plan.sourceText)} `;
+    const isSourceBackedBrand = (label: string): boolean =>
+      normalizedSource.includes(` ${normalizeAssetLabel(label)} `);
+    const {
+      exactTechnologyBrandIconFor,
+      technologyBrandIconFor,
+    } = await import('./technology-catalog.js');
+    const technologyIcons = Object.fromEntries(
+      [...new Set(allLabels)].flatMap((label) => {
+        const icon = brandLabels.has(label)
+          ? isSourceBackedBrand(label)
+            ? exactTechnologyBrandIconFor(label)
+            : undefined
+          : diagramLabels.has(label)
+            ? technologyBrandIconFor(label)
+            : exactTechnologyBrandIconFor(label);
+        return icon ? [[label, icon] as const] : [];
+      }),
+    );
+
+    const copiedBrands = new Map<string, string>();
+    const localBrandAssets: Record<string, {
+      id: string;
+      title: string;
+      file: string;
+      colorPolicy: 'original' | 'monochrome-allowed';
+    }> = {};
+    for (const label of new Set(allLabels)) {
+      if (technologyIcons[label]) continue;
+      if (brandLabels.has(label) && !isSourceBackedBrand(label)) continue;
+      const asset = brandAssetForLabel(registry, label);
+      if (!asset) continue;
+      const publicName = copiedBrands.get(asset.id) ?? `brand-${asset.id}.svg`;
+      if (!copiedBrands.has(asset.id)) {
+        await copyFile(assetFilePath(registry, asset.file), resolve(publicDirectory, publicName));
+        copiedBrands.set(asset.id, publicName);
+      }
+      localBrandAssets[label] = {
+        id: asset.id,
+        title: asset.canonicalName,
+        file: publicName,
+        colorPolicy: asset.colorPolicy,
+      };
+    }
+
     console.log('Bundling narrated-video templates...');
     const serveUrl = await bundle({
       entryPoint: findEntryPoint(),
@@ -120,13 +217,6 @@ export const renderNarratedVideo = async (
         },
       }),
     });
-    const {resolveTechnologyBrandIcons} = await import('./technology-catalog.js');
-    const technologyIcons = resolveTechnologyBrandIcons(
-      options.plan.scenes.flatMap((scene) => [
-        ...scene.primaryItems,
-        ...scene.secondaryItems,
-      ]),
-    );
     const browserExecutable = findBrowserExecutable();
 
     for (const [index, output] of outputs.entries()) {
@@ -139,6 +229,8 @@ export const renderNarratedVideo = async (
         profile: output.profile,
         audioFile: publicAudioName,
         technologyIcons,
+        localBrandAssets,
+        motionAssets,
       };
       const composition = await selectComposition({
         serveUrl,

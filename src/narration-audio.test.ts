@@ -10,7 +10,7 @@ import {
 import {draftNarratedPlanSchema, timedNarratedPlanSchema} from './types.js';
 
 const draft = draftNarratedPlanSchema.parse({
-  version: 4,
+  version: 5,
   kind: 'narrated-video',
   stage: 'draft',
   sourceText: 'A then B.',
@@ -30,6 +30,12 @@ const draft = draftNarratedPlanSchema.parse({
     leftLabel: '',
     rightLabel: '',
     reason: 'Flow',
+    visual: {
+      kind: 'network-map',
+      motion: 'flow',
+      motif: 'data',
+      assetId: null,
+    },
     beats: [
       {
         id: 'a',
@@ -135,6 +141,7 @@ describe('materializeTimedNarration', () => {
     expect(timed.voiceoverFile).toBe('flow.audio/voiceover.wav');
     expect(timed.voiceoverPlaybackRate).toBe(1);
     expect(timed.palette).toBe('amber');
+    expect(timed.scenes[0]!.visual).toEqual(draft.scenes[0]!.visual);
     expect(() =>
       timedNarratedPlanSchema.parse({
         ...timed,
