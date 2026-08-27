@@ -71,7 +71,7 @@ export const sceneBackgroundPrompt = (
     'Abstract cinematic educational-video background.',
     videoPaletteFor(palette).generatedImageDirection,
     'No text, letters, numbers, logos, watermarks, user-interface panels, or prominent people.',
-    'Keep the center and lower caption area low-detail and high-contrast for foreground diagrams and subtitles.',
+    'Keep the center and upper caption area low-detail and high-contrast for foreground diagrams and subtitles.',
   ].join(' ');
 };
 

@@ -2,7 +2,7 @@ import {AbsoluteFill, Audio, Sequence, staticFile} from 'remotion';
 import type {NarratedRenderInput, VisualClip} from '../types.js';
 import {AnimationClip} from './AnimationClip.js';
 import {
-  captionBottomInset,
+  captionTopInset,
   PhraseCaption,
   SceneBackdrop,
 } from './NarratedSceneLayer.js';
@@ -64,7 +64,7 @@ export const NarratedVideo = ({
             <AnimationClip
               background="transparent"
               clip={clip}
-              contentBottomInset={captionBottomInset(captions, profile)}
+              contentTopInset={captionTopInset(captions, profile)}
               fps={fps}
               palette={plan.palette}
               profile={profile}

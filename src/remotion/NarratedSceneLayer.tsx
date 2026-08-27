@@ -183,7 +183,7 @@ export const SceneBackdrop = ({
   );
 };
 
-export const captionBottomInset = (
+export const captionTopInset = (
   captions: CaptionMode,
   profile: RenderProfile,
 ): number => captions === 'off' ? 0 : profile.aspectRatio === '9:16' ? 180 : 190;
@@ -245,14 +245,14 @@ export const PhraseCaption = ({
     <div
       style={{
         alignItems: 'center',
-        bottom: vertical ? 92 : 34,
         display: 'flex',
         justifyContent: 'center',
         left: profile.safeArea.left,
         opacity,
         position: 'absolute',
         right: profile.safeArea.right,
-        transform: `translateY(${(1 - entrance) * 14}px) scale(${0.97 + entrance * 0.03})`,
+        top: profile.safeArea.top,
+        transform: `translateY(${(1 - entrance) * -14}px) scale(${0.97 + entrance * 0.03})`,
         zIndex: 20,
       }}
     >

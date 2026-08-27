@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {RENDER_PROFILES} from '../render-profile.js';
 import {timedNarrationSceneSchema} from '../types.js';
 import {
-  captionBottomInset,
+  captionTopInset,
   captionPhraseAtMs,
   sceneBackdropOpacity,
 } from './NarratedSceneLayer.js';
@@ -59,10 +59,10 @@ describe('phrase captions', () => {
     expect(captionPhraseAtMs(scene, 1_350)).toBeUndefined();
   });
 
-  it('reserves orientation-specific space only when captions are enabled', () => {
-    expect(captionBottomInset('on', RENDER_PROFILES['16:9'])).toBe(190);
-    expect(captionBottomInset('on', RENDER_PROFILES['9:16'])).toBe(180);
-    expect(captionBottomInset('off', RENDER_PROFILES['9:16'])).toBe(0);
+  it('reserves orientation-specific top space only when captions are enabled', () => {
+    expect(captionTopInset('on', RENDER_PROFILES['16:9'])).toBe(190);
+    expect(captionTopInset('on', RENDER_PROFILES['9:16'])).toBe(180);
+    expect(captionTopInset('off', RENDER_PROFILES['9:16'])).toBe(0);
   });
 
   it('crossfades scene backdrops at their boundaries', () => {

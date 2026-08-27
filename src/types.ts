@@ -835,7 +835,7 @@ export type PublishCoverInput = z.infer<typeof publishCoverInputSchema>;
 export const renderInputSchema = z.object({
   clip: visualClipSchema,
   background: renderBackgroundSchema,
-  contentBottomInset: z.number().int().nonnegative().optional(),
+  contentTopInset: z.number().int().nonnegative().optional(),
   fps: z.number().int().positive(),
   palette: videoPaletteSchema.default('cyan'),
   profile: renderProfileSchema,

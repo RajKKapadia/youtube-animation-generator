@@ -52,7 +52,7 @@ describe('scene background prompts', () => {
     expect(prompt).toContain('tall cinematic 9:16 portrait');
     expect(prompt).toContain('deep teal-green palette');
     expect(prompt).toContain('No text');
-    expect(prompt).toContain('lower caption area low-detail');
+    expect(prompt).toContain('upper caption area low-detail');
     expect(scene.backgroundPrompt).toBe(
       'A glowing queue carrying durable work between two systems.',
     );
