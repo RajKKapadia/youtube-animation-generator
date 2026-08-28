@@ -1,6 +1,6 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos combine deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, and curated local Lottie assets. They retain beat-aligned phrase captions, speech-aligned reveals, summary-aware cinematic palettes, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, optional cited web research can enrich narrated sources, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos combine deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, and curated local Lottie assets. They retain beat-aligned phrase captions, speech-aligned reveals, summary-aware cinematic palettes, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
 
 The current CLI supports three workflows:
 
@@ -24,6 +24,8 @@ Default output:
 
 ```text
 /videos/summary-video/
+├── summary.research.json          # optional cited research cache
+├── summary.research.md            # optional clickable research report
 ├── summary.narration-script.md
 ├── summary.narration-plan.json
 ├── summary.narration-timed.json
@@ -128,6 +130,30 @@ pnpm run animations create summary.md --aspect-ratio both
 The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. It also selects one dark cinematic palette—`cyan`, `violet`, `emerald`, `amber`, or `rose`—from the source's dominant subject and tone. The saved `palette` field drives every scene and makes rerenders deterministic; edit that field in the draft or timed plan to override the automatic choice.
 
 Every visible item is anchored to exactly one semantic narration beat. A beat is one coherent utterance that can be spoken in a natural breath; its short ordered phrases are caption and reveal boundaries, not separate TTS calls. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
+
+### Grounded web research
+
+Web research is off by default. Enable an optional research pass before narrated planning:
+
+```bash
+pnpm run animations create summary.md --research auto
+pnpm run animations create summary.md --research required
+```
+
+`auto` lets the model skip search when the supplied source is already sufficient. `required` forces at least one OpenAI hosted [`web_search`](https://developers.openai.com/api/docs/guides/tools-web-search) call. Both modes use medium search context, permit at most four tool calls, keep response storage disabled, and request the complete consulted-source list.
+
+The research response is structured into `supported`, `context`, and `contested` claims. Every claim URL is checked against URLs actually returned by the search tool; an invented or unmatched citation aborts planning. Only supported and contextual claims are added to the planner's effective source. Contested claims remain reviewable in `summary.research.json` and `summary.research.md` but cannot ground narration, metrics, charts, or generated imagery.
+
+Research-enriched plans retain the untouched input in `originalSourceText`, the effective grounded input in `sourceText`, and the complete citation bundle in `research`. The narration script ends with clickable research sources. Matching research is reused by source/configuration hash, including after a later planning failure. `--force` does not purchase fresh research; refresh it explicitly:
+
+```bash
+pnpm run animations create summary.md \
+  --research required \
+  --refresh-research \
+  --force
+```
+
+Research options apply only while planning a new narrated video. Subtitle overlays, saved-plan rendering, image validation, and publish-kit generation do not run web searches.
 
 Every version-6 scene persists a discriminated `visual` object. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated local Lottie asset or remains `null` for code-native motion. `image-focus` instead references a plan-level local/generated media id, while `data-visualization` stores its validated chart specification. Versions 1–5 still load and normalize with their original diagram/default behavior and no new foreground media. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. If truthful source material cannot support that variety, the saved plan receives a warning instead of being rejected or padded with invented content.
 
@@ -364,6 +390,8 @@ Narrated videos:
 --scene-background <mode>         ambient or generated; default: ambient
 --image-model <model>             Default: OPENAI_IMAGE_MODEL or gpt-image-2
 --image-quality <quality>         low, medium, or high; default: medium
+--research <off|auto|required>    Web research before planning; default: off
+--refresh-research                Replace the matching research cache
 --regenerate-backgrounds          Refresh cached assets; requires generated mode
 
 Publish kits:
@@ -393,11 +421,11 @@ All treatments use the same motion grammar: beat-triggered entrances, stable hol
 
 Titles and labels are measured and fitted into their bounds. Brand resolution is deterministic: an exact Simple Icons name or explicit alias is tried first, an exact entry from `assets/brands/manifest.json` is tried second, and a Lucide semantic icon plus the visible company name is used last. Brand showcases do not use fuzzy matching. Missing or ambiguous logos produce a planning warning; brand names absent from the source and source-unsupported metric numbers are rejected before the plan is saved. The renderer never fabricates a mark or silently substitutes another company. Original logo colors are preserved unless a curated manifest explicitly allows monochrome use.
 
-Narrated plan files are version 5 and store one summary-aware palette plus the scene-level visual treatment. Version-4 plans retain their saved palette and normalize to `diagram`, `reveal`, `none`, and a null asset. Version-1 through version-3 plans remain loadable with the compatibility `cyan` palette and the same diagram visual default. Earlier phrase, expression, timing, and background-prompt compatibility behavior remains intact. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
+Narrated plan files are version 6 and store one summary-aware palette plus the scene-level visual treatment. Research metadata is an additive optional version-6 field, so plans created without research remain unchanged. Version-5 plans retain their saved visual treatment and normalize to version 6 without foreground media; version-4 and earlier compatibility behavior remains intact. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
 
 Ambient backgrounds are generated entirely in Remotion from palette-driven deterministic gradients, moving light fields, a subtle grid, and a vignette. The same palette drives diagram accents and new publish covers. Generated backgrounds use native `2048×1152` and `1152×2048` JPEG assets, receive the stored palette direction in their prompt, add a slow pan/zoom plus neutral readability overlays, and never silently fall back to ambient when generation was requested. Changing the palette changes the prompt hash, so cached images cannot silently retain the previous color family.
 
-The OpenAI Responses API uses Zod Structured Outputs with response storage disabled (`store: false`). OpenAI selects and fills these templates; it does not generate arbitrary React code.
+The OpenAI Responses API uses Zod Structured Outputs with response storage disabled (`store: false`). Optional source research uses the hosted `web_search` tool, bounds it to four calls, saves complete source metadata, and verifies structured claim URLs against tool-returned URLs. OpenAI selects and fills the planning templates; it does not generate arbitrary React code.
 
 ## Local motion and brand assets
 

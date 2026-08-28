@@ -69,6 +69,37 @@ describe('draftNarratedPlanSchema', () => {
     expect(parsed.palette).toBe('emerald');
   });
 
+  it('keeps original source and web research metadata paired', () => {
+    const research = {
+      version: 1 as const,
+      kind: 'web-research' as const,
+      sourceHash: 'a'.repeat(64),
+      researchedAt: '2026-08-28T00:00:00.000Z',
+      model: 'fixture',
+      mode: 'required' as const,
+      searchContextSize: 'medium' as const,
+      maxToolCalls: 4 as const,
+      queries: ['queue documentation'],
+      summary: 'Checked the main claim.',
+      claims: [{
+        claim: 'Durable queues retain pending work.',
+        status: 'supported' as const,
+        sourceUrls: ['https://example.com/queues'],
+      }],
+      sources: [{
+        url: 'https://example.com/queues',
+        title: 'Queue documentation',
+      }],
+    };
+    expect(() => draftNarratedPlanSchema.parse({...validPlan, research}))
+      .toThrow('preserve both originalSourceText and research metadata');
+    expect(() => draftNarratedPlanSchema.parse({
+      ...validPlan,
+      originalSourceText: validPlan.sourceText,
+      research,
+    })).not.toThrow();
+  });
+
   it('accepts only curated video palettes', () => {
     for (const palette of ['cyan', 'violet', 'emerald', 'amber', 'rose'] as const) {
       expect(draftNarratedPlanSchema.parse({...validPlan, palette}).palette)
@@ -520,6 +551,37 @@ describe('narrationScriptMarkdown', () => {
       '# Why queues help\n\n' +
         '## Scene 1: A queue decouples work\n\n' +
         '*[breath]* The producer submits work. The queue lets the consumer process it independently.\n',
+    );
+  });
+
+  it('adds clickable research sources to an enriched script', () => {
+    const enriched = draftNarratedPlanSchema.parse({
+      ...validPlan,
+      originalSourceText: validPlan.sourceText,
+      research: {
+        version: 1,
+        kind: 'web-research',
+        sourceHash: 'a'.repeat(64),
+        researchedAt: '2026-08-28T00:00:00.000Z',
+        model: 'fixture',
+        mode: 'required',
+        searchContextSize: 'medium',
+        maxToolCalls: 4,
+        queries: ['queue documentation'],
+        summary: 'Checked the main claim.',
+        claims: [{
+          claim: 'Durable queues retain pending work.',
+          status: 'supported',
+          sourceUrls: ['https://example.com/queues'],
+        }],
+        sources: [{
+          url: 'https://example.com/queues',
+          title: 'Queue documentation',
+        }],
+      },
+    });
+    expect(narrationScriptMarkdown(enriched)).toContain(
+      '## Research sources\n\n1. [Queue documentation](https://example.com/queues)',
     );
   });
 });

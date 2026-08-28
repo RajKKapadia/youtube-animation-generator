@@ -9,6 +9,7 @@ import {
   type DraftNarrationSceneSuggestion,
   type DraftNarratedPlan,
   type NarratedMediaAsset,
+  type WebResearchBundle,
 } from './types.js';
 import {joinNarrationPhrases} from './narration-text.js';
 import {
@@ -24,6 +25,7 @@ import {
   chartDatumGroundingIssue,
   sourceContainsGroundedText,
 } from './source-grounding.js';
+import {webResearchSourceListMarkdown} from './source-research.js';
 
 export {joinNarrationPhrases} from './narration-text.js';
 
@@ -382,6 +384,8 @@ export interface NarrationPlanOptions {
   language: string;
   localImages?: DiscoveredLocalImage[];
   model: string;
+  originalSourceText?: string;
+  research?: WebResearchBundle;
   sourceText: string;
   targetDurationSeconds: number;
 }
@@ -470,6 +474,12 @@ export const planNarratedVideo = async (
     kind: 'narrated-video',
     stage: 'draft',
     sourceText: options.sourceText,
+    ...(options.research
+      ? {
+          originalSourceText: options.originalSourceText ?? options.sourceText,
+          research: options.research,
+        }
+      : {}),
     generatedAt: new Date().toISOString(),
     model: options.model,
     targetDurationSeconds: options.targetDurationSeconds,
@@ -493,5 +503,8 @@ export const narrationScriptMarkdown = (plan: DraftNarratedPlan): string => {
     return `## Scene ${sceneIndex + 1}: ${scene.title}\n\n${narration}`;
   });
 
-  return `# ${plan.title}\n\n${sections.join('\n\n')}\n`;
+  const researchSources = plan.research
+    ? `\n${webResearchSourceListMarkdown(plan.research)}`
+    : '';
+  return `# ${plan.title}\n\n${sections.join('\n\n')}\n${researchSources}`;
 };

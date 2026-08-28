@@ -127,20 +127,31 @@ describe('narrated CLI plan-only path', () => {
       runCli(['create', 'missing.md', '--regenerate-visuals']),
     ).rejects.toThrow('--regenerate-visuals requires --generated-visuals auto');
     await expect(
+      runCli(['create', 'missing.md', '--research', 'sometimes']),
+    ).rejects.toThrow('--research must be one of: off, auto, required');
+    await expect(
+      runCli(['create', 'missing.md', '--refresh-research']),
+    ).rejects.toThrow('--refresh-research requires --research auto or required');
+    await expect(
       runCli(['missing.srt', '--scene-background', 'generated']),
+    ).rejects.toThrow('Narrated visual options cannot be used with subtitle overlays');
+    await expect(
+      runCli(['missing.srt', '--research', 'auto']),
     ).rejects.toThrow('Narrated visual options cannot be used with subtitle overlays');
   });
 
-  it('documents the v0.6.2 narrated and publish-kit options', async () => {
+  it('documents the v0.7.0 narrated and publish-kit options', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     await runCli(['--help']);
     const output = String(log.mock.calls[0]?.[0]);
-    expect(output).toContain('youtube-animations 0.6.2');
+    expect(output).toContain('youtube-animations 0.7.0');
     expect(output).toContain('--voice <auto|M1..M5|F1..F5>');
     expect(output).toContain('--captions <on|off>');
     expect(output).toContain('--scene-background <mode>');
     expect(output).toContain('--image-quality <quality>');
     expect(output).toContain('--generated-visuals <off|auto>');
+    expect(output).toContain('--research <off|auto|required>');
+    expect(output).toContain('--refresh-research');
     expect(output).toContain('--regenerate-visuals');
     expect(output).toContain('publish <narrated-plan.json>');
     expect(output).toContain('--cover-aspect <16:9|9:16|both>');
