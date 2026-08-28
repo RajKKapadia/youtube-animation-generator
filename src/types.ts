@@ -27,6 +27,69 @@ export type RenderAspectRatio = z.infer<typeof renderAspectRatioSchema>;
 export const aspectRatioSelectionSchema = z.enum(['16:9', '9:16', 'both']);
 export type AspectRatioSelection = z.infer<typeof aspectRatioSelectionSchema>;
 
+export const webResearchModeSchema = z.enum(['off', 'auto', 'required']);
+export type WebResearchMode = z.infer<typeof webResearchModeSchema>;
+
+export const webResearchClaimStatusSchema = z.enum([
+  'supported',
+  'contested',
+  'context',
+]);
+
+const webResearchUrlSchema = z.string().max(2_048).url().refine(
+  (value) => value.startsWith('https://') || value.startsWith('http://'),
+  'Research sources must use HTTP or HTTPS URLs.',
+);
+
+export const webResearchSourceSchema = z.object({
+  url: webResearchUrlSchema,
+  title: z.string().min(1).max(300),
+});
+
+export const webResearchClaimSchema = z.object({
+  claim: z.string().min(1).max(800),
+  status: webResearchClaimStatusSchema,
+  sourceUrls: z.array(webResearchUrlSchema).min(1).max(6),
+});
+
+export const webResearchBundleSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal('web-research'),
+  sourceHash: z.string().regex(/^[\da-f]{64}$/u),
+  researchedAt: z.string().min(1),
+  model: z.string().min(1),
+  mode: webResearchModeSchema.exclude(['off']),
+  searchContextSize: z.literal('medium'),
+  maxToolCalls: z.literal(4),
+  queries: z.array(z.string().min(1).max(500)).max(20),
+  summary: z.string().min(1).max(3_000),
+  claims: z.array(webResearchClaimSchema).max(16),
+  sources: z.array(webResearchSourceSchema).max(100),
+}).superRefine((bundle, context) => {
+  const sourceUrls = new Set(bundle.sources.map(({url}) => url));
+  if (sourceUrls.size !== bundle.sources.length) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Research sources must be unique.',
+      path: ['sources'],
+    });
+  }
+  for (const [claimIndex, claim] of bundle.claims.entries()) {
+    for (const [urlIndex, url] of claim.sourceUrls.entries()) {
+      if (!sourceUrls.has(url)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Every research claim URL must reference a saved source.',
+          path: ['claims', claimIndex, 'sourceUrls', urlIndex],
+        });
+      }
+    }
+  }
+});
+
+export type WebResearchClaim = z.infer<typeof webResearchClaimSchema>;
+export type WebResearchBundle = z.infer<typeof webResearchBundleSchema>;
+
 export const renderProfileSchema = z.object({
   aspectRatio: renderAspectRatioSchema,
   width: z.number().int().positive(),
@@ -710,6 +773,8 @@ export const draftNarratedPlanSchema = z.object({
   kind: z.literal('narrated-video'),
   stage: z.literal('draft'),
   sourceText: z.string().min(1),
+  originalSourceText: z.string().min(1).optional(),
+  research: webResearchBundleSchema.optional(),
   generatedAt: z.string().min(1),
   model: z.string().min(1),
   targetDurationSeconds: z.number().positive(),
@@ -719,7 +784,16 @@ export const draftNarratedPlanSchema = z.object({
   planningWarnings: z.array(z.string().min(1)).optional(),
   mediaAssets: z.array(narratedMediaAssetSchema).max(8),
   scenes: z.array(draftNarrationSceneSchema).min(1).max(6),
-}).superRefine(addNarratedPlanIssues);
+}).superRefine((plan, context) => {
+  addNarratedPlanIssues(plan, context);
+  if (Boolean(plan.originalSourceText) !== Boolean(plan.research)) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Research-enriched plans must preserve both originalSourceText and research metadata.',
+      path: ['research'],
+    });
+  }
+});
 
 export type DraftNarratedPlan = z.infer<typeof draftNarratedPlanSchema>;
 
@@ -823,6 +897,8 @@ export const timedNarratedPlanSchema = z.object({
   kind: z.literal('narrated-video'),
   stage: z.literal('timed'),
   sourceText: z.string().min(1),
+  originalSourceText: z.string().min(1).optional(),
+  research: webResearchBundleSchema.optional(),
   generatedAt: z.string().min(1),
   model: z.string().min(1),
   targetDurationSeconds: z.number().positive(),
@@ -842,6 +918,13 @@ export const timedNarratedPlanSchema = z.object({
   scenes: z.array(timedNarrationSceneSchema).min(1).max(6),
 }).superRefine((plan, context) => {
   addNarratedPlanIssues(plan, context);
+  if (Boolean(plan.originalSourceText) !== Boolean(plan.research)) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Research-enriched plans must preserve both originalSourceText and research metadata.',
+      path: ['research'],
+    });
+  }
   let previousSceneEnd = 0;
   for (const [sceneIndex, scene] of plan.scenes.entries()) {
     if (scene.startMs < previousSceneEnd) {

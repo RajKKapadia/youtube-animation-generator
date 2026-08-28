@@ -27,6 +27,10 @@ import {aspectSuffix, profilesForSelection} from './render-profile.js';
 import {renderClips} from './render.js';
 import {readSubtitleFile} from './subtitles.js';
 import {
+  enrichSourceWithResearch,
+  loadOrCreateWebResearch,
+} from './source-research.js';
+import {
   aspectRatioSelectionSchema,
   captionModeSchema,
   generatedVisualModeSchema,
@@ -34,6 +38,7 @@ import {
   narratedPlanSchema,
   savedPlanSchema,
   sceneBackgroundModeSchema,
+  webResearchModeSchema,
   type AspectRatioSelection,
   type CaptionMode,
   type DraftNarratedPlan,
@@ -45,6 +50,7 @@ import {
   type SavedPlan,
   type SceneBackgroundMode,
   type TimedNarratedPlan,
+  type WebResearchMode,
 } from './types.js';
 import {
   supertonicLanguageSchema,
@@ -53,7 +59,7 @@ import {
 } from './supertonic/protocol.js';
 import {selectSupertonicVoice} from './supertonic/voice-selection.js';
 
-const VERSION = '0.6.2';
+const VERSION = '0.7.0';
 const FORMATS = new Set<OutputFormat>(['prores', 'webm', 'green']);
 
 const help = `youtube-animations ${VERSION}
@@ -92,6 +98,8 @@ Narrated video options:
   --image-model <model>             Image model (default: OPENAI_IMAGE_MODEL or gpt-image-2)
   --image-quality <quality>         low, medium, or high (default: medium)
   --generated-visuals <off|auto>    Grounded foreground generation (default: off)
+  --research <off|auto|required>    Web research before planning (default: off)
+  --refresh-research                Replace the matching research cache
   --regenerate-visuals              Explicitly refresh generated foreground images
   --regenerate-backgrounds          Replace matching cached scene images
 
@@ -105,6 +113,7 @@ Publish-kit options:
 Examples:
   youtube-animations episode.srt --aspect-ratio both
   youtube-animations create summary.md
+  youtube-animations create summary.md --research required --plan-only
   youtube-animations create summary.md --aspect-ratio 9:16
   youtube-animations create --render-plan summary-video/summary.narration-plan.json
   youtube-animations publish summary-video/summary.narration-timed.json
@@ -193,6 +202,14 @@ const parseGeneratedVisuals = (value: string | undefined): GeneratedVisualMode =
   const parsed = generatedVisualModeSchema.safeParse(value);
   if (!parsed.success) {
     throw new Error('--generated-visuals must be one of: off, auto.');
+  }
+  return parsed.data;
+};
+
+const parseResearchMode = (value: string | undefined): WebResearchMode => {
+  const parsed = webResearchModeSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error('--research must be one of: off, auto, required.');
   }
   return parsed.data;
 };
@@ -294,6 +311,11 @@ interface NarratedVisualOptions {
   regenerateBackgrounds: boolean;
   regenerateVisuals: boolean;
   sceneBackground: SceneBackgroundMode;
+}
+
+interface NarratedResearchOptions {
+  mode: WebResearchMode;
+  refresh: boolean;
 }
 
 const resolveForegroundVisuals = async ({
@@ -500,6 +522,7 @@ const runNarratedWorkflow = async ({
   language,
   model,
   planPath,
+  research,
   sourcePath,
   speed,
   steps,
@@ -512,6 +535,7 @@ const runNarratedWorkflow = async ({
   language: string;
   model: string;
   planPath?: string;
+  research: NarratedResearchOptions;
   sourcePath?: string;
   speed: number;
   steps: number;
@@ -524,6 +548,9 @@ const runNarratedWorkflow = async ({
   let outputDirectory: string;
 
   if (planPath) {
+    if (research.mode !== 'off' || research.refresh) {
+      throw new Error('Research options can only be used while planning a new narrated video.');
+    }
     const loaded = await loadPlan(planPath);
     if (loaded.kind !== 'narrated') throw new Error('This is a subtitle animation plan.');
     printPlanningWarnings(loaded.plan.planningWarnings);
@@ -584,12 +611,32 @@ const runNarratedWorkflow = async ({
     if (localImages.length > 0) {
       console.log(`Found ${localImages.length} valid local image${localImages.length === 1 ? '' : 's'} in ${resolve(dirname(sourcePath), 'images')}.`);
     }
+    let planningSourceText = sourceText;
+    let researchBundle;
+    if (research.mode !== 'off') {
+      console.log(`Researching the source with ${model} (${research.mode})...`);
+      const researched = await loadOrCreateWebResearch({
+        mode: research.mode,
+        model,
+        outputDirectory,
+        refresh: research.refresh,
+        sourceText,
+        stem,
+      });
+      researchBundle = researched.bundle;
+      planningSourceText = enrichSourceWithResearch(sourceText, researchBundle);
+      console.log(
+        `${researched.reused ? 'Reused' : 'Saved'} web research: ${researched.paths.json}`,
+      );
+      console.log(`Saved research report: ${researched.paths.markdown}`);
+    }
     draft = await planNarratedVideo({
       generatedVisuals: visual.generatedVisuals,
       language,
       localImages,
       model,
-      sourceText,
+      ...(researchBundle ? {originalSourceText: sourceText, research: researchBundle} : {}),
+      sourceText: planningSourceText,
       targetDurationSeconds,
     });
     await stageSelectedLocalImages({
@@ -694,7 +741,9 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       'render-plan': {type: 'string'},
       'render-publish': {type: 'string'},
       'regenerate-backgrounds': {type: 'boolean', default: false},
+      'refresh-research': {type: 'boolean', default: false},
       'regenerate-visuals': {type: 'boolean', default: false},
+      research: {type: 'string', default: 'off'},
       'scene-background': {type: 'string', default: 'ambient'},
       'supertonic-assets-dir': {type: 'string', default: 'models/supertonic-3'},
       'target-duration': {type: 'string'},
@@ -722,6 +771,12 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   const fps = parsePositiveInteger(values.fps, 30, '--fps');
   const model = values.model ?? process.env.OPENAI_MODEL ?? 'gpt-5.6';
   const publishCommand = positionals[0] === 'publish';
+  const usedResearchOption = tokens.some(
+    (token) => token.kind === 'option' && [
+      'research',
+      'refresh-research',
+    ].includes(token.name),
+  );
   const renderPublishPath = values['render-publish']
     ? resolve(values['render-publish'])
     : undefined;
@@ -733,6 +788,9 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     ].includes(token.name),
   );
   if (publishCommand) {
+    if (usedResearchOption) {
+      throw new Error('Research options can only be used with narrated-video creation.');
+    }
     if (positionals.length !== 2) {
       throw new Error('Provide exactly one narrated plan path after publish.');
     }
@@ -766,11 +824,18 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     regenerateVisuals: values['regenerate-visuals'],
     sceneBackground: parseSceneBackground(values['scene-background']),
   };
+  const research: NarratedResearchOptions = {
+    mode: parseResearchMode(values.research),
+    refresh: values['refresh-research'],
+  };
   if (visual.regenerateBackgrounds && visual.sceneBackground !== 'generated') {
     throw new Error('--regenerate-backgrounds requires --scene-background generated.');
   }
   if (visual.regenerateVisuals && visual.generatedVisuals !== 'auto') {
     throw new Error('--regenerate-visuals requires --generated-visuals auto.');
+  }
+  if (research.refresh && research.mode === 'off') {
+    throw new Error('--refresh-research requires --research auto or required.');
   }
   const common: CommonRuntimeOptions = {
     aspectRatio,
@@ -786,6 +851,8 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     'image-model',
     'image-quality',
     'generated-visuals',
+    'research',
+    'refresh-research',
     'regenerate-backgrounds',
     'regenerate-visuals',
     'scene-background',
@@ -803,6 +870,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
         language: parseLanguage(values.language),
         model,
         planPath: renderPlanPath,
+        research,
         speed: parseTtsSpeed(values['tts-speed']),
         steps: parseTtsSteps(values['tts-steps']),
         targetDurationSeconds: parsePositiveNumber(values['target-duration'], 60, '--target-duration'),
@@ -832,6 +900,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       common,
       language: parseLanguage(values.language),
       model,
+      research,
       ...(renderPlanPath ? {planPath: renderPlanPath} : {sourcePath: resolve(positionals[1]!)}),
       speed,
       steps,
