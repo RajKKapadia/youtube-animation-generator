@@ -1,5 +1,6 @@
 import {existsSync} from 'node:fs';
-import {copyFile, mkdir, mkdtemp, rm} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {copyFile, mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {basename, dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -14,6 +15,7 @@ import type {
   TimedNarratedPlan,
 } from './types.js';
 import type {SceneBackgroundAssets} from './scene-backgrounds.js';
+import type {GeneratedVisualAssets} from './generated-visuals.js';
 import {
   assetFilePath,
   brandAssetForLabel,
@@ -52,6 +54,7 @@ export interface NarratedOutput {
 export interface RenderNarratedVideoOptions {
   aspectRatio: AspectRatioSelection;
   backgroundAssets?: SceneBackgroundAssets | undefined;
+  foregroundAssets?: GeneratedVisualAssets | undefined;
   captions: CaptionMode;
   force: boolean;
   fps: number;
@@ -109,6 +112,37 @@ export const renderNarratedVideo = async (
           await copyFile(asset, resolve(publicDirectory, publicName));
           publicBackgroundAssets[output.profile.aspectRatio][scene.id] = publicName;
         }
+      }
+    }
+    const publicForegroundAssets: GeneratedVisualAssets = {'16:9': {}, '9:16': {}};
+    const copiedForegroundFiles = new Set<string>();
+    const planDirectory = options.voiceoverBaseDirectory ?? options.outputDirectory;
+    for (const output of outputs) {
+      for (const scene of options.plan.scenes) {
+        if (scene.visual.kind !== 'image-focus') continue;
+        const mediaId = scene.visual.mediaId;
+        const media = options.plan.mediaAssets.find(({id}) => id === mediaId);
+        if (!media) throw new Error(`Narrated plan is missing foreground media ${mediaId}.`);
+        const sourcePath = media.source === 'local'
+          ? resolve(planDirectory, media.file)
+          : options.foregroundAssets?.[output.profile.aspectRatio]?.[media.id];
+        if (!sourcePath || !existsSync(sourcePath)) {
+          throw new Error(
+            `${media.source === 'local' ? 'Local' : 'Generated'} foreground image does not exist for ${scene.id} (${output.profile.aspectRatio}).`,
+          );
+        }
+        if (media.source === 'local') {
+          const hash = createHash('sha256').update(await readFile(sourcePath)).digest('hex');
+          if (hash !== media.sha256) {
+            throw new Error(`Local foreground image hash does not match the saved plan: ${media.file}`);
+          }
+        }
+        const publicName = `foreground-${media.id}-${basename(sourcePath)}`;
+        if (!copiedForegroundFiles.has(publicName)) {
+          await copyFile(sourcePath, resolve(publicDirectory, publicName));
+          copiedForegroundFiles.add(publicName);
+        }
+        publicForegroundAssets[output.profile.aspectRatio][media.id] = publicName;
       }
     }
     const registry = await loadAssetRegistry();
@@ -225,6 +259,7 @@ export const renderNarratedVideo = async (
         captions: options.captions,
         sceneBackground: options.sceneBackground,
         backgroundAssets: publicBackgroundAssets[output.profile.aspectRatio],
+        foregroundAssets: publicForegroundAssets[output.profile.aspectRatio],
         fps: options.fps,
         profile: output.profile,
         audioFile: publicAudioName,

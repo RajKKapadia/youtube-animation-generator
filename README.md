@@ -1,6 +1,6 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos combine deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, and curated local Lottie assets. They retain beat-aligned phrase captions, speech-aligned reveals, summary-aware cinematic palettes, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos combine deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, and curated local Lottie assets. They retain beat-aligned phrase captions, speech-aligned reveals, summary-aware cinematic palettes, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
 
 The current CLI supports three workflows:
 
@@ -27,6 +27,8 @@ Default output:
 ├── summary.narration-script.md
 ├── summary.narration-plan.json
 ├── summary.narration-timed.json
+├── summary.media/                 # selected files copied from sibling images/
+├── summary.generated-visuals/     # optional foreground cache and manifest
 ├── summary.audio/
 │   ├── voiceover.wav
 │   └── beats/
@@ -76,7 +78,7 @@ Subtitle input keeps its existing editor-oriented output names. Vertical files i
 
 Planning-only and saved-plan workflows skip the dependencies they do not use. For example, `--plan-only` does not need Chrome or Supertonic, and a timed narrated plan with ambient backgrounds can be rerendered without OpenAI or Supertonic.
 
-Saved-plan rendering never downloads a logo or animation. It validates the checked-in asset manifests, copies only referenced files into Remotion's temporary public directory, and removes that staging directory after the render.
+Saved-plan rendering never downloads a logo or animation. It validates checked-in asset manifests and hashes for selected local images, copies only referenced files into Remotion's temporary public directory, and removes that staging directory after the render. A timed plan also reuses cached generated foreground images without OpenAI; if one is missing, the CLI names the scene and asks for `--generated-visuals auto` instead of silently substituting unrelated art.
 
 Publish metadata needs OpenAI only when creating a new publish plan. Rendering an edited publish plan needs Chrome but makes no OpenAI request. Publish covers use only Remotion typography, shapes, diagrams, Lucide icons, and the installed Simple Icons catalog; the publish workflow never calls the Image API.
 
@@ -127,7 +129,59 @@ The planning request creates a faithful hook, explanation, and conclusion using 
 
 Every visible item is anchored to exactly one semantic narration beat. A beat is one coherent utterance that can be spoken in a natural breath; its short ordered phrases are caption and reveal boundaries, not separate TTS calls. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
 
-Every version-5 scene also persists an editable `visual` object. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated local Lottie asset or remains `null` for code-native motion. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. If truthful source material cannot support that variety, the saved plan receives a warning instead of being rejected or padded with invented content.
+Every version-6 scene persists a discriminated `visual` object. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated local Lottie asset or remains `null` for code-native motion. `image-focus` instead references a plan-level local/generated media id, while `data-visualization` stores its validated chart specification. Versions 1–5 still load and normalize with their original diagram/default behavior and no new foreground media. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. If truthful source material cannot support that variety, the saved plan receives a warning instead of being rejected or padded with invented content.
+
+### Local foreground images
+
+Place optional PNG, JPEG, or WebP files directly in an `images/` folder beside the source file:
+
+```text
+/videos/
+├── summary.md
+└── images/
+    ├── benchmark-chart.png
+    └── warehouse-photo.webp
+```
+
+The planner receives each valid file as a high-detail Base64 image with a stable content-derived id. Pixels and embedded text are explicitly untrusted and can guide scene matching only; graph values must still come from the source text. A local file can appear in at most one scene. Selected files are hash-checked and transactionally copied into `summary.media/`, so saved plans rerender without the original sibling folder. Screenshots and diagrams normally use `contain` over a blurred backplate; photographs may use `cover`.
+
+### Source-backed charts
+
+When the source contains enough related values, the planner can select grouped comparison bars or 2–4 metric cards. Every datum preserves its stable id, exact label, numeric value, unit, precision, numeric token, and exact evidence excerpt. Ratios, differences, and percentage changes save operand ids only; the renderer computes and marks their deterministic rounded display with `≈`. Grouped bars are vertical in 16:9 and horizontal in 9:16. A single isolated fact continues to use `metric-focus`.
+
+Markdown tables and wrapped source text are checked with normalized whitespace, so an otherwise exact row does not fail merely because its cells were separated by tabs or newlines. If a proposed chart, generated/local image reference, metric, or brand treatment still cannot be verified against the source, the planner preserves the narration and replaces only that optional treatment with a code-native diagram. The CLI prints the reason under `Planning warnings`, and the warning is saved in the draft plan for review; unsupported values are never rendered as a chart.
+
+### Grounded generated foreground illustrations
+
+Generated foreground visuals are off by default. Enable the planner and materializer explicitly:
+
+```bash
+pnpm run animations create summary.md \
+  --aspect-ratio both \
+  --generated-visuals auto
+```
+
+`auto` permits at most two scenes and may generate zero. Each selected scene saves exact source evidence, 2–5 exact source anchors, its narration beat, literal subject/action/environment/framing, and exclusions. Generic decoration, values, charts, quotes, text, logos, interfaces, named-person likenesses, and fabricated documentary evidence are forbidden. Literal editorial depiction is preferred; a metaphor must save its exact relationship to the source.
+
+The CLI uses the [OpenAI Image API](https://developers.openai.com/api/docs/guides/image-generation) to create separate opaque JPEGs at 2048×1152 and 1152×2048. A structured high-detail vision check then requires a strong subject/action match, no unsupported content, no text/logos/charts/UI, and orientation-safe composition. One failed check gets one corrective regeneration; a second failure aborts before voice synthesis or rendering.
+
+Assets and their evidence, prompts, model, quality, aspect, cache hash, validation result, and attempt count live in `summary.generated-visuals/manifest.json`. Matching cache entries rerender with `--generated-visuals off`. `--force` does not refresh them; use both `--generated-visuals auto --regenerate-visuals` for an explicit paid refresh.
+
+Planning saves grounded directions without purchasing images:
+
+```bash
+pnpm run animations create summary.md \
+  --plan-only \
+  --generated-visuals auto
+```
+
+Materialize those reviewed directions later:
+
+```bash
+pnpm run animations create \
+  --render-plan summary-video/summary.narration-plan.json \
+  --generated-visuals auto
+```
 
 Phrase captions are enabled by default and can be disabled for a clean export:
 
@@ -145,7 +199,7 @@ pnpm run animations create summary.md \
 
 Generated images use `gpt-image-2` at medium quality by default. Change the model or quality with `--image-model` and `--image-quality`. `--regenerate-backgrounds` refreshes matching cached images; `--force` replaces videos and plans without purchasing new images. All requested images are staged before the cache is promoted, and a failed image request stops before voice synthesis or rendering.
 
-Create only the script and draft storyboard—including editable subtitle phrases and scene background prompts. No voice or image assets are required for this step:
+Create only the script and draft storyboard—including editable subtitle phrases, chart evidence, generated foreground directions, and scene background prompts. Selected local images are copied for deterministic rerenders, but no voice or generated image assets are purchased in this step:
 
 ```bash
 pnpm run animations create summary.md --plan-only
@@ -211,6 +265,12 @@ pnpm run animations publish \
 ```
 
 Use `--cover-aspect 16:9` or `--cover-aspect 9:16` to render one orientation. The default is `both`. Existing metadata and images are protected unless `--force` is supplied. `--output-dir` moves the complete publish-kit output when generating new metadata and moves cover output when rerendering an edited publish plan.
+
+### Automatic Supertonic voice selection
+
+Narrated videos default to `--voice auto`. After planning, the CLI scores the final title, scene titles, narration, visual motifs, and source text against Supertone's documented use cases for its ten included presets. For example, investor and finance material favors M3, educational walkthroughs favor M4, news-style reports favor F3, and technical training favors F4. The selected voice and a short source-signal reason are printed before synthesis, and the concrete voice ID is persisted in the timed plan for deterministic rerendering.
+
+Selection is local and deterministic: it adds no OpenAI request, cloud voice charge, or ten-voice audition pass. Content without a strong profile signal falls back to the general-purpose M1 preset. Pass an explicit voice such as `--voice F1` to override automatic selection. The profile descriptions follow the official [Supertonic built-in voice guide](https://supertone-inc.github.io/supertonic-py/voices/).
 
 ### Subtle voice expressions
 
@@ -295,7 +355,7 @@ Subtitle overlays:
 
 Narrated videos:
 --supertonic-assets-dir <path>    Default: models/supertonic-3
---voice <M1..M5|F1..F5>          Default: M1
+--voice <auto|M1..M5|F1..F5>     Default: auto
 --language <code>                 Default: en; use na for language-agnostic
 --tts-speed <number>              0.7-2.0 (default: 1.05)
 --tts-steps <number>              1-20 (default: 8)

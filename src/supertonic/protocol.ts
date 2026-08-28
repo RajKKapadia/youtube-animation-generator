@@ -16,6 +16,13 @@ export const supertonicVoiceSchema = z.enum([
 
 export type SupertonicVoice = z.infer<typeof supertonicVoiceSchema>;
 
+export const supertonicVoiceChoiceSchema = z.union([
+  z.literal('auto'),
+  supertonicVoiceSchema,
+]);
+
+export type SupertonicVoiceChoice = z.infer<typeof supertonicVoiceChoiceSchema>;
+
 export const supertonicLanguageSchema = z.enum([
   'en', 'ko', 'ja', 'ar', 'bg', 'cs', 'da', 'de', 'el', 'es', 'et',
   'fi', 'fr', 'hi', 'hr', 'hu', 'id', 'it', 'lt', 'lv', 'nl', 'pl',

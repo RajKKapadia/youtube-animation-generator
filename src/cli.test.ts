@@ -1,4 +1,4 @@
-import {mkdtemp, rm, writeFile} from 'node:fs/promises';
+import {access, mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {afterEach, describe, expect, it, vi} from 'vitest';
@@ -68,6 +68,45 @@ describe('narrated CLI plan-only path', () => {
     log.mockRestore();
   });
 
+  it('keeps generated foreground directions purchase-free in plan-only mode', async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), 'narrated-generated-plan-only-'));
+    temporaryDirectories.push(directory);
+    const planPath = resolve(directory, 'summary.narration-plan.json');
+    const evidence = 'Warehouse robots move sealed packages through a sorting hall.';
+    await writeFile(planPath, JSON.stringify({
+      version: 6,
+      kind: 'narrated-video',
+      stage: 'draft',
+      sourceText: evidence,
+      generatedAt: '2026-08-27T00:00:00.000Z',
+      model: 'fixture',
+      targetDurationSeconds: 5,
+      language: 'en',
+      title: 'Warehouse',
+      palette: 'amber',
+      mediaAssets: [{id: 'generated-warehouse', source: 'generated', direction: {
+        sourceEvidence: evidence,
+        sourceAnchors: ['Warehouse robots', 'sorting hall'],
+        narrationBeat: 'Warehouse robots move sealed packages.',
+        subject: 'warehouse robots and sealed packages',
+        action: 'moving packages',
+        environment: 'a sorting hall',
+        framing: 'wide editorial view',
+        exclusions: ['text'],
+        depiction: 'literal',
+        metaphorRelationship: null,
+      }}],
+      scenes: [{
+        id: 'warehouse', backgroundPrompt: 'Abstract warehouse.', template: 'callout', title: 'Warehouse',
+        primaryItems: ['Warehouse robots'], secondaryItems: [], leftLabel: '', rightLabel: '', reason: 'Source action.',
+        visual: {kind: 'image-focus', motion: 'push-in', motif: 'automation', assetId: null, source: 'generated', mediaId: 'generated-warehouse', fit: 'cover', focalPosition: 'center'},
+        beats: [{id: 'beat', expression: 'none', phrases: [{id: 'phrase', text: 'Warehouse robots move sealed packages.'}], primaryItemIndices: [0], secondaryItemIndices: []}],
+      }],
+    }));
+    await runCli(['create', '--render-plan', planPath, '--plan-only', '--generated-visuals', 'auto']);
+    await expect(access(resolve(directory, 'summary.generated-visuals'))).rejects.toThrow();
+  });
+
   it('rejects unsupported aspect ratios before doing work', async () => {
     await expect(
       runCli(['create', 'missing.md', '--aspect-ratio', 'square']),
@@ -82,21 +121,35 @@ describe('narrated CLI plan-only path', () => {
       runCli(['create', 'missing.md', '--regenerate-backgrounds']),
     ).rejects.toThrow('--regenerate-backgrounds requires');
     await expect(
+      runCli(['create', 'missing.md', '--generated-visuals', 'sometimes']),
+    ).rejects.toThrow('--generated-visuals must be one of');
+    await expect(
+      runCli(['create', 'missing.md', '--regenerate-visuals']),
+    ).rejects.toThrow('--regenerate-visuals requires --generated-visuals auto');
+    await expect(
       runCli(['missing.srt', '--scene-background', 'generated']),
     ).rejects.toThrow('Narrated visual options cannot be used with subtitle overlays');
   });
 
-  it('documents the v0.5 narrated and publish-kit options', async () => {
+  it('documents the v0.6.2 narrated and publish-kit options', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     await runCli(['--help']);
     const output = String(log.mock.calls[0]?.[0]);
-    expect(output).toContain('youtube-animations 0.5.0');
+    expect(output).toContain('youtube-animations 0.6.2');
+    expect(output).toContain('--voice <auto|M1..M5|F1..F5>');
     expect(output).toContain('--captions <on|off>');
     expect(output).toContain('--scene-background <mode>');
     expect(output).toContain('--image-quality <quality>');
+    expect(output).toContain('--generated-visuals <off|auto>');
+    expect(output).toContain('--regenerate-visuals');
     expect(output).toContain('publish <narrated-plan.json>');
     expect(output).toContain('--cover-aspect <16:9|9:16|both>');
     log.mockRestore();
+  });
+
+  it('rejects unknown automatic voice choices', async () => {
+    await expect(runCli(['create', 'missing.md', '--voice', 'cinematic']))
+      .rejects.toThrow('--voice must be auto or one of M1..M5 or F1..F5');
   });
 
   it('validates an edited publish plan without OpenAI, Chrome, or model assets', async () => {

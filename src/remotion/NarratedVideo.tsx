@@ -13,6 +13,7 @@ export const NarratedVideo = ({
   audioFile,
   backgroundAssets,
   captions,
+  foregroundAssets,
   fps,
   localBrandAssets,
   motionAssets,
@@ -54,6 +55,7 @@ export const NarratedVideo = ({
             <NarratedVisualLayer
               contentTopInset={captionTopInset(captions, profile)}
               fps={fps}
+              foregroundAssets={foregroundAssets}
               motionAssets={motionAssets}
               palette={plan.palette}
               profile={profile}

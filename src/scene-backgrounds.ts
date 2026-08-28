@@ -127,7 +127,7 @@ export const withTransientImageRetries = async <T>(
 export const createOpenAIImageGenerator = (): GenerateSceneImage => {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error(
-      'OPENAI_API_KEY is required for --scene-background generated.',
+      'OPENAI_API_KEY is required for uncached image generation.',
     );
   }
   const client = new OpenAI({

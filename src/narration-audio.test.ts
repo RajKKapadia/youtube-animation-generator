@@ -10,7 +10,7 @@ import {
 import {draftNarratedPlanSchema, timedNarratedPlanSchema} from './types.js';
 
 const draft = draftNarratedPlanSchema.parse({
-  version: 5,
+  version: 6,
   kind: 'narrated-video',
   stage: 'draft',
   sourceText: 'A then B.',
@@ -20,6 +20,7 @@ const draft = draftNarratedPlanSchema.parse({
   language: 'en',
   title: 'Flow',
   palette: 'amber',
+  mediaAssets: [],
   scenes: [{
     id: 'flow',
     backgroundPrompt: 'Abstract A to B flow.',
@@ -151,6 +152,45 @@ describe('materializeTimedNarration', () => {
         }],
       }),
     ).toThrow('one entry for every matching visual item');
+  });
+
+  it('propagates v6 foreground media metadata unchanged into timed plans', () => {
+    const mediaDraft = draftNarratedPlanSchema.parse({
+      ...draft,
+      mediaAssets: [{
+        id: 'local-flow-image',
+        source: 'local',
+        file: 'flow.media/flow.png',
+        sha256: 'a'.repeat(64),
+        mimeType: 'image/png',
+        originalName: 'flow.png',
+      }],
+      scenes: [{
+        ...draft.scenes[0]!,
+        visual: {kind: 'image-focus', motion: 'push-in', motif: 'data', assetId: null, source: 'local', mediaId: 'local-flow-image', fit: 'contain', focalPosition: 'center'},
+      }],
+    });
+    const timed = materializeTimedNarration({
+      audioDirectoryName: 'flow.audio',
+      draft: mediaDraft,
+      result: {
+        sampleRate: 1_000,
+        totalSamples: 1_500,
+        voiceoverFile: 'voiceover.wav',
+        scenes: [{
+          id: 'flow', startSample: 0, sampleCount: 1_500,
+          beats: [
+            {id: 'a', file: 'beats/a.wav', startSample: 300, sampleCount: 400, phrases: [{id: 'a-starts', startSample: 300, sampleCount: 400}]},
+            {id: 'b', file: 'beats/b.wav', startSample: 850, sampleCount: 350, phrases: [{id: 'then', startSample: 850, sampleCount: 150}, {id: 'b-finishes', startSample: 1_050, sampleCount: 150}]},
+          ],
+        }],
+      },
+      speed: 1.05,
+      steps: 8,
+      voice: 'M1',
+    });
+    expect(timed.mediaAssets).toEqual(mediaDraft.mediaAssets);
+    expect(timed.scenes[0]!.visual).toEqual(mediaDraft.scenes[0]!.visual);
   });
 
   it('scales sample-derived timings for pitch-preserving high-speed playback', () => {

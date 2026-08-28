@@ -3,12 +3,13 @@ import {
   assertSourceBackedNarratedVisuals,
   narrationScriptMarkdown,
   narratedVisualPlanningWarnings,
+  recoverUnsupportedNarratedVisuals,
 } from './narration-planner.js';
 import {draftNarratedPlanSchema, narratedPlanSchema} from './types.js';
 import type {AssetRegistry} from './asset-registry.js';
 
 const validPlan = {
-  version: 5 as const,
+  version: 6 as const,
   kind: 'narrated-video' as const,
   stage: 'draft' as const,
   sourceText: 'Queues let producers and consumers operate independently.',
@@ -18,6 +19,7 @@ const validPlan = {
   language: 'en',
   title: 'Why queues help',
   palette: 'emerald' as const,
+  mediaAssets: [],
   scenes: [
     {
       id: 'queue-flow',
@@ -140,7 +142,7 @@ describe('draftNarratedPlanSchema', () => {
       })),
     };
     const parsed = narratedPlanSchema.parse(JSON.parse(JSON.stringify(legacyV2)));
-    expect(parsed.version).toBe(5);
+    expect(parsed.version).toBe(6);
     expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.beats.map((beat) => beat.expression)).toEqual([
       'none',
@@ -160,7 +162,7 @@ describe('draftNarratedPlanSchema', () => {
       ...withoutPalette,
       version: 3,
     });
-    expect(parsed.version).toBe(5);
+    expect(parsed.version).toBe(6);
     expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.beats[0]!.expression).toBe('none');
   });
@@ -182,7 +184,7 @@ describe('draftNarratedPlanSchema', () => {
     };
     const raw = JSON.parse(JSON.stringify(legacy));
     const parsed = narratedPlanSchema.parse(raw);
-    expect(parsed.version).toBe(5);
+    expect(parsed.version).toBe(6);
     expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.backgroundPrompt).toContain('A queue decouples work');
     expect(parsed.scenes[0]!.beats[0]!.phrases).toEqual([
@@ -197,7 +199,7 @@ describe('draftNarratedPlanSchema', () => {
     const scenes = legacy.scenes as Array<Record<string, unknown>>;
     delete scenes[0]!.visual;
     const parsed = narratedPlanSchema.parse(legacy);
-    expect(parsed.version).toBe(5);
+    expect(parsed.version).toBe(6);
     expect(parsed.palette).toBe('emerald');
     expect(parsed.scenes[0]!.visual).toEqual({
       kind: 'diagram',
@@ -205,6 +207,52 @@ describe('draftNarratedPlanSchema', () => {
       motif: 'none',
       assetId: null,
     });
+  });
+
+  it('normalizes version-5 visual plans without adding v6 media or chart metadata', () => {
+    const legacy = structuredClone(validPlan) as Record<string, unknown>;
+    legacy.version = 5;
+    delete legacy.mediaAssets;
+    const parsed = narratedPlanSchema.parse(legacy);
+    expect(parsed.version).toBe(6);
+    expect(parsed.mediaAssets).toEqual([]);
+    expect(parsed.scenes[0]!.visual.kind).toBe('diagram');
+  });
+
+  it('validates exact chart evidence and numeric tokens in version-6 plans', () => {
+    const sourceEvidence = 'Jalapeño reached 85,448 tokens/s while Existing reached 44,960 tokens/s.';
+    const chartPlan = structuredClone(validPlan);
+    chartPlan.sourceText = sourceEvidence;
+    chartPlan.scenes[0]!.visual = {
+      kind: 'data-visualization',
+      motion: 'count-up',
+      motif: 'analytics',
+      assetId: null,
+      chart: {
+        type: 'metric-cards',
+        title: 'Throughput',
+        data: [
+          {id: 'new', label: 'Jalapeño', value: 85_448, unit: 'tokens/s', precision: 0, sourceEvidence, sourceToken: '85,448'},
+          {id: 'old', label: 'Existing', value: 44_960, unit: 'tokens/s', precision: 0, sourceEvidence, sourceToken: '44,960'},
+        ],
+        series: [],
+        categories: [],
+        cards: [
+          {id: 'new-card', label: 'Jalapeño', datumId: 'new', annotationId: 'ratio'},
+          {id: 'old-card', label: 'Existing', datumId: 'old', annotationId: null},
+        ],
+        derivedAnnotations: [{id: 'ratio', label: 'Higher', operation: 'ratio', currentDatumId: 'new', baselineDatumId: 'old', precision: 1}],
+      },
+    } as typeof chartPlan.scenes[0]['visual'];
+    expect(draftNarratedPlanSchema.parse(chartPlan).scenes[0]!.visual.kind)
+      .toBe('data-visualization');
+    const unsupported = structuredClone(chartPlan);
+    if (unsupported.scenes[0]!.visual.kind === 'data-visualization') {
+      unsupported.scenes[0]!.visual.chart.data[0]!.sourceToken = '99,999';
+    }
+    expect(() => draftNarratedPlanSchema.parse(unsupported)).toThrow(
+      'exact source label, numeric token, value, and evidence',
+    );
   });
 
   it('rejects incompatible visual treatment and motion combinations', () => {
@@ -336,6 +384,131 @@ describe('narrated visual planning warnings', () => {
         visual: {kind: 'metric-focus', motion: 'count-up', motif: 'analytics'},
       }],
     })).toThrow('source-unsupported number');
+  });
+
+  it('accepts chart evidence separated by Markdown whitespace', () => {
+    const sourceText = 'Jalapeño\n\n85,448 tokens/s\n\nExisting best\n\n44,960 tokens/s';
+    const scene = structuredClone(validPlan.scenes[0]!);
+    const chartScene = {
+      ...scene,
+      visual: {
+        kind: 'data-visualization' as const,
+        motion: 'count-up' as const,
+        motif: 'analytics' as const,
+        chart: {
+          type: 'metric-cards' as const,
+          title: 'Throughput',
+          data: [
+            {id: 'jalapeno', label: 'Jalapeño', value: 85_448, unit: 'tokens/s', precision: 0, sourceEvidence: 'Jalapeño 85,448 tokens/s', sourceToken: '85,448'},
+            {id: 'existing', label: 'Existing best', value: 44_960, unit: 'tokens/s', precision: 0, sourceEvidence: 'Existing best 44,960 tokens/s', sourceToken: '44,960'},
+          ],
+          series: [],
+          categories: [],
+          cards: [
+            {id: 'jalapeno-card', label: 'Jalapeño', datumId: 'jalapeno', annotationId: null},
+            {id: 'existing-card', label: 'Existing best', datumId: 'existing', annotationId: null},
+          ],
+          derivedAnnotations: [],
+        },
+      },
+    };
+    expect(() => assertSourceBackedNarratedVisuals({
+      scenes: [chartScene],
+      sourceText,
+    })).not.toThrow();
+  });
+
+  it('downgrades an unverified optional chart without discarding narration', () => {
+    const scene = structuredClone(validPlan.scenes[0]!);
+    const recovered = recoverUnsupportedNarratedVisuals({
+      sourceText: 'The source reports 42 requests per second.',
+      scenes: [{
+        ...scene,
+        visual: {
+          kind: 'data-visualization',
+          motion: 'count-up',
+          motif: 'analytics',
+          chart: {
+            type: 'metric-cards',
+            title: 'Requests',
+            data: [
+              {id: 'reported', label: 'source', value: 42, unit: 'requests/s', precision: 0, sourceEvidence: 'source reports 42 requests per second', sourceToken: '42'},
+              {id: 'invented', label: 'baseline', value: 99, unit: 'requests/s', precision: 0, sourceEvidence: 'baseline reports 99 requests per second', sourceToken: '99'},
+            ],
+            series: [],
+            categories: [],
+            cards: [
+              {id: 'reported-card', label: 'Reported', datumId: 'reported', annotationId: null},
+              {id: 'invented-card', label: 'Baseline', datumId: 'invented', annotationId: null},
+            ],
+            derivedAnnotations: [],
+          },
+        },
+      }],
+    });
+    expect(recovered.scenes[0]!.visual).toEqual({
+      kind: 'diagram',
+      motion: 'reveal',
+      motif: 'none',
+    });
+    expect(recovered.scenes[0]!.beats).toEqual(scene.beats);
+    expect(recovered.warnings).toEqual([
+      expect.stringContaining('code-native fallback'),
+    ]);
+    expect(() => assertSourceBackedNarratedVisuals({
+      scenes: recovered.scenes,
+      sourceText: 'The source reports 42 requests per second.',
+    })).not.toThrow();
+  });
+
+  it('requires exact grounding and explicit opt-in for generated foreground directions', () => {
+    const scene = structuredClone(validPlan.scenes[0]!);
+    const generatedScene = {
+      ...scene,
+      visual: {
+        kind: 'image-focus' as const,
+        motion: 'push-in' as const,
+        motif: 'automation' as const,
+        source: 'generated' as const,
+        localImageId: null,
+        generatedDirection: {
+          sourceEvidence: 'Queues let producers and consumers operate independently.',
+          sourceAnchors: ['Queues', 'consumers'],
+          narrationBeat: 'The producer submits work.',
+          subject: 'producers and consumers',
+          action: 'operating independently around a queue',
+          environment: 'a literal package handoff environment',
+          framing: 'wide editorial composition',
+          exclusions: ['text', 'logos'],
+          depiction: 'literal' as const,
+          metaphorRelationship: null,
+        },
+        fit: 'cover' as const,
+        focalPosition: 'center' as const,
+      },
+    };
+    expect(() => assertSourceBackedNarratedVisuals({
+      sourceText: validPlan.sourceText,
+      scenes: [generatedScene],
+      generatedVisuals: 'off',
+    })).toThrow('generated visuals are off');
+    expect(() => assertSourceBackedNarratedVisuals({
+      sourceText: validPlan.sourceText,
+      scenes: [generatedScene],
+      generatedVisuals: 'auto',
+    })).not.toThrow();
+    const unsupported = structuredClone(generatedScene);
+    unsupported.visual.generatedDirection.sourceAnchors[1] = 'Invented Corp';
+    expect(() => assertSourceBackedNarratedVisuals({
+      sourceText: validPlan.sourceText,
+      scenes: [unsupported],
+      generatedVisuals: 'auto',
+    })).toThrow('Invented Corp');
+    expect(() => assertSourceBackedNarratedVisuals({
+      sourceText: validPlan.sourceText,
+      scenes: [0, 1, 2].map((index) => ({...generatedScene, id: `generated-${index}`})),
+      generatedVisuals: 'auto',
+    })).toThrow('more than two generated foreground scenes');
   });
 });
 

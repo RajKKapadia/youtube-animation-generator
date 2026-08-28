@@ -9,6 +9,15 @@ import {narrationScriptMarkdown, planNarratedVideo} from './narration-planner.js
 import {synthesizeNarration} from './narration-audio.js';
 import {narratedOutputPaths, renderNarratedVideo} from './narrated-render.js';
 import {
+  materializeGeneratedVisuals,
+  type GeneratedVisualAssets,
+} from './generated-visuals.js';
+import {
+  discoverLocalImages,
+  mirrorNarratedMediaCaches,
+  stageSelectedLocalImages,
+} from './local-images.js';
+import {
   materializeSceneBackgrounds,
   type SceneBackgroundAssets,
 } from './scene-backgrounds.js';
@@ -20,6 +29,7 @@ import {readSubtitleFile} from './subtitles.js';
 import {
   aspectRatioSelectionSchema,
   captionModeSchema,
+  generatedVisualModeSchema,
   imageQualitySchema,
   narratedPlanSchema,
   savedPlanSchema,
@@ -27,6 +37,7 @@ import {
   type AspectRatioSelection,
   type CaptionMode,
   type DraftNarratedPlan,
+  type GeneratedVisualMode,
   type ImageQuality,
   type NarratedPlan,
   type OutputFormat,
@@ -37,11 +48,12 @@ import {
 } from './types.js';
 import {
   supertonicLanguageSchema,
-  supertonicVoiceSchema,
-  type SupertonicVoice,
+  supertonicVoiceChoiceSchema,
+  type SupertonicVoiceChoice,
 } from './supertonic/protocol.js';
+import {selectSupertonicVoice} from './supertonic/voice-selection.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.2';
 const FORMATS = new Set<OutputFormat>(['prores', 'webm', 'green']);
 
 const help = `youtube-animations ${VERSION}
@@ -70,7 +82,7 @@ Subtitle overlay options:
 
 Narrated video options:
   --supertonic-assets-dir <path>    Model directory (default: models/supertonic-3)
-  --voice <M1..M5|F1..F5>          Voice style (default: M1)
+  --voice <auto|M1..M5|F1..F5>     Voice style (default: auto)
   --language <code>                 Narration language (default: en)
   --tts-speed <number>              Speech speed, 0.7-2.0 (default: 1.05)
   --tts-steps <number>              Inference steps, 1-20 (default: 8)
@@ -79,6 +91,8 @@ Narrated video options:
   --scene-background <mode>         ambient or generated (default: ambient)
   --image-model <model>             Image model (default: OPENAI_IMAGE_MODEL or gpt-image-2)
   --image-quality <quality>         low, medium, or high (default: medium)
+  --generated-visuals <off|auto>    Grounded foreground generation (default: off)
+  --regenerate-visuals              Explicitly refresh generated foreground images
   --regenerate-backgrounds          Replace matching cached scene images
 
 Publish-kit options:
@@ -175,9 +189,17 @@ const parseImageQuality = (value: string | undefined): ImageQuality => {
   return parsed.data;
 };
 
-const parseVoice = (value: string | undefined): SupertonicVoice => {
-  const parsed = supertonicVoiceSchema.safeParse(value);
-  if (!parsed.success) throw new Error('--voice must be one of M1..M5 or F1..F5.');
+const parseGeneratedVisuals = (value: string | undefined): GeneratedVisualMode => {
+  const parsed = generatedVisualModeSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error('--generated-visuals must be one of: off, auto.');
+  }
+  return parsed.data;
+};
+
+const parseVoice = (value: string | undefined): SupertonicVoiceChoice => {
+  const parsed = supertonicVoiceChoiceSchema.safeParse(value);
+  if (!parsed.success) throw new Error('--voice must be auto or one of M1..M5 or F1..F5.');
   return parsed.data;
 };
 
@@ -266,11 +288,37 @@ interface CommonRuntimeOptions {
 
 interface NarratedVisualOptions {
   captions: CaptionMode;
+  generatedVisuals: GeneratedVisualMode;
   imageModel: string;
   imageQuality: ImageQuality;
   regenerateBackgrounds: boolean;
+  regenerateVisuals: boolean;
   sceneBackground: SceneBackgroundMode;
 }
+
+const resolveForegroundVisuals = async ({
+  aspectRatio,
+  plan,
+  planDirectory,
+  stem,
+  visual,
+}: {
+  aspectRatio: AspectRatioSelection;
+  plan: DraftNarratedPlan | TimedNarratedPlan;
+  planDirectory: string;
+  stem: string;
+  visual: NarratedVisualOptions;
+}): Promise<GeneratedVisualAssets | undefined> => materializeGeneratedVisuals({
+  allowGeneration: visual.generatedVisuals === 'auto',
+  aspectRatio,
+  model: visual.imageModel,
+  outputDirectory: planDirectory,
+  plan,
+  quality: visual.imageQuality,
+  regenerate: visual.regenerateVisuals,
+  stem,
+  validationModel: plan.model,
+});
 
 const resolveSceneBackgrounds = async ({
   aspectRatio,
@@ -388,6 +436,7 @@ const runSubtitleWorkflow = async ({
 
 const renderTimedNarration = async ({
   backgroundAssets,
+  foregroundAssets,
   common,
   plan,
   planDirectory,
@@ -395,6 +444,7 @@ const renderTimedNarration = async ({
   visual,
 }: {
   backgroundAssets?: SceneBackgroundAssets | undefined;
+  foregroundAssets?: GeneratedVisualAssets | undefined;
   common: CommonRuntimeOptions;
   plan: TimedNarratedPlan;
   planDirectory: string;
@@ -414,6 +464,13 @@ const renderTimedNarration = async ({
     }).map(({outputPath}) => outputPath),
     common.force,
   );
+  const resolvedForegroundAssets = foregroundAssets ?? await resolveForegroundVisuals({
+    aspectRatio: common.aspectRatio,
+    plan,
+    planDirectory,
+    stem,
+    visual,
+  });
   const resolvedBackgroundAssets = backgroundAssets ?? await resolveSceneBackgrounds({
     aspectRatio: common.aspectRatio,
     outputDirectory,
@@ -424,6 +481,7 @@ const renderTimedNarration = async ({
   const outputs = await renderNarratedVideo({
     aspectRatio: common.aspectRatio,
     backgroundAssets: resolvedBackgroundAssets,
+    foregroundAssets: resolvedForegroundAssets,
     captions: visual.captions,
     force: common.force,
     fps: common.fps,
@@ -459,7 +517,7 @@ const runNarratedWorkflow = async ({
   steps: number;
   targetDurationSeconds: number;
   visual: NarratedVisualOptions;
-  voice: SupertonicVoice;
+  voice: SupertonicVoiceChoice;
 }) => {
   let draft: DraftNarratedPlan;
   let stem: string;
@@ -486,6 +544,12 @@ const runNarratedWorkflow = async ({
       console.log('Draft narrated plan is valid; --plan-only skipped synthesis.');
       return;
     }
+    await mirrorNarratedMediaCaches({
+      plan: draft,
+      sourceDirectory: dirname(planPath),
+      stem,
+      targetDirectory: outputDirectory,
+    });
   } else {
     if (!sourcePath) throw new Error('Provide exactly one .txt or .md source path after create.');
     const extension = extname(sourcePath).toLowerCase();
@@ -516,11 +580,23 @@ const runNarratedWorkflow = async ({
         ];
     await preflightOutputs(futurePaths, common.force);
     console.log(`Planning a roughly ${targetDurationSeconds}-second narrated video with ${model}...`);
+    const localImages = await discoverLocalImages({sourcePath, stem});
+    if (localImages.length > 0) {
+      console.log(`Found ${localImages.length} valid local image${localImages.length === 1 ? '' : 's'} in ${resolve(dirname(sourcePath), 'images')}.`);
+    }
     draft = await planNarratedVideo({
+      generatedVisuals: visual.generatedVisuals,
       language,
+      localImages,
       model,
       sourceText,
       targetDurationSeconds,
+    });
+    await stageSelectedLocalImages({
+      catalog: localImages,
+      outputDirectory,
+      plan: draft,
+      stem,
     });
     printPlanningWarnings(draft.planningWarnings);
     await writeJson(draftPath, draft, common.force);
@@ -542,6 +618,23 @@ const runNarratedWorkflow = async ({
     [timedPath, resolve(outputDirectory, audioDirectoryName), ...requestedVideoPaths],
     common.force,
   );
+  const selectedVoice = voice === 'auto'
+    ? selectSupertonicVoice(draft)
+    : {
+        voice,
+        matchedSignals: [],
+        reason: 'Selected explicitly with --voice.',
+      };
+  if (voice === 'auto') {
+    console.log(`Auto-selected Supertonic ${selectedVoice.voice}: ${selectedVoice.reason}`);
+  }
+  const foregroundAssets = await resolveForegroundVisuals({
+    aspectRatio: common.aspectRatio,
+    plan: draft,
+    planDirectory: outputDirectory,
+    stem,
+    visual,
+  });
   const backgroundAssets = await resolveSceneBackgrounds({
     aspectRatio: common.aspectRatio,
     outputDirectory,
@@ -549,7 +642,7 @@ const runNarratedWorkflow = async ({
     stem,
     visual,
   });
-  console.log(`Synthesizing ${draft.scenes.reduce((count, scene) => count + scene.beats.length, 0)} narration beats with Supertonic ${voice}...`);
+  console.log(`Synthesizing ${draft.scenes.reduce((count, scene) => count + scene.beats.length, 0)} narration beats with Supertonic ${selectedVoice.voice}...`);
   const timed = await synthesizeNarration({
     assetsDirectory,
     audioDirectoryName,
@@ -558,7 +651,7 @@ const runNarratedWorkflow = async ({
     outputDirectory,
     speed,
     steps,
-    voice,
+    voice: selectedVoice.voice,
   });
   await writeJson(timedPath, timed, common.force);
   console.log(`Saved timed plan: ${timedPath}`);
@@ -570,6 +663,7 @@ const runNarratedWorkflow = async ({
     stem,
     visual,
     backgroundAssets,
+    foregroundAssets,
   });
 };
 
@@ -590,6 +684,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       help: {type: 'boolean', default: false},
       'image-model': {type: 'string'},
       'image-quality': {type: 'string', default: 'medium'},
+      'generated-visuals': {type: 'string', default: 'off'},
       language: {type: 'string', default: 'en'},
       'max-suggestions': {type: 'string'},
       'metadata-only': {type: 'boolean', default: false},
@@ -599,13 +694,14 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       'render-plan': {type: 'string'},
       'render-publish': {type: 'string'},
       'regenerate-backgrounds': {type: 'boolean', default: false},
+      'regenerate-visuals': {type: 'boolean', default: false},
       'scene-background': {type: 'string', default: 'ambient'},
       'supertonic-assets-dir': {type: 'string', default: 'models/supertonic-3'},
       'target-duration': {type: 'string'},
       'tts-speed': {type: 'string'},
       'tts-steps': {type: 'string'},
       version: {type: 'boolean', default: false},
-      voice: {type: 'string', default: 'M1'},
+      voice: {type: 'string', default: 'auto'},
     },
   });
 
@@ -663,13 +759,18 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   }
   const visual: NarratedVisualOptions = {
     captions: parseCaptionMode(values.captions),
+    generatedVisuals: parseGeneratedVisuals(values['generated-visuals']),
     imageModel: values['image-model'] ?? process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2',
     imageQuality: parseImageQuality(values['image-quality']),
     regenerateBackgrounds: values['regenerate-backgrounds'],
+    regenerateVisuals: values['regenerate-visuals'],
     sceneBackground: parseSceneBackground(values['scene-background']),
   };
   if (visual.regenerateBackgrounds && visual.sceneBackground !== 'generated') {
     throw new Error('--regenerate-backgrounds requires --scene-background generated.');
+  }
+  if (visual.regenerateVisuals && visual.generatedVisuals !== 'auto') {
+    throw new Error('--regenerate-visuals requires --generated-visuals auto.');
   }
   const common: CommonRuntimeOptions = {
     aspectRatio,
@@ -684,7 +785,9 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     'captions',
     'image-model',
     'image-quality',
+    'generated-visuals',
     'regenerate-backgrounds',
+    'regenerate-visuals',
     'scene-background',
   ]);
   const usedNarratedOnlyOption = tokens.some(
