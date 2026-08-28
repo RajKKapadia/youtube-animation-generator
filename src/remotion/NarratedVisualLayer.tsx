@@ -2,7 +2,9 @@ import type {CSSProperties, ReactNode} from 'react';
 import {
   AbsoluteFill,
   Easing,
+  Img,
   interpolate,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
@@ -20,6 +22,14 @@ import {AnimationClip} from './AnimationClip.js';
 import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
 import {NarratedMotionAsset} from './NarratedMotionAsset.js';
 import {TechnologyBadge, TechnologyIconsProvider} from './TechnologyBadge.js';
+import {calculateChartAnnotation, formatChartDatum} from '../data-visualization.js';
+import {
+  CINEMATIC_MOTION,
+  ambientWave,
+  beatEntrance,
+  sceneEntranceExit,
+  timedProgress,
+} from './cinematic-motion.js';
 
 const clamp = {
   extrapolateLeft: 'clamp' as const,
@@ -27,11 +37,7 @@ const clamp = {
 };
 
 const itemEntrance = (frame: number, fps: number, startMs: number): number => {
-  const start = Math.round((startMs / 1_000) * fps);
-  return interpolate(frame, [start, start + Math.max(5, Math.round(fps * 0.34))], [0, 1], {
-    ...clamp,
-    easing: Easing.out(Easing.cubic),
-  });
+  return beatEntrance(frame, fps, startMs);
 };
 
 const SceneCanvas = ({
@@ -350,7 +356,9 @@ const BrandShowcase = ({
         {brands.map((brand, index) => {
           const timing = scene.primaryItemTimings[index] ?? scene.secondaryItemTimings[index - scene.primaryItems.length];
           const entrance = itemEntrance(frame, fps, timing?.startMs ?? index * 120);
-          const drift = scene.visual.motion === 'drift' ? Math.sin(frame * 0.025 + index * 1.3) * 7 : 0;
+          const drift = scene.visual.motion === 'drift'
+            ? ambientWave(frame, fps, index * 1.3) * CINEMATIC_MOTION.maxAmbientPixels
+            : 0;
           return (
             <div
               key={`${brand}-${index}`}
@@ -425,13 +433,21 @@ const NetworkMap = ({
             const x = mapWidth / 2 + Math.cos(angle) * radiusX;
             const y = mapHeight / 2 + Math.sin(angle) * radiusY;
             const entrance = itemEntrance(frame, fps, scene.primaryItemTimings[index + 1]?.startMs ?? 0);
+            const edgeStartFrame = Math.round(((scene.primaryItemTimings[index + 1]?.startMs ?? 0) / 1_000) * fps);
+            const edgeDraw = timedProgress(
+              frame - edgeStartFrame,
+              fps,
+              CINEMATIC_MOTION.connectorDrawSeconds,
+            );
             const pulseX = mapWidth / 2 + (x - mapWidth / 2) * edgeProgress;
             const pulseY = mapHeight / 2 + (y - mapHeight / 2) * edgeProgress;
             return (
               <g key={`edge-${index}`} opacity={entrance}>
                 <line
                   stroke={hexToRgba(theme.accents.primary, 0.54)}
-                  strokeDasharray="12 14"
+                  pathLength="1"
+                  strokeDasharray="1"
+                  strokeDashoffset={1 - edgeDraw}
                   strokeWidth="5"
                   x1={mapWidth / 2}
                   x2={x}
@@ -591,8 +607,13 @@ const IconSpotlight = ({
   const asset = assetForScene(scene, motionAssets);
   const focal = scene.primaryItems[0] ?? scene.visual.motif.replace('-', ' ');
   const supporting = [...scene.primaryItems.slice(1), ...scene.secondaryItems].slice(0, 5);
-  const drift = scene.visual.motion === 'drift' ? Math.sin(frame * 0.028) * 8 : 0;
-  const pulse = scene.visual.motion === 'pulse' ? 1 + Math.sin(frame * 0.045) * 0.018 : 1;
+  const drift = scene.visual.motion === 'drift'
+    ? ambientWave(frame, fps) * CINEMATIC_MOTION.maxAmbientPixels
+    : 0;
+  const pulse = scene.visual.motion === 'pulse'
+    ? 1 + ambientWave(frame, fps, 0.8) * CINEMATIC_MOTION.maxAmbientScale
+    : 1;
+  const scanProgress = timedProgress(frame, fps, 0.8, 0.18);
   return (
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
       <SceneTitle profile={profile} title={scene.title} />
@@ -623,7 +644,8 @@ const IconSpotlight = ({
                 height: 12,
                 left: 0,
                 position: 'absolute',
-                top: `${20 + ((frame % (fps * 3)) / (fps * 3)) * 60}%`,
+                opacity: scanProgress < 1 ? 1 : 0,
+                top: `${16 + scanProgress * 68}%`,
                 width: '100%',
               }}
             />
@@ -654,9 +676,306 @@ const IconSpotlight = ({
   );
 };
 
+const focalObjectPosition = (position: 'center' | 'top' | 'right' | 'bottom' | 'left'): string => ({
+  center: '50% 50%',
+  top: '50% 18%',
+  right: '82% 50%',
+  bottom: '50% 82%',
+  left: '18% 50%',
+})[position];
+
+const ImageFocus = ({
+  foregroundAssets,
+  palette,
+  profile,
+  scene,
+}: {
+  foregroundAssets: Record<string, string>;
+  palette: VideoPalette;
+  profile: RenderProfile;
+  scene: TimedNarrationScene;
+}) => {
+  const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  if (scene.visual.kind !== 'image-focus') return null;
+  const vertical = profile.aspectRatio === '9:16';
+  const theme = videoPaletteFor(palette);
+  const asset = foregroundAssets[scene.visual.mediaId];
+  const progress = interpolate(
+    frame,
+    [0, Math.max(1, Math.round((scene.durationMs / 1_000) * fps))],
+    [0, 1],
+    clamp,
+  );
+  const wave = ambientWave(frame, fps, 0.4);
+  const scale = scene.visual.motion === 'push-in'
+    ? CINEMATIC_MOTION.imageScaleStart +
+      (CINEMATIC_MOTION.imageScaleEnd - CINEMATIC_MOTION.imageScaleStart) * progress
+    : CINEMATIC_MOTION.imageScaleStart + wave * 0.005;
+  const direction = scene.visual.focalPosition === 'right' || scene.visual.focalPosition === 'bottom' ? -1 : 1;
+  const panX = scene.visual.motion === 'pan'
+    ? (progress - 0.5) * CINEMATIC_MOTION.maxAmbientPixels * 2 * direction
+    : scene.visual.motion === 'drift' ? wave * CINEMATIC_MOTION.maxAmbientPixels : 0;
+  const panY = scene.visual.motion === 'drift'
+    ? ambientWave(frame, fps, 2.1) * CINEMATIC_MOTION.maxAmbientPixels
+    : 0;
+  const imageStyle: CSSProperties = {
+    height: '100%',
+    objectFit: scene.visual.fit,
+    objectPosition: focalObjectPosition(scene.visual.focalPosition),
+    transform: `translate(${panX}px, ${panY}px) scale(${scale})`,
+    width: '100%',
+  };
+
+  return (
+    <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
+      <SceneTitle profile={profile} title={scene.title} />
+      <div
+        style={{
+          ...panelStyle(theme.accents.primary),
+          borderRadius: vertical ? 38 : 34,
+          flex: 1,
+          margin: vertical ? '18px 10px 26px' : '8px 80px 22px',
+          minHeight: 0,
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        {asset && scene.visual.fit === 'contain' ? (
+          <Img
+            src={staticFile(asset)}
+            style={{
+              filter: 'blur(34px) saturate(0.72) brightness(0.48)',
+              height: '112%',
+              left: '-6%',
+              objectFit: 'cover',
+              opacity: 0.84,
+              position: 'absolute',
+              top: '-6%',
+              width: '112%',
+            }}
+          />
+        ) : null}
+        {asset ? <Img src={staticFile(asset)} style={{...imageStyle, position: 'relative'}} /> : null}
+        <AbsoluteFill
+          style={{
+            background: 'linear-gradient(180deg, rgba(2,6,23,0.02), rgba(2,6,23,0.2))',
+            boxShadow: `inset 0 0 0 2px ${hexToRgba(theme.accents.primary, 0.28)}`,
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+const DataVisualizationView = ({
+  palette,
+  profile,
+  scene,
+}: {
+  palette: VideoPalette;
+  profile: RenderProfile;
+  scene: TimedNarrationScene;
+}) => {
+  const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  if (scene.visual.kind !== 'data-visualization') return null;
+  const chart = scene.visual.chart;
+  const vertical = profile.aspectRatio === '9:16';
+  const theme = videoPaletteFor(palette);
+  const axisProgress = timedProgress(frame, fps, 0.25);
+  const valueProgress = timedProgress(
+    frame,
+    fps,
+    CINEMATIC_MOTION.chartGrowthSeconds,
+    0.12,
+  );
+  const badgeProgress = timedProgress(frame, fps, 0.3, 0.78);
+  const datumById = new Map(chart.data.map((datum) => [datum.id, datum]));
+  const annotationById = new Map(chart.derivedAnnotations.map((annotation) => [annotation.id, annotation]));
+
+  if (chart.type === 'metric-cards') {
+    return (
+      <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
+        <SceneTitle profile={profile} title={chart.title} />
+        <div
+          style={{
+            alignContent: 'center',
+            display: 'grid',
+            flex: 1,
+            gap: vertical ? 26 : 28,
+            gridTemplateColumns: vertical ? 'repeat(2, minmax(0, 1fr))' : `repeat(${chart.cards.length}, minmax(0, 1fr))`,
+            minHeight: 0,
+          }}
+        >
+          {chart.cards.map((card, index) => {
+            const datum = datumById.get(card.datumId);
+            if (!datum) return null;
+            const entrance = beatEntrance(frame, fps, 120 + index * 95);
+            const annotation = card.annotationId ? annotationById.get(card.annotationId) : undefined;
+            return (
+              <div
+                key={card.id}
+                style={{
+                  ...panelStyle(index % 2 === 0 ? theme.accents.primary : theme.accents.secondary),
+                  alignItems: 'flex-start',
+                  borderRadius: 30,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  minHeight: vertical ? 300 : 350,
+                  opacity: entrance,
+                  padding: vertical ? 34 : 32,
+                  transform: `translateY(${(1 - entrance) * (22 + index * 3)}px) scale(${0.96 + entrance * 0.04})`,
+                }}
+              >
+                <FittedText align="left" fontWeight={760} lineHeight={1.08} maxFontSize={vertical ? 31 : 28} maxHeight={78} maxLines={2} maxWidth={vertical ? 350 : 310} text={card.label} />
+                <div style={{fontSize: vertical ? 66 : 58, fontWeight: 880, letterSpacing: -2, marginTop: 28}}>
+                  {formatChartDatum({...datum, value: datum.value * valueProgress})}
+                </div>
+                {annotation ? (
+                  <div
+                    style={{
+                      background: hexToRgba(theme.accents.secondary, 0.2),
+                      border: `1px solid ${hexToRgba(theme.accents.secondary, 0.64)}`,
+                      borderRadius: 999,
+                      color: theme.accents.secondary,
+                      fontSize: vertical ? 27 : 24,
+                      fontWeight: 820,
+                      marginTop: 24,
+                      opacity: badgeProgress,
+                      padding: '9px 18px',
+                      transform: `scale(${0.88 + badgeProgress * 0.12})`,
+                    }}
+                  >
+                    {annotation.label} {calculateChartAnnotation(chart, annotation).display}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  const values = chart.data.map(({value}) => value);
+  const minimum = Math.min(0, ...values);
+  const maximum = Math.max(0, ...values);
+  const range = Math.max(1e-9, maximum - minimum);
+  const zeroPercent = ((0 - minimum) / range) * 100;
+  const seriesColors = [theme.accents.primary, theme.accents.secondary, '#F8FAFC'];
+  return (
+    <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
+      <SceneTitle profile={profile} title={chart.title} />
+      <div style={{display: 'flex', flex: 1, flexDirection: 'column', gap: 18, minHeight: 0}}>
+        <div style={{display: 'flex', gap: 22, justifyContent: 'center', opacity: axisProgress}}>
+          {chart.series.map((series, index) => (
+            <div key={series.id} style={{alignItems: 'center', display: 'flex', fontSize: vertical ? 23 : 21, fontWeight: 720, gap: 9}}>
+              <span style={{background: seriesColors[index], borderRadius: 99, height: 13, width: 13}} />
+              {series.label}
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            ...panelStyle(theme.accents.primary),
+            borderRadius: 30,
+            display: 'flex',
+            flex: 1,
+            flexDirection: vertical ? 'column' : 'row',
+            gap: vertical ? 22 : 26,
+            minHeight: 0,
+            opacity: axisProgress,
+            padding: vertical ? '30px 34px' : '36px 46px 28px',
+          }}
+        >
+          {chart.categories.map((category) => (
+            <div key={category.id} style={{display: 'flex', flex: 1, flexDirection: 'column', gap: 12, margin: '0 auto', maxWidth: vertical ? '100%' : 460, minHeight: 0, width: '100%'}}>
+              {vertical ? (
+                <FittedText fontWeight={700} lineHeight={1.05} maxFontSize={25} maxHeight={58} maxLines={2} maxWidth={820} text={category.label} />
+              ) : null}
+              <div style={{alignSelf: 'stretch', display: 'flex', flex: 1, flexDirection: vertical ? 'column' : 'row', gap: vertical ? 16 : 13, margin: vertical ? 'auto 0' : undefined, maxHeight: vertical ? 260 : undefined, minHeight: 0, position: 'relative'}}>
+                <div
+                  style={vertical ? {
+                    background: 'rgba(226,232,240,0.45)',
+                    height: 2,
+                    left: `${zeroPercent}%`,
+                    position: 'absolute',
+                    top: 0,
+                    width: 2,
+                  } : {
+                    background: 'rgba(226,232,240,0.45)',
+                    bottom: `${zeroPercent}%`,
+                    height: 2,
+                    left: 0,
+                    position: 'absolute',
+                    width: '100%',
+                  }}
+                />
+                {category.values.map((reference, index) => {
+                  const datum = datumById.get(reference.datumId);
+                  if (!datum) return null;
+                  const value = datum.value * valueProgress;
+                  const magnitude = Math.abs(value) / range * 100;
+                  const offset = ((Math.min(value, 0) - minimum) / range) * 100;
+                  return vertical ? (
+                    <div key={datum.id} style={{alignItems: 'center', display: 'flex', flex: 1, position: 'relative'}}>
+                      <div style={{background: seriesColors[index], borderRadius: '0 10px 10px 0', height: 32, left: `${offset}%`, position: 'absolute', width: `${magnitude}%`}} />
+                      <span style={{fontSize: 19, fontWeight: 780, left: magnitude < 65 ? `${offset + magnitude + 2}%` : undefined, maxWidth: '46%', position: 'absolute', right: magnitude >= 65 ? '2%' : undefined, textAlign: magnitude >= 65 ? 'right' : 'left'}}>{formatChartDatum(datum)}</span>
+                    </div>
+                  ) : (
+                    <div key={datum.id} style={{display: 'flex', flex: 1, justifyContent: 'center', position: 'relative'}}>
+                      <div style={{background: seriesColors[index], borderRadius: value >= 0 ? '10px 10px 0 0' : '0 0 10px 10px', bottom: `${value >= 0 ? zeroPercent : offset}%`, height: `${magnitude}%`, maxWidth: 90, position: 'absolute', width: '70%'}} />
+                      <span style={{bottom: `${Math.min(94, (value >= 0 ? zeroPercent + magnitude : offset) + 1)}%`, fontSize: 18, fontWeight: 780, position: 'absolute'}}>{formatChartDatum(datum)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {!vertical ? (
+                <FittedText fontWeight={700} lineHeight={1.05} maxFontSize={22} maxHeight={54} maxLines={2} maxWidth={250} text={category.label} />
+              ) : null}
+            </div>
+          ))}
+        </div>
+        <div style={{display: 'flex', gap: 12, justifyContent: 'center', minHeight: 52}}>
+          {chart.derivedAnnotations.map((annotation) => (
+            <div key={annotation.id} style={{background: hexToRgba(theme.accents.secondary, 0.2), border: `1px solid ${hexToRgba(theme.accents.secondary, 0.7)}`, borderRadius: 999, color: theme.accents.secondary, fontSize: vertical ? 25 : 22, fontWeight: 820, opacity: badgeProgress, padding: '9px 18px', transform: `translateY(${(1 - badgeProgress) * 12}px)`}}>
+              {annotation.label} {calculateChartAnnotation(chart, annotation).display}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CinematicSceneFrame = ({
+  children,
+  scene,
+}: {
+  children: ReactNode;
+  scene: TimedNarrationScene;
+}) => {
+  const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const visibility = sceneEntranceExit(frame, fps, scene.durationMs);
+  return (
+    <AbsoluteFill
+      style={{
+        opacity: visibility,
+        transform: `translateY(${(1 - visibility) * 10}px) scale(${0.992 + visibility * 0.008})`,
+      }}
+    >
+      {children}
+    </AbsoluteFill>
+  );
+};
+
 export const NarratedVisualLayer = ({
   contentTopInset,
   fps,
+  foregroundAssets,
   motionAssets,
   palette,
   profile,
@@ -665,6 +984,7 @@ export const NarratedVisualLayer = ({
 }: {
   contentTopInset: number;
   fps: number;
+  foregroundAssets: Record<string, string>;
   motionAssets: Record<string, SelectedMotionAsset>;
   palette: VideoPalette;
   profile: RenderProfile;
@@ -686,15 +1006,17 @@ export const NarratedVisualLayer = ({
       secondaryItemTimings: scene.secondaryItemTimings.map(({startMs}) => ({startMs})),
     };
     return (
-      <AnimationClip
-        background="transparent"
-        clip={clip}
-        contentTopInset={contentTopInset}
-        fps={fps}
-        palette={palette}
-        profile={profile}
-        technologyIcons={technologyIcons}
-      />
+      <CinematicSceneFrame scene={scene}>
+        <AnimationClip
+          background="transparent"
+          clip={clip}
+          contentTopInset={contentTopInset}
+          fps={fps}
+          palette={palette}
+          profile={profile}
+          technologyIcons={technologyIcons}
+        />
+      </CinematicSceneFrame>
     );
   }
 
@@ -710,14 +1032,20 @@ export const NarratedVisualLayer = ({
         return <MetricFocus palette={palette} profile={profile} scene={scene} />;
       case 'icon-spotlight':
         return <IconSpotlight motionAssets={motionAssets} palette={palette} profile={profile} scene={scene} />;
+      case 'image-focus':
+        return <ImageFocus foregroundAssets={foregroundAssets} palette={palette} profile={profile} scene={scene} />;
+      case 'data-visualization':
+        return <DataVisualizationView palette={palette} profile={profile} scene={scene} />;
     }
   })();
 
   return (
-    <SceneCanvas contentTopInset={contentTopInset} profile={profile}>
-      <TechnologyIconsProvider icons={technologyIcons}>
-        {content}
-      </TechnologyIconsProvider>
-    </SceneCanvas>
+    <CinematicSceneFrame scene={scene}>
+      <SceneCanvas contentTopInset={contentTopInset} profile={profile}>
+        <TechnologyIconsProvider icons={technologyIcons}>
+          {content}
+        </TechnologyIconsProvider>
+      </SceneCanvas>
+    </CinematicSceneFrame>
   );
 };

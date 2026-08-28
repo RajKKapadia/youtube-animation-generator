@@ -7,6 +7,7 @@ import {
   videoPaletteSchema,
   type VideoPalette,
 } from './visual-palettes.js';
+import {chartDatumGroundingIssue} from './source-grounding.js';
 
 export {narrationExpressionSchema, videoPaletteSchema};
 export type {NarrationExpression, VideoPalette};
@@ -212,6 +213,8 @@ export const narratedVisualKindSchema = z.enum([
   'network-map',
   'metric-focus',
   'icon-spotlight',
+  'image-focus',
+  'data-visualization',
 ]);
 
 export type NarratedVisualKind = z.infer<typeof narratedVisualKindSchema>;
@@ -224,6 +227,8 @@ export const narratedMotionSchema = z.enum([
   'scan',
   'count-up',
   'drift',
+  'push-in',
+  'pan',
 ]);
 
 export type NarratedMotion = z.infer<typeof narratedMotionSchema>;
@@ -250,6 +255,8 @@ const ALLOWED_NARRATED_MOTIONS: Record<NarratedVisualKind, NarratedMotion[]> = {
   'network-map': ['flow', 'orbit', 'pulse'],
   'metric-focus': ['reveal', 'count-up', 'pulse'],
   'icon-spotlight': ['reveal', 'pulse', 'scan', 'drift'],
+  'image-focus': ['push-in', 'pan', 'drift'],
+  'data-visualization': ['reveal', 'count-up'],
 };
 
 const addNarratedVisualIssues = (
@@ -277,22 +284,247 @@ const addNarratedVisualIssues = (
   }
 };
 
-export const narratedVisualSuggestionSchema = z.object({
-  kind: narratedVisualKindSchema,
+const assetIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+
+const legacyNarratedVisualKindSchema = z.enum([
+  'diagram',
+  'agent-workflow',
+  'brand-showcase',
+  'network-map',
+  'metric-focus',
+  'icon-spotlight',
+]);
+
+const legacyNarratedVisualSuggestionSchema = z.object({
+  kind: legacyNarratedVisualKindSchema,
   motion: narratedMotionSchema,
   motif: narratedVisualMotifSchema,
 }).superRefine(addNarratedVisualIssues);
+
+const chartDatumSchema = z.object({
+  id: assetIdSchema,
+  label: z.string().min(1).max(80),
+  value: z.number().finite(),
+  unit: z.string().min(1).max(24),
+  precision: z.number().int().min(0).max(4),
+  sourceEvidence: z.string().min(1).max(400),
+  sourceToken: z.string().min(1).max(40),
+});
+
+export type ChartDatum = z.infer<typeof chartDatumSchema>;
+
+export const chartDerivedOperationSchema = z.enum([
+  'ratio',
+  'difference',
+  'percent-change',
+]);
+
+export const chartDerivedAnnotationSchema = z.object({
+  id: assetIdSchema,
+  label: z.string().min(1).max(64),
+  operation: chartDerivedOperationSchema,
+  currentDatumId: assetIdSchema,
+  baselineDatumId: assetIdSchema,
+  precision: z.number().int().min(0).max(2),
+});
+
+export type ChartDerivedAnnotation = z.infer<
+  typeof chartDerivedAnnotationSchema
+>;
+
+const chartSeriesSchema = z.object({
+  id: assetIdSchema,
+  label: z.string().min(1).max(48),
+});
+
+const chartCategorySchema = z.object({
+  id: assetIdSchema,
+  label: z.string().min(1).max(72),
+  values: z.array(z.object({
+    seriesId: assetIdSchema,
+    datumId: assetIdSchema,
+  })).min(1).max(3),
+});
+
+const metricCardSchema = z.object({
+  id: assetIdSchema,
+  label: z.string().min(1).max(72),
+  datumId: assetIdSchema,
+  annotationId: assetIdSchema.nullable(),
+});
+
+export const dataVisualizationSchema = z.object({
+  type: z.enum(['grouped-bars', 'metric-cards']),
+  title: z.string().min(1).max(100),
+  data: z.array(chartDatumSchema).min(2).max(12),
+  series: z.array(chartSeriesSchema).max(3),
+  categories: z.array(chartCategorySchema).max(4),
+  cards: z.array(metricCardSchema).max(4),
+  derivedAnnotations: z.array(chartDerivedAnnotationSchema).max(4),
+}).superRefine((chart, context) => {
+  const datumById = new Map(chart.data.map((datum) => [datum.id, datum]));
+  if (datumById.size !== chart.data.length) {
+    context.addIssue({code: 'custom', message: 'Chart datum ids must be unique.', path: ['data']});
+  }
+  const annotationIds = new Set(chart.derivedAnnotations.map(({id}) => id));
+  if (annotationIds.size !== chart.derivedAnnotations.length) {
+    context.addIssue({code: 'custom', message: 'Chart annotation ids must be unique.', path: ['derivedAnnotations']});
+  }
+  for (const [index, annotation] of chart.derivedAnnotations.entries()) {
+    const current = datumById.get(annotation.currentDatumId);
+    const baseline = datumById.get(annotation.baselineDatumId);
+    if (!current || !baseline) {
+      context.addIssue({code: 'custom', message: 'Derived chart operands must reference source data.', path: ['derivedAnnotations', index]});
+      continue;
+    }
+    if (current.unit !== baseline.unit) {
+      context.addIssue({code: 'custom', message: 'Derived chart operands must use compatible units.', path: ['derivedAnnotations', index]});
+    }
+    if (baseline.value === 0) {
+      context.addIssue({code: 'custom', message: 'Derived chart baselines cannot be zero.', path: ['derivedAnnotations', index, 'baselineDatumId']});
+    }
+  }
+  if (chart.type === 'grouped-bars') {
+    if (chart.series.length < 1 || chart.categories.length < 1 || chart.cards.length !== 0) {
+      context.addIssue({code: 'custom', message: 'Grouped bars require 1-3 series, 1-4 categories, and no metric cards.', path: []});
+    }
+    const seriesIds = new Set(chart.series.map(({id}) => id));
+    for (const [categoryIndex, category] of chart.categories.entries()) {
+      if (category.values.length !== chart.series.length) {
+        context.addIssue({code: 'custom', message: 'Every grouped-bar category must supply one value per series.', path: ['categories', categoryIndex, 'values']});
+      }
+      for (const [valueIndex, value] of category.values.entries()) {
+        if (!seriesIds.has(value.seriesId) || !datumById.has(value.datumId)) {
+          context.addIssue({code: 'custom', message: 'Grouped-bar values must reference declared series and data.', path: ['categories', categoryIndex, 'values', valueIndex]});
+        }
+      }
+    }
+  } else if (chart.cards.length < 2 || chart.series.length !== 0 || chart.categories.length !== 0) {
+    context.addIssue({code: 'custom', message: 'Metric cards require 2-4 cards and no grouped-bar series or categories.', path: []});
+  }
+  for (const [index, card] of chart.cards.entries()) {
+    if (!datumById.has(card.datumId) || (card.annotationId && !annotationIds.has(card.annotationId))) {
+      context.addIssue({code: 'custom', message: 'Metric cards must reference declared data and annotations.', path: ['cards', index]});
+    }
+  }
+});
+
+export type DataVisualization = z.infer<typeof dataVisualizationSchema>;
+
+export const generatedVisualDirectionSchema = z.object({
+  sourceEvidence: z.string().min(1).max(600),
+  sourceAnchors: z.array(z.string().min(1).max(120)).min(2).max(5),
+  narrationBeat: z.string().min(1).max(500),
+  subject: z.string().min(1).max(180),
+  action: z.string().min(1).max(180),
+  environment: z.string().min(1).max(180),
+  framing: z.string().min(1).max(180),
+  exclusions: z.array(z.string().min(1).max(120)).min(1).max(10),
+  depiction: z.enum(['literal', 'metaphor']),
+  metaphorRelationship: z.string().max(240).nullable(),
+}).superRefine((direction, context) => {
+  if (direction.depiction === 'metaphor' && !direction.metaphorRelationship) {
+    context.addIssue({code: 'custom', message: 'A visual metaphor must state its source relationship.', path: ['metaphorRelationship']});
+  }
+  if (direction.depiction === 'literal' && direction.metaphorRelationship) {
+    context.addIssue({code: 'custom', message: 'Literal depictions cannot declare a metaphor relationship.', path: ['metaphorRelationship']});
+  }
+});
+
+export type GeneratedVisualDirection = z.infer<
+  typeof generatedVisualDirectionSchema
+>;
+
+export const localNarratedMediaAssetSchema = z.object({
+  id: assetIdSchema,
+  source: z.literal('local'),
+  file: z.string().min(1).refine((value) =>
+    !value.startsWith('/') && !value.split(/[\\/]/u).includes('..'),
+  'Local media paths must be plan-relative and cannot traverse directories.'),
+  sha256: z.string().regex(/^[\da-f]{64}$/u),
+  mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+  originalName: z.string().min(1).max(255),
+});
+
+export const generatedNarratedMediaAssetSchema = z.object({
+  id: assetIdSchema,
+  source: z.literal('generated'),
+  direction: generatedVisualDirectionSchema,
+});
+
+export const narratedMediaAssetSchema = z.discriminatedUnion('source', [
+  localNarratedMediaAssetSchema,
+  generatedNarratedMediaAssetSchema,
+]);
+
+export type NarratedMediaAsset = z.infer<typeof narratedMediaAssetSchema>;
+
+const imageFocusSuggestionSchema = z.object({
+  kind: z.literal('image-focus'),
+  motion: z.enum(['push-in', 'pan', 'drift']),
+  motif: narratedVisualMotifSchema,
+  source: z.enum(['local', 'generated']),
+  localImageId: assetIdSchema.nullable(),
+  generatedDirection: generatedVisualDirectionSchema.nullable(),
+  fit: z.enum(['contain', 'cover']),
+  focalPosition: z.enum(['center', 'top', 'right', 'bottom', 'left']),
+}).superRefine((visual, context) => {
+  if (visual.source === 'local' && (!visual.localImageId || visual.generatedDirection)) {
+    context.addIssue({code: 'custom', message: 'Local image scenes require only a local image id.', path: ['localImageId']});
+  }
+  if (visual.source === 'generated' && (visual.localImageId || !visual.generatedDirection)) {
+    context.addIssue({code: 'custom', message: 'Generated image scenes require only a grounded prompt direction.', path: ['generatedDirection']});
+  }
+});
+
+const dataVisualizationSuggestionSchema = z.object({
+  kind: z.literal('data-visualization'),
+  motion: z.enum(['reveal', 'count-up']),
+  motif: z.enum(['analytics', 'data']),
+  chart: dataVisualizationSchema,
+});
+
+export const narratedVisualSuggestionSchema = z.union([
+  legacyNarratedVisualSuggestionSchema,
+  imageFocusSuggestionSchema,
+  dataVisualizationSuggestionSchema,
+]);
 
 export type NarratedVisualSuggestion = z.infer<
   typeof narratedVisualSuggestionSchema
 >;
 
-export const narratedSceneVisualSchema = z.object({
-  kind: narratedVisualKindSchema,
+const legacyNarratedSceneVisualSchema = z.object({
+  kind: legacyNarratedVisualKindSchema,
   motion: narratedMotionSchema,
   motif: narratedVisualMotifSchema,
-  assetId: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).nullable(),
+  assetId: assetIdSchema.nullable(),
 }).superRefine(addNarratedVisualIssues);
+
+const imageFocusSceneVisualSchema = z.object({
+  kind: z.literal('image-focus'),
+  motion: z.enum(['push-in', 'pan', 'drift']),
+  motif: narratedVisualMotifSchema,
+  assetId: z.null(),
+  source: z.enum(['local', 'generated']),
+  mediaId: assetIdSchema,
+  fit: z.enum(['contain', 'cover']),
+  focalPosition: z.enum(['center', 'top', 'right', 'bottom', 'left']),
+});
+
+const dataVisualizationSceneVisualSchema = z.object({
+  kind: z.literal('data-visualization'),
+  motion: z.enum(['reveal', 'count-up']),
+  motif: z.enum(['analytics', 'data']),
+  assetId: z.null(),
+  chart: dataVisualizationSchema,
+});
+
+export const narratedSceneVisualSchema = z.union([
+  legacyNarratedSceneVisualSchema,
+  imageFocusSceneVisualSchema,
+  dataVisualizationSceneVisualSchema,
+]);
 
 export type NarratedSceneVisual = z.infer<typeof narratedSceneVisualSchema>;
 
@@ -374,7 +606,9 @@ export const maxNarrationExpressionsForDuration = (
 
 const addNarratedPlanIssues = (
   plan: {
-    scenes: Array<{beats: NarrationBeat[]}>;
+    mediaAssets: NarratedMediaAsset[];
+    scenes: Array<{beats: NarrationBeat[]; visual: NarratedSceneVisual}>;
+    sourceText: string;
     targetDurationSeconds: number;
   },
   context: z.core.$RefinementCtx,
@@ -417,10 +651,62 @@ const addNarratedPlanIssues = (
       break;
     }
   }
+
+  const mediaById = new Map(plan.mediaAssets.map((asset) => [asset.id, asset]));
+  if (mediaById.size !== plan.mediaAssets.length) {
+    context.addIssue({code: 'custom', message: 'Narrated media asset ids must be unique.', path: ['mediaAssets']});
+  }
+  const usedMediaIds = new Set<string>();
+  let generatedSceneCount = 0;
+  for (const [sceneIndex, scene] of plan.scenes.entries()) {
+    if (scene.visual.kind === 'image-focus') {
+      const asset = mediaById.get(scene.visual.mediaId);
+      if (!asset || asset.source !== scene.visual.source) {
+        context.addIssue({code: 'custom', message: 'Image-focus scenes must reference media with matching provenance.', path: ['scenes', sceneIndex, 'visual', 'mediaId']});
+      }
+      if (usedMediaIds.has(scene.visual.mediaId)) {
+        context.addIssue({code: 'custom', message: 'Each foreground image may be used by at most one scene.', path: ['scenes', sceneIndex, 'visual', 'mediaId']});
+      }
+      usedMediaIds.add(scene.visual.mediaId);
+      if (asset?.source === 'generated') {
+        generatedSceneCount += 1;
+        const direction = asset.direction;
+        if (!plan.sourceText.includes(direction.sourceEvidence)) {
+          context.addIssue({code: 'custom', message: 'Generated visual evidence must be an exact source excerpt.', path: ['mediaAssets', plan.mediaAssets.indexOf(asset), 'direction', 'sourceEvidence']});
+        }
+        for (const [anchorIndex, anchor] of direction.sourceAnchors.entries()) {
+          if (!plan.sourceText.includes(anchor)) {
+            context.addIssue({code: 'custom', message: 'Generated visual anchors must occur exactly in the source.', path: ['mediaAssets', plan.mediaAssets.indexOf(asset), 'direction', 'sourceAnchors', anchorIndex]});
+          }
+        }
+        const sceneBeatText = scene.beats
+          .map((beat) => beat.phrases.map(({text}) => text).join(' '))
+          .join(' ');
+        if (!sceneBeatText.includes(direction.narrationBeat)) {
+          context.addIssue({code: 'custom', message: 'Generated visual narrationBeat must exactly match narration in its scene.', path: ['mediaAssets', plan.mediaAssets.indexOf(asset), 'direction', 'narrationBeat']});
+        }
+      }
+    }
+    if (scene.visual.kind === 'data-visualization') {
+      for (const [datumIndex, datum] of scene.visual.chart.data.entries()) {
+        const parsedToken = Number(datum.sourceToken.replaceAll(',', '').replace(/%$/u, ''));
+        if (
+          chartDatumGroundingIssue(plan.sourceText, datum) ||
+          !Number.isFinite(parsedToken) ||
+          parsedToken !== datum.value
+        ) {
+          context.addIssue({code: 'custom', message: 'Chart data must preserve an exact source label, numeric token, value, and evidence excerpt.', path: ['scenes', sceneIndex, 'visual', 'chart', 'data', datumIndex]});
+        }
+      }
+    }
+  }
+  if (generatedSceneCount > 2) {
+    context.addIssue({code: 'custom', message: 'Narrated videos can contain at most two generated foreground scenes.', path: ['scenes']});
+  }
 };
 
 export const draftNarratedPlanSchema = z.object({
-  version: z.literal(5),
+  version: z.literal(6),
   kind: z.literal('narrated-video'),
   stage: z.literal('draft'),
   sourceText: z.string().min(1),
@@ -431,6 +717,7 @@ export const draftNarratedPlanSchema = z.object({
   title: z.string().min(1).max(100),
   palette: videoPaletteSchema,
   planningWarnings: z.array(z.string().min(1)).optional(),
+  mediaAssets: z.array(narratedMediaAssetSchema).max(8),
   scenes: z.array(draftNarrationSceneSchema).min(1).max(6),
 }).superRefine(addNarratedPlanIssues);
 
@@ -532,7 +819,7 @@ export const timedNarrationSceneSchema = visualContentSchema.extend({
 export type TimedNarrationScene = z.infer<typeof timedNarrationSceneSchema>;
 
 export const timedNarratedPlanSchema = z.object({
-  version: z.literal(5),
+  version: z.literal(6),
   kind: z.literal('narrated-video'),
   stage: z.literal('timed'),
   sourceText: z.string().min(1),
@@ -543,6 +830,7 @@ export const timedNarratedPlanSchema = z.object({
   title: z.string().min(1).max(100),
   palette: videoPaletteSchema,
   planningWarnings: z.array(z.string().min(1)).optional(),
+  mediaAssets: z.array(narratedMediaAssetSchema).max(8),
   sampleRate: z.number().int().positive(),
   voice: z.string().min(1),
   ttsSpeed: z.number().positive(),
@@ -794,6 +1082,72 @@ const legacyV4TimedNarratedPlanSchema = z.object({
   scenes: z.array(legacyV3TimedNarrationSceneSchema).min(1).max(6),
 });
 
+const legacyV5DraftNarrationSceneSchema = visualContentSchema.extend({
+  id: z.string().min(1).max(80),
+  backgroundPrompt: z.string().min(1).max(600),
+  visual: legacyNarratedSceneVisualSchema,
+  beats: z.array(narrationBeatSchema).min(1).max(12),
+}).superRefine(addNarrationSceneIssues);
+
+const legacyV5TimedNarrationSceneSchema = visualContentSchema.extend({
+  id: z.string().min(1).max(80),
+  backgroundPrompt: z.string().min(1).max(600),
+  visual: legacyNarratedSceneVisualSchema,
+  startMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().positive(),
+  beats: z.array(timedNarrationBeatSchema).min(1).max(12),
+  primaryItemTimings: z.array(anchoredItemTimingSchema).max(6),
+  secondaryItemTimings: z.array(anchoredItemTimingSchema).max(6),
+}).superRefine((scene, context) => {
+  addNarrationSceneIssues(scene, context);
+  for (const [field, items] of [
+    ['primaryItemTimings', scene.primaryItems],
+    ['secondaryItemTimings', scene.secondaryItems],
+  ] as const) {
+    if (scene[field].length !== items.length) {
+      context.addIssue({code: 'custom', message: `${field} must contain one entry for every matching visual item.`, path: [field]});
+    }
+  }
+});
+
+const legacyV5DraftNarratedPlanSchema = z.object({
+  version: z.literal(5),
+  kind: z.literal('narrated-video'),
+  stage: z.literal('draft'),
+  sourceText: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  targetDurationSeconds: z.number().positive(),
+  language: z.string().min(1),
+  title: z.string().min(1).max(100),
+  palette: videoPaletteSchema,
+  planningWarnings: z.array(z.string().min(1)).optional(),
+  scenes: z.array(legacyV5DraftNarrationSceneSchema).min(1).max(6),
+});
+
+const legacyV5TimedNarratedPlanSchema = z.object({
+  version: z.literal(5),
+  kind: z.literal('narrated-video'),
+  stage: z.literal('timed'),
+  sourceText: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  targetDurationSeconds: z.number().positive(),
+  language: z.string().min(1),
+  title: z.string().min(1).max(100),
+  palette: videoPaletteSchema,
+  planningWarnings: z.array(z.string().min(1)).optional(),
+  sampleRate: z.number().int().positive(),
+  voice: z.string().min(1),
+  ttsSpeed: z.number().positive(),
+  ttsSteps: z.number().int().positive(),
+  voiceoverPlaybackRate: z.number().positive().default(1),
+  voiceoverFile: z.string().min(1),
+  durationMs: z.number().int().positive(),
+  totalSamples: z.number().int().positive(),
+  scenes: z.array(legacyV5TimedNarrationSceneSchema).min(1).max(6),
+});
+
 export const defaultSceneBackgroundPrompt = (scene: VisualContent): string =>
   `Abstract technical atmosphere for ${scene.title}. ${scene.reason}`.slice(0, 600);
 
@@ -803,8 +1157,9 @@ const normalizeLegacyDraft = (
   plan: z.infer<typeof legacyDraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 5,
+  version: 6,
   palette: 'cyan',
+  mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     backgroundPrompt: defaultSceneBackgroundPrompt(scene),
@@ -821,8 +1176,9 @@ const normalizeLegacyTimed = (
   plan: z.infer<typeof legacyTimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 5,
+  version: 6,
   palette: 'cyan',
+  mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     backgroundPrompt: defaultSceneBackgroundPrompt(scene),
@@ -845,8 +1201,9 @@ const normalizeLegacyV2Draft = (
   plan: z.infer<typeof legacyV2DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 5,
+  version: 6,
   palette: 'cyan',
+  mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     visual: DEFAULT_NARRATED_SCENE_VISUAL,
@@ -861,8 +1218,9 @@ const normalizeLegacyV2Timed = (
   plan: z.infer<typeof legacyV2TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 5,
+  version: 6,
   palette: 'cyan',
+  mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     visual: DEFAULT_NARRATED_SCENE_VISUAL,
@@ -877,8 +1235,9 @@ const normalizeLegacyV3Draft = (
   plan: z.infer<typeof legacyV3DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 5,
+  version: 6,
   palette: 'cyan',
+  mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     visual: DEFAULT_NARRATED_SCENE_VISUAL,
@@ -889,8 +1248,9 @@ const normalizeLegacyV3Timed = (
   plan: z.infer<typeof legacyV3TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 5,
+  version: 6,
   palette: 'cyan',
+  mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     visual: DEFAULT_NARRATED_SCENE_VISUAL,
@@ -901,7 +1261,8 @@ const normalizeLegacyV4Draft = (
   plan: z.infer<typeof legacyV4DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 5,
+  version: 6,
+  mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     visual: DEFAULT_NARRATED_SCENE_VISUAL,
@@ -912,16 +1273,35 @@ const normalizeLegacyV4Timed = (
   plan: z.infer<typeof legacyV4TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 5,
+  version: 6,
+  mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
     visual: DEFAULT_NARRATED_SCENE_VISUAL,
   })),
 });
 
+const normalizeLegacyV5Draft = (
+  plan: z.infer<typeof legacyV5DraftNarratedPlanSchema>,
+): DraftNarratedPlan => draftNarratedPlanSchema.parse({
+  ...plan,
+  version: 6,
+  mediaAssets: [],
+});
+
+const normalizeLegacyV5Timed = (
+  plan: z.infer<typeof legacyV5TimedNarratedPlanSchema>,
+): TimedNarratedPlan => timedNarratedPlanSchema.parse({
+  ...plan,
+  version: 6,
+  mediaAssets: [],
+});
+
 export const narratedPlanSchema = z.union([
   draftNarratedPlanSchema,
   timedNarratedPlanSchema,
+  legacyV5DraftNarratedPlanSchema.transform(normalizeLegacyV5Draft),
+  legacyV5TimedNarratedPlanSchema.transform(normalizeLegacyV5Timed),
   legacyV4DraftNarratedPlanSchema.transform(normalizeLegacyV4Draft),
   legacyV4TimedNarratedPlanSchema.transform(normalizeLegacyV4Timed),
   legacyV3DraftNarratedPlanSchema.transform(normalizeLegacyV3Draft),
@@ -1014,6 +1394,9 @@ export type CaptionMode = z.infer<typeof captionModeSchema>;
 export const sceneBackgroundModeSchema = z.enum(['ambient', 'generated']);
 export type SceneBackgroundMode = z.infer<typeof sceneBackgroundModeSchema>;
 
+export const generatedVisualModeSchema = z.enum(['off', 'auto']);
+export type GeneratedVisualMode = z.infer<typeof generatedVisualModeSchema>;
+
 export const imageQualitySchema = z.enum(['low', 'medium', 'high']);
 export type ImageQuality = z.infer<typeof imageQualitySchema>;
 
@@ -1074,6 +1457,7 @@ export const narratedRenderInputSchema = z.object({
   captions: captionModeSchema,
   sceneBackground: sceneBackgroundModeSchema,
   backgroundAssets: z.record(z.string(), z.string().min(1)).default({}),
+  foregroundAssets: z.record(z.string(), z.string().min(1)).default({}),
   fps: z.number().int().positive(),
   profile: renderProfileSchema,
   audioFile: z.string().min(1),

@@ -56,6 +56,7 @@ const calculateMetadata: CalculateMetadataFunction<RenderInput> = async ({props}
 const defaultNarratedProps: NarratedRenderInput = {
   audioFile: 'voiceover.wav',
   backgroundAssets: {},
+  foregroundAssets: {},
   captions: 'on',
   fps: 30,
   profile: RENDER_PROFILES['16:9'],
@@ -63,7 +64,7 @@ const defaultNarratedProps: NarratedRenderInput = {
   localBrandAssets: {},
   motionAssets: {},
   plan: {
-    version: 5,
+    version: 6,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText: 'A request moves through a queue.',
@@ -73,6 +74,7 @@ const defaultNarratedProps: NarratedRenderInput = {
     language: 'en',
     title: 'Request flow',
     palette: 'cyan',
+    mediaAssets: [],
     sampleRate: 44_100,
     voice: 'M1',
     ttsSpeed: 1.05,

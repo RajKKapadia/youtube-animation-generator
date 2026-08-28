@@ -119,7 +119,7 @@ const main = async () => {
   );
   await writePcm16Wav(resolve(audioDirectory, 'voiceover.wav'), audio, sampleRate);
   const plan = timedNarratedPlanSchema.parse({
-    version: 5,
+    version: 6,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText:
@@ -130,6 +130,7 @@ const main = async () => {
     language: 'en',
     title: 'Varied narrated render fixture',
     palette,
+    mediaAssets: [],
     sampleRate,
     voice: 'M1',
     ttsSpeed: 1.05,
