@@ -10,6 +10,7 @@
       "creator": "YouTube Animations project",
       "license": "Project-authored asset; all rights retained by the repository owner",
       "licenseUrl": null,
+      "attributionRequired": false,
       "attribution": "YouTube Animations project",
       "loop": "loop",
       "playbackRate": 0.75,

@@ -21,8 +21,14 @@ import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 import {AnimationClip} from './AnimationClip.js';
 import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
 import {NarratedMotionAsset} from './NarratedMotionAsset.js';
-import {TechnologyBadge, TechnologyIconsProvider} from './TechnologyBadge.js';
+import {
+  SemanticIconsProvider,
+  TechnologyBadge,
+  TechnologyIconsProvider,
+} from './TechnologyBadge.js';
+import {AnimatedVisualIcon} from './SemanticIcon.js';
 import {calculateChartAnnotation, formatChartDatum} from '../data-visualization.js';
+import {iconRecordForItems} from '../icon-catalog.js';
 import {
   CINEMATIC_MOTION,
   ambientWave,
@@ -96,13 +102,28 @@ const panelStyle = (accent: string): CSSProperties => ({
   boxShadow: '0 28px 64px rgba(2,6,23,0.44)',
 });
 
+export const VERTICAL_AGENT_WORKFLOW_GEOMETRY = {
+  nodeHeight: 156,
+  nodeRadius: 205,
+  orbitHeight: 600,
+} as const;
+
+export const verticalAgentWorkflowNodeClearance = (): number =>
+  VERTICAL_AGENT_WORKFLOW_GEOMETRY.orbitHeight / 2 -
+  VERTICAL_AGENT_WORKFLOW_GEOMETRY.nodeRadius -
+  VERTICAL_AGENT_WORKFLOW_GEOMETRY.nodeHeight / 2;
+
 const ItemChip = ({
   entrance,
+  fill = false,
   label,
+  labelMaxWidth,
   size,
 }: {
   entrance: number;
+  fill?: boolean;
   label: string;
+  labelMaxWidth?: number;
   size: number;
 }) => (
   <div
@@ -112,23 +133,26 @@ const ItemChip = ({
       border: '2px solid rgba(148,163,184,0.28)',
       borderRadius: 22,
       boxShadow: '0 18px 40px rgba(2,6,23,0.36)',
+      boxSizing: 'border-box',
       display: 'flex',
-      gap: 18,
-      minHeight: size,
+      gap: fill ? 16 : 18,
+      height: fill ? size : undefined,
+      minHeight: fill ? undefined : size,
       opacity: entrance,
-      padding: '14px 22px',
+      padding: fill ? '10px 18px' : '14px 22px',
       transform: `translateY(${(1 - entrance) * 20}px) scale(${0.96 + entrance * 0.04})`,
+      width: fill ? '100%' : undefined,
     }}
   >
-    <TechnologyBadge label={label} size={Math.round(size * 0.62)} />
+    <TechnologyBadge label={label} size={Math.round(size * (fill ? 0.58 : 0.62))} />
     <FittedText
       align="left"
       fontWeight={720}
       lineHeight={1.08}
       maxFontSize={Math.round(size * 0.32)}
-      maxHeight={Math.round(size * 0.72)}
+      maxHeight={Math.round(size * (fill ? 0.62 : 0.72))}
       maxLines={2}
-      maxWidth={size * 2.8}
+      maxWidth={labelMaxWidth ?? size * 2.8}
       text={label}
     />
   </div>
@@ -172,6 +196,13 @@ const AgentWorkflow = ({
     clamp,
   );
   const coreScale = 1 + Math.sin(frame * 0.045) * 0.012;
+  const orbitHeight = vertical ? VERTICAL_AGENT_WORKFLOW_GEOMETRY.orbitHeight : 560;
+  const nodeRadius = vertical ? VERTICAL_AGENT_WORKFLOW_GEOMETRY.nodeRadius : 260;
+  const nodeBadgeSize = vertical ? 76 : 82;
+  const nodeLabelHeight = vertical ? 72 : 78;
+  const nodeHeight = vertical
+    ? VERTICAL_AGENT_WORKFLOW_GEOMETRY.nodeHeight
+    : nodeBadgeSize + 8 + nodeLabelHeight;
 
   return (
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
@@ -192,7 +223,7 @@ const AgentWorkflow = ({
             alignItems: 'center',
             display: 'grid',
             flex: vertical ? '0 0 auto' : '0 0 46%',
-            height: vertical ? 540 : 560,
+            height: orbitHeight,
             justifyItems: 'center',
             position: 'relative',
             transform: `scale(${coreScale})`,
@@ -214,12 +245,25 @@ const AgentWorkflow = ({
               palette={palette}
               style={{height: vertical ? 310 : 340, position: 'relative', width: vertical ? 310 : 340}}
             />
+          ) : scene.icons.focal ? (
+            <AnimatedVisualIcon
+              color={theme.accents.primary}
+              id={scene.icons.focal}
+              motion={scene.visual.motion}
+              secondaryColor={theme.accents.secondary}
+              size={vertical ? 210 : 230}
+            />
           ) : (
-            <TechnologyBadge label="AI agent" size={vertical ? 190 : 210} />
+            <AnimatedVisualIcon
+              color={theme.accents.primary}
+              id="ai-agent"
+              motion={scene.visual.motion}
+              secondaryColor={theme.accents.secondary}
+              size={vertical ? 210 : 230}
+            />
           )}
           {tools.map((tool, index, visibleTools) => {
             const angle = -Math.PI / 2 + (index / visibleTools.length) * Math.PI * 2;
-            const radius = vertical ? 245 : 260;
             const entrance = itemEntrance(frame, fps, toolStartMs(index));
             return (
               <div
@@ -229,17 +273,25 @@ const AgentWorkflow = ({
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 8,
+                  height: nodeHeight,
                   left: '50%',
                   opacity: entrance,
                   position: 'absolute',
                   top: '50%',
-                  transform: `translate(-50%, -50%) translate(${Math.cos(angle) * radius}px, ${Math.sin(angle) * radius}px) scale(${0.86 + entrance * 0.14})`,
+                  transform: `translate(-50%, -50%) translate(${Math.cos(angle) * nodeRadius}px, ${Math.sin(angle) * nodeRadius}px) scale(${0.86 + entrance * 0.14})`,
+                  width: vertical ? 190 : 200,
                 }}
               >
-                <TechnologyBadge label={tool} size={vertical ? 76 : 82} />
-                <div style={{fontSize: vertical ? 22 : 23, fontWeight: 720, maxWidth: 170, textAlign: 'center'}}>
-                  {tool}
-                </div>
+                <TechnologyBadge label={tool} size={nodeBadgeSize} />
+                <FittedText
+                  fontWeight={720}
+                  lineHeight={1.08}
+                  maxFontSize={vertical ? 22 : 23}
+                  maxHeight={nodeLabelHeight}
+                  maxLines={3}
+                  maxWidth={vertical ? 190 : 200}
+                  text={tool}
+                />
               </div>
             );
           })}
@@ -614,29 +666,107 @@ const IconSpotlight = ({
     ? 1 + ambientWave(frame, fps, 0.8) * CINEMATIC_MOTION.maxAmbientScale
     : 1;
   const scanProgress = timedProgress(frame, fps, 0.8, 0.18);
+  const interoperability = scene.icons.focal === 'standard-protocol' && supporting.length > 0;
+  const orbitAngle = (frame / fps) * Math.PI * 0.72;
+  const orbitRadiusX = vertical ? 235 : 250;
+  const orbitRadiusY = 178;
   return (
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
       <SceneTitle profile={profile} title={scene.title} />
-      <div style={{alignItems: 'center', display: 'flex', flex: 1, flexDirection: vertical ? 'column' : 'row', gap: vertical ? 46 : 100, justifyContent: 'center'}}>
+      <div
+        style={{
+          alignItems: 'center',
+          boxSizing: 'border-box',
+          display: 'flex',
+          flex: 1,
+          flexDirection: vertical ? 'column' : 'row',
+          gap: vertical ? 28 : 100,
+          justifyContent: vertical ? 'flex-start' : 'center',
+          minHeight: 0,
+          paddingTop: vertical ? 120 : 0,
+        }}
+      >
         <div
           style={{
             ...panelStyle(theme.accents.primary),
             alignItems: 'center',
             borderRadius: 46,
+            boxSizing: 'border-box',
             display: 'flex',
-            height: vertical ? 520 : 520,
+            flex: '0 0 auto',
+            height: vertical ? 450 : 520,
             justifyContent: 'center',
             overflow: 'hidden',
             position: 'relative',
             transform: `translateY(${drift}px) scale(${pulse})`,
-            width: vertical ? 760 : 660,
+            width: vertical ? 720 : 660,
           }}
         >
-          {asset ? (
-            <NarratedMotionAsset asset={asset} palette={palette} style={{height: '78%', width: '78%'}} />
-          ) : (
-            <TechnologyBadge label={focal} size={vertical ? 260 : 250} />
-          )}
+          {interoperability ? (
+            <>
+              <div
+                style={{
+                  border: `3px solid ${hexToRgba(theme.accents.primary, 0.34)}`,
+                  borderRadius: '50%',
+                  height: orbitRadiusY * 2,
+                  position: 'absolute',
+                  width: orbitRadiusX * 2,
+                }}
+              />
+              {supporting.slice(0, 4).map((item, index, items) => {
+                const angle = -Math.PI / 2 + (index / items.length) * Math.PI * 2;
+                const entrance = itemEntrance(
+                  frame,
+                  fps,
+                  scene.primaryItemTimings[index + 1]?.startMs ?? 0,
+                );
+                return (
+                  <div
+                    key={`constellation-${item}-${index}`}
+                    style={{
+                      left: `calc(50% + ${Math.cos(angle) * orbitRadiusX}px)`,
+                      opacity: entrance,
+                      position: 'absolute',
+                      top: `calc(50% + ${Math.sin(angle) * orbitRadiusY}px)`,
+                      transform: `translate(-50%, -50%) scale(${0.82 + entrance * 0.18})`,
+                      zIndex: 3,
+                    }}
+                  >
+                    <TechnologyBadge label={item} size={vertical ? 76 : 72} />
+                  </div>
+                );
+              })}
+              <div
+                style={{
+                  background: theme.accents.secondary,
+                  borderRadius: '50%',
+                  boxShadow: `0 0 24px ${theme.accents.secondary}`,
+                  height: 18,
+                  left: `calc(50% + ${Math.cos(orbitAngle) * orbitRadiusX}px)`,
+                  position: 'absolute',
+                  top: `calc(50% + ${Math.sin(orbitAngle) * orbitRadiusY}px)`,
+                  transform: 'translate(-50%, -50%)',
+                  width: 18,
+                  zIndex: 4,
+                }}
+              />
+            </>
+          ) : null}
+          <div style={{position: 'relative', zIndex: 2}}>
+            {asset ? (
+              <NarratedMotionAsset asset={asset} palette={palette} style={{height: vertical ? 320 : 400, width: vertical ? 320 : 400}} />
+            ) : scene.icons.focal ? (
+              <AnimatedVisualIcon
+                color={theme.accents.primary}
+                id={scene.icons.focal}
+                motion={scene.visual.motion}
+                secondaryColor={theme.accents.secondary}
+                size={interoperability ? (vertical ? 220 : 235) : (vertical ? 280 : 340)}
+              />
+            ) : (
+              <TechnologyBadge label={focal} size={vertical ? 230 : 250} />
+            )}
+          </div>
           {scene.visual.motion === 'scan' ? (
             <div
               style={{
@@ -651,23 +781,34 @@ const IconSpotlight = ({
             />
           ) : null}
         </div>
-        <div style={{display: 'flex', flexDirection: 'column', gap: 20, width: vertical ? '100%' : 620}}>
+        <div
+          style={{
+            alignItems: vertical ? 'center' : undefined,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: vertical ? 16 : 20,
+            maxWidth: vertical ? 820 : 620,
+            width: vertical ? '100%' : 620,
+          }}
+        >
           <FittedText
             align={vertical ? 'center' : 'left'}
             fontWeight={840}
             lineHeight={1.02}
-            maxFontSize={vertical ? 60 : 62}
-            maxHeight={vertical ? 150 : 160}
-            maxLines={3}
+            maxFontSize={vertical ? 54 : 62}
+            maxHeight={vertical ? 82 : 160}
+            maxLines={vertical ? 2 : 3}
             maxWidth={vertical ? 820 : 620}
             text={focal}
           />
           {supporting.map((item, index) => (
             <ItemChip
               entrance={itemEntrance(frame, fps, scene.primaryItemTimings[index + 1]?.startMs ?? 0)}
+              fill={vertical}
               key={`${item}-${index}`}
               label={item}
-              size={vertical ? 92 : 90}
+              size={vertical ? 86 : 90}
+              {...(vertical ? {labelMaxWidth: 700} : {})}
             />
           ))}
         </div>
@@ -1002,6 +1143,7 @@ export const NarratedVisualLayer = ({
       leftLabel: scene.leftLabel,
       rightLabel: scene.rightLabel,
       reason: scene.reason,
+      icons: scene.icons,
       primaryItemTimings: scene.primaryItemTimings.map(({startMs}) => ({startMs})),
       secondaryItemTimings: scene.secondaryItemTimings.map(({startMs}) => ({startMs})),
     };
@@ -1038,12 +1180,19 @@ export const NarratedVisualLayer = ({
         return <DataVisualizationView palette={palette} profile={profile} scene={scene} />;
     }
   })();
+  const semanticIcons = iconRecordForItems({
+    primaryItems: scene.primaryItems,
+    secondaryItems: scene.secondaryItems,
+    icons: scene.icons,
+  });
 
   return (
     <CinematicSceneFrame scene={scene}>
       <SceneCanvas contentTopInset={contentTopInset} profile={profile}>
         <TechnologyIconsProvider icons={technologyIcons}>
-          {content}
+          <SemanticIconsProvider icons={semanticIcons}>
+            {content}
+          </SemanticIconsProvider>
         </TechnologyIconsProvider>
       </SceneCanvas>
     </CinematicSceneFrame>

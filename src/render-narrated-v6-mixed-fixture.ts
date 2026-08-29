@@ -67,6 +67,7 @@ const makeScene = ({
   leftLabel: '',
   rightLabel: '',
   reason: 'Narrated v6 mixed fixture.',
+  icons: {focal: null, primary: [], secondary: []},
   visual,
   startMs: sceneIndex * sceneDurationMs,
   durationMs: sceneDurationMs,

@@ -118,6 +118,28 @@ describe('narrated publish metadata', () => {
     expect(markdown).toContain('- Headline: Queues Make Systems Flow');
   });
 
+  it('adds required icon credits to the YouTube description and sidecar', () => {
+    const plan = materializePublishPlan({
+      assetAttributions: [{
+        assetId: 'custom-standard',
+        attribution: 'Icon by Fixture creator',
+        sourceUrl: 'https://example.com/icon',
+      }],
+      generatedAt: '2026-08-25T00:00:00.000Z',
+      language: 'en',
+      model: 'fixture',
+      palette: narration.palette,
+      response,
+      sourcePlan: 'queue.narration-plan.json',
+    });
+    expect(plan.youtube.description).toContain(
+      'Asset credits:\n- Icon by Fixture creator: https://example.com/icon',
+    );
+    expect(publishKitMarkdown(plan)).toContain(
+      '## Asset credits\n\n- Icon by Fixture creator: https://example.com/icon',
+    );
+  });
+
   it('keeps the narration transcript grouped by selectable scene id', () => {
     expect(narratedTranscript(narration)).toContain(
       'Scene 1 (queue-flow) — A queue decouples work',

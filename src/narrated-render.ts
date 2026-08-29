@@ -19,9 +19,11 @@ import type {GeneratedVisualAssets} from './generated-visuals.js';
 import {
   assetFilePath,
   brandAssetForLabel,
+  iconAssetForId,
   loadAssetRegistry,
   normalizeAssetLabel,
 } from './asset-registry.js';
+import {semanticIconDefinitionFor} from './icon-catalog.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -236,6 +238,35 @@ export const renderNarratedVideo = async (
       };
     }
 
+    const localIconAssets: Record<string, {
+      id: string;
+      file: string;
+      colorPolicy: 'original' | 'monochrome-allowed';
+    }> = {};
+    const selectedIconIds = new Set(
+      options.plan.scenes.flatMap((scene) => [
+        ...(scene.icons.focal ? [scene.icons.focal] : []),
+        ...scene.icons.primary.flatMap((id) => id ? [id] : []),
+        ...scene.icons.secondary.flatMap((id) => id ? [id] : []),
+      ]),
+    );
+    for (const iconId of selectedIconIds) {
+      if (semanticIconDefinitionFor(iconId)) continue;
+      const asset = iconAssetForId(registry, iconId);
+      if (!asset) {
+        throw new Error(
+          `Narrated plan references unregistered icon "${iconId}". Add it to assets/icons/manifest.json before rendering.`,
+        );
+      }
+      const publicName = `icon-${asset.id}.svg`;
+      await copyFile(assetFilePath(registry, asset.file), resolve(publicDirectory, publicName));
+      localIconAssets[asset.id] = {
+        id: asset.id,
+        file: publicName,
+        colorPolicy: asset.colorPolicy,
+      };
+    }
+
     console.log('Bundling narrated-video templates...');
     const serveUrl = await bundle({
       entryPoint: findEntryPoint(),
@@ -265,6 +296,7 @@ export const renderNarratedVideo = async (
         audioFile: publicAudioName,
         technologyIcons,
         localBrandAssets,
+        localIconAssets,
         motionAssets,
       };
       const composition = await selectComposition({

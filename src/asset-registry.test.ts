@@ -5,6 +5,7 @@ import {afterEach, describe, expect, it} from 'vitest';
 import {
   brandAssetForLabel,
   loadAssetRegistry,
+  motionAssetForScene,
   validateLottieAnimationData,
 } from './asset-registry.js';
 
@@ -51,10 +52,12 @@ const brandAsset = {
 
 const createRegistry = async ({
   brands = [brandAsset],
+  icons = [],
   lottie = vectorLottie(),
   motion = [motionAsset],
 }: {
   brands?: unknown[];
+  icons?: unknown[];
   lottie?: unknown;
   motion?: unknown[];
 } = {}) => {
@@ -62,10 +65,15 @@ const createRegistry = async ({
   temporaryDirectories.push(root);
   await mkdir(resolve(root, 'motion'), {recursive: true});
   await mkdir(resolve(root, 'brands'), {recursive: true});
+  await mkdir(resolve(root, 'icons'), {recursive: true});
   await writeFile(resolve(root, 'motion/manifest.json'), JSON.stringify({version: 1, assets: motion}));
   await writeFile(resolve(root, 'brands/manifest.json'), JSON.stringify({version: 1, assets: brands}));
+  await writeFile(resolve(root, 'icons/manifest.json'), JSON.stringify({version: 1, assets: icons}));
   await writeFile(resolve(root, 'motion/agent-pulse.json'), JSON.stringify(lottie));
   await writeFile(resolve(root, 'brands/acme.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1z"/></svg>');
+  if (icons.length > 0) {
+    await writeFile(resolve(root, 'icons/custom-standard.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1z"/></svg>');
+  }
   return root;
 };
 
@@ -81,6 +89,7 @@ describe('asset registry validation', () => {
   it('loads pure-vector local assets and resolves exact aliases', async () => {
     const registry = await loadAssetRegistry(await createRegistry());
     expect(registry.motionAssets.map(({id}) => id)).toEqual(['agent-pulse']);
+    expect(registry.iconAssets).toEqual([]);
     expect(brandAssetForLabel(registry, 'ACME CORP')?.id).toBe('acme');
     expect(registry.warnings).toEqual([]);
   });
@@ -120,5 +129,34 @@ describe('asset registry validation', () => {
     )).toEqual([
       'Expression fixture contains a Lottie expression and requires manual flicker review.',
     ]);
+  });
+
+  it('requires scene keywords before selecting a broad-motif motion asset', async () => {
+    const registry = await loadAssetRegistry(await createRegistry());
+    expect(motionAssetForScene(registry, 'ai-agent', 'An agent uses a tool.'))
+      .toMatchObject({id: 'agent-pulse'});
+    expect(motionAssetForScene(registry, 'ai-agent', 'A hardware standard connects CPUs.'))
+      .toBeUndefined();
+  });
+
+  it('loads a licensed local SVG icon with attribution metadata', async () => {
+    const registry = await loadAssetRegistry(await createRegistry({
+      icons: [{
+        id: 'custom-standard',
+        keywords: ['hardware standard'],
+        file: 'icons/custom-standard.svg',
+        sourceUrl: 'https://example.com/icon',
+        creator: 'Fixture creator',
+        license: 'Attribution license',
+        licenseUrl: 'https://example.com/license',
+        attributionRequired: true,
+        attribution: 'Icon by Fixture creator',
+        colorPolicy: 'monochrome-allowed',
+      }],
+    }));
+    expect(registry.iconAssets[0]).toMatchObject({
+      id: 'custom-standard',
+      attributionRequired: true,
+    });
   });
 });
