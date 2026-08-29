@@ -10,9 +10,9 @@ import {
 } from 'remotion';
 import type {
   RenderProfile,
+  RenderableVisualScene,
   SelectedMotionAsset,
   TechnologyBrandIcon,
-  TimedNarrationScene,
   VideoPalette,
   VisualClip,
 } from '../types.js';
@@ -159,7 +159,7 @@ const ItemChip = ({
 );
 
 const assetForScene = (
-  scene: TimedNarrationScene,
+  scene: RenderableVisualScene,
   assets: Record<string, SelectedMotionAsset>,
 ): SelectedMotionAsset | undefined => scene.visual.assetId
   ? assets[scene.visual.assetId]
@@ -174,7 +174,7 @@ const AgentWorkflow = ({
   motionAssets: Record<string, SelectedMotionAsset>;
   palette: VideoPalette;
   profile: RenderProfile;
-  scene: TimedNarrationScene;
+  scene: RenderableVisualScene;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
@@ -187,11 +187,11 @@ const AgentWorkflow = ({
     : scene.secondaryItemTimings[index - scene.primaryItems.length]?.startMs ?? 0;
   const activeBeat = Math.max(
     0,
-    scene.beats.findLastIndex(({startMs}) => frame >= Math.round((startMs / 1_000) * fps)),
+    scene.activityCues.findLastIndex(({startMs}) => frame >= Math.round((startMs / 1_000) * fps)),
   );
   const travel = interpolate(
     frame,
-    [Math.round((scene.beats[activeBeat]?.startMs ?? 0) / 1_000 * fps), Math.round(((scene.beats[activeBeat]?.startMs ?? 0) / 1_000) * fps) + fps],
+    [Math.round((scene.activityCues[activeBeat]?.startMs ?? 0) / 1_000 * fps), Math.round(((scene.activityCues[activeBeat]?.startMs ?? 0) / 1_000) * fps) + fps],
     [0, 1],
     clamp,
   );
@@ -353,7 +353,7 @@ const AgentWorkflow = ({
               maxHeight={vertical ? 115 : 155}
               maxLines={3}
               maxWidth={vertical ? 760 : 560}
-              text={scene.beats[activeBeat]?.phrases.map(({text}) => text).join(' ') ?? scene.reason}
+              text={scene.activityCues[activeBeat]?.text ?? scene.reason}
             />
           </div>
           <div style={{...panelStyle(theme.accents.secondary), borderRadius: 28, padding: vertical ? 26 : 30}}>
@@ -384,7 +384,7 @@ const BrandShowcase = ({
 }: {
   palette: VideoPalette;
   profile: RenderProfile;
-  scene: TimedNarrationScene;
+  scene: RenderableVisualScene;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
@@ -453,7 +453,7 @@ const NetworkMap = ({
 }: {
   palette: VideoPalette;
   profile: RenderProfile;
-  scene: TimedNarrationScene;
+  scene: RenderableVisualScene;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
@@ -582,7 +582,7 @@ const MetricFocus = ({
 }: {
   palette: VideoPalette;
   profile: RenderProfile;
-  scene: TimedNarrationScene;
+  scene: RenderableVisualScene;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
@@ -650,7 +650,7 @@ const IconSpotlight = ({
   motionAssets: Record<string, SelectedMotionAsset>;
   palette: VideoPalette;
   profile: RenderProfile;
-  scene: TimedNarrationScene;
+  scene: RenderableVisualScene;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
@@ -834,7 +834,7 @@ const ImageFocus = ({
   foregroundAssets: Record<string, string>;
   palette: VideoPalette;
   profile: RenderProfile;
-  scene: TimedNarrationScene;
+  scene: RenderableVisualScene;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
@@ -916,7 +916,7 @@ const DataVisualizationView = ({
 }: {
   palette: VideoPalette;
   profile: RenderProfile;
-  scene: TimedNarrationScene;
+  scene: RenderableVisualScene;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
@@ -1096,7 +1096,7 @@ const CinematicSceneFrame = ({
   scene,
 }: {
   children: ReactNode;
-  scene: TimedNarrationScene;
+  scene: RenderableVisualScene;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
@@ -1129,7 +1129,7 @@ export const NarratedVisualLayer = ({
   motionAssets: Record<string, SelectedMotionAsset>;
   palette: VideoPalette;
   profile: RenderProfile;
-  scene: TimedNarrationScene;
+  scene: RenderableVisualScene;
   technologyIcons: Record<string, TechnologyBrandIcon>;
 }) => {
   if (scene.visual.kind === 'diagram') {

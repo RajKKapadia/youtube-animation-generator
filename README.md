@@ -1,6 +1,6 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, optional cited web research can enrich narrated sources, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Narrated videos combine deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, and curated local Lottie assets. They retain beat-aligned phrase captions, speech-aligned reveals, summary-aware cinematic palettes, optional subtle voice expressions, and an optional publish kit with YouTube metadata plus code-native covers.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, optional cited web research can enrich narrated sources, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Both video workflows support deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, curated local Lottie assets, coherent cinematic palettes, and optional scene backgrounds. Subtitle inputs remain separate editor-ready clips; they never synthesize or edit audio.
 
 The current CLI supports three workflows:
 
@@ -60,11 +60,14 @@ summary-video/summary.backgrounds/
 
 With `--aspect-ratio both`, `summary-9x16.mp4` is rendered from the same narration, voiceover, and sample-derived timeline.
 
-Subtitle input keeps its existing editor-oriented output names. Vertical files insert `-9x16` before the extension, and manifests are version 2:
+Subtitle input keeps its existing editor-oriented output names. Vertical files insert `-9x16` before the extension, and enriched placement manifests are version 3:
 
 ```text
 /videos/animations/
 ├── episode.animation-plan.json
+├── episode.media/                 # selected files copied from sibling images/
+├── episode.generated-visuals/     # optional foreground cache and manifest
+├── episode.backgrounds/           # optional generated backdrop cache
 ├── episode.animations.json
 ├── episode.animations-9x16.json
 ├── 00h04m12s-01-process-flow.mp4
@@ -349,7 +352,27 @@ pnpm run animations episode.srt --plan-only
 pnpm run animations --render-plan animations/episode.animation-plan.json
 ```
 
-New overlay plans speech-align visible items to subtitle cues. Saved version-1 plans remain compatible and fall back to evenly distributed reveals when item timings are absent. Version-2 output manifests add `aspectRatio`, `width`, and `height` while landscape filenames remain unchanged.
+New overlay plans speech-align visible items to subtitle cues. Saved version-1 plans remain compatible and fall back to evenly distributed reveals when item timings are absent. Version-3 output manifests retain `aspectRatio`, `width`, and `height` and add palette, captions, scene background, and asset-credit metadata while landscape filenames remain unchanged.
+
+Version-2 subtitle plans select one palette and can use all narrated visual treatments. Put relevant PNG, JPEG, or WebP files in an `images/` directory beside the subtitle file; each selected image is copied once into the plan output for deterministic rerenders. Exact chart values, brand names, metrics, and generated-image evidence must occur in the selected cue range. An unsupported optional treatment falls back to a diagram with a saved warning instead of rendering invented information.
+
+Opt into exact cue captions and an opaque ambient H.264 clip:
+
+```bash
+pnpm run animations episode.srt \
+  --captions on \
+  --scene-background ambient
+```
+
+Generate and cache a background for every selected clip and orientation:
+
+```bash
+pnpm run animations episode.srt \
+  --scene-background generated \
+  --aspect-ratio both
+```
+
+Both background modes imply `--format h264` when no format is supplied. Explicit `green`, `prores`, and `webm` remain background-off editor-overlay formats. Generated foreground illustrations are independently opt-in with `--generated-visuals auto`, limited to two clips, relevance-validated, and reusable from cache.
 
 ## Native vertical layouts
 
@@ -376,8 +399,15 @@ Landscape remains 1920×1080 and preserves the original layouts.
 --version                         Show the CLI version
 
 Subtitle overlays:
---format <prores|webm|green>      Output format (default: green)
+--format <prores|webm|green|h264> Output format (green by default; h264 for scene backgrounds)
 --max-suggestions <number>        Maximum overlays (default: 6; max: 12)
+--captions <on|off>               Exact cue captions; default: off
+--scene-background <mode>         off, ambient, or generated; default: off
+--generated-visuals <off|auto>    Grounded foreground generation; default: off
+--regenerate-visuals              Refresh generated foreground assets; requires auto
+--regenerate-backgrounds          Refresh generated backdrops; requires generated mode
+--image-model <model>             Default: OPENAI_IMAGE_MODEL or gpt-image-2
+--image-quality <quality>         low, medium, or high; default: medium
 
 Narrated videos:
 --supertonic-assets-dir <path>    Default: models/supertonic-3
@@ -409,19 +439,21 @@ Subtitle inputs default to an adjacent `animations/` directory. Narrated source 
 - `timeline` — ordered stages or events
 - `callout` — definitions, concepts, and important statistics
 
-These four layouts remain available under `visual.kind: "diagram"`. Narrated videos add five responsive treatments:
+These four layouts remain available under `visual.kind: "diagram"`. Narrated videos and version-2 subtitle plans also support:
 
 - `agent-workflow` — one central agent, surrounding tools, and beat-driven request/result activity
 - `brand-showcase` — exact product or company marks with staggered entrances and very slow drift
 - `network-map` — hub-and-spoke relationships, drawn edges, and one traveling pulse
 - `metric-focus` — an exact source-backed number or claim with count-up and supporting context
 - `icon-spotlight` — one dominant semantic, brand, or local Lottie visual with supporting chips
+- `image-focus` — one relevant local or grounded generated foreground image with cinematic pan, drift, or push-in
+- `data-visualization` — exact grouped bars or metric cards with renderer-computed derived annotations
 
-All treatments use the same motion grammar: beat-triggered entrances, stable hold frames, small ambient movement, and one dominant moving element. They do not use random motion, constant bouncing, rapid spinning, or effects behind the protected caption lane.
+All treatments use the same motion grammar: narration-beat or subtitle-cue entrances, stable hold frames, small ambient movement, and one dominant moving element. They do not use random motion, constant bouncing, rapid spinning, or effects behind the protected caption lane.
 
 Titles and labels are measured and fitted into their bounds. Icon resolution is deterministic: an explicit, relevance-checked scene icon is tried first; an exact Simple Icons name or explicit brand alias is tried second; an exact entry from `assets/brands/manifest.json` is tried third; and a conservative Lucide label fallback is used last. The built-in catalog includes standards/protocols, compatibility, CPUs, accelerators, memory, circuits, AI models, and the existing software-system concepts. Brand showcases do not use fuzzy matching. Missing or ambiguous logos produce a planning warning; brand names absent from the source and source-unsupported metric numbers are rejected before the plan is saved. The renderer never fabricates a mark or silently substitutes another company. Original logo colors are preserved unless a curated manifest explicitly allows monochrome use.
 
-Narrated plan files are version 6 and store one summary-aware palette plus the scene-level visual treatment. Research metadata is an additive optional version-6 field, so plans created without research remain unchanged. Version-5 plans retain their saved visual treatment and normalize to version 6 without foreground media; version-4 and earlier compatibility behavior remains intact. Subtitle animation plans remain version 1, and subtitle output manifests remain version 2.
+Narrated plan files remain version 6. New subtitle animation plans are version 2 and persist the same palette, treatment, icons, media, captions, background prompts, warnings, and required asset credits; subtitle output manifests are version 3 and record the render-time caption/background settings. Version-1 subtitle plans normalize to cyan diagrams and render unchanged with the default caption/background-off options. Captions require regeneration because legacy files do not contain original per-cue timing.
 
 Ambient backgrounds are generated entirely in Remotion from palette-driven deterministic gradients, moving light fields, a subtle grid, and a vignette. The same palette drives diagram accents and new publish covers. Generated backgrounds use native `2048×1152` and `1152×2048` JPEG assets, receive the stored palette direction in their prompt, add a slow pan/zoom plus neutral readability overlays, and never silently fall back to ambient when generation was requested. Changing the palette changes the prompt hash, so cached images cannot silently retain the previous color family.
 
@@ -439,7 +471,7 @@ Asset intake workflow:
 
 1. Obtain a logo SVG from the company's official brand or press kit, or obtain an SVG/Lottie from an approved source under a license that covers the intended video use. Never use an AI-generated company logo.
 2. Put the selected file under `assets/brands/`, `assets/icons/`, or `assets/motion/`. For a custom animation, Jitter, Lottielab, or SVGator can export Lottie from controlled SVG artwork.
-3. Add complete provenance, semantic keywords, attribution, and playback/color metadata to the matching manifest. Mark external icons that require per-video credit with `attributionRequired: true`; used credits are persisted in the narration plan and appended to generated YouTube descriptions and publish Markdown. For third-party assets, also add any required notice to `THIRD_PARTY_NOTICES.md`.
+3. Add complete provenance, semantic keywords, attribution, and playback/color metadata to the matching manifest. Mark external icons that require per-video credit with `attributionRequired: true`; used credits are persisted in narrated plans and version-2 subtitle plans, copied into subtitle placement manifests, and appended to generated narrated publish Markdown. For third-party assets, also add any required notice to `THIRD_PARTY_NOTICES.md`.
 4. Run `pnpm assets:validate`, `pnpm test`, `pnpm check`, and `pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixtures` before assigning the asset ID to a scene.
 5. Inspect early, middle, and final frames in both orientations, then render the representative narrated MP4 fixture to check for flicker and caption collisions.
 
@@ -465,10 +497,11 @@ Render early, middle, and completed stress-test frames for all four templates an
 
 ```bash
 pnpm fixtures:layouts -- /tmp/youtube-animation-layout-fixtures
+pnpm fixtures:subtitle-visuals -- /tmp/youtube-animation-subtitle-visual-fixtures
 pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixtures
 ```
 
-Together, these commands cover the four diagram templates and all five narrated treatments with early, middle, and completed states in both orientations. The fixtures use long titles, six items, and a caption lane. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping, logo distortion, Lottie flicker, and unsafe positioning.
+Together, these commands cover the four diagram templates and all eight visual kinds with early, middle, and completed states in both orientations. The subtitle fixture also covers caption-off green output, caption-on ambient output, and a mock generated background without an API call. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping, logo distortion, Lottie flicker, chart readability, and unsafe positioning.
 
 Render narrated MP4 fixtures with captions in both orientations. The second command uses local mock artwork to exercise the generated-image rendering path without an API call:
 

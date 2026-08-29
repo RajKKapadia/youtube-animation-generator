@@ -113,7 +113,7 @@ describe('narrated CLI plan-only path', () => {
     ).rejects.toThrow('--aspect-ratio must be one of');
   });
 
-  it('validates narrated visual options and keeps them out of overlay workflows', async () => {
+  it('validates visual options and keeps research out of overlay workflows', async () => {
     await expect(
       runCli(['create', 'missing.md', '--captions', 'sometimes']),
     ).rejects.toThrow('--captions must be one of: on, off');
@@ -133,18 +133,41 @@ describe('narrated CLI plan-only path', () => {
       runCli(['create', 'missing.md', '--refresh-research']),
     ).rejects.toThrow('--refresh-research requires --research auto or required');
     await expect(
-      runCli(['missing.srt', '--scene-background', 'generated']),
-    ).rejects.toThrow('Narrated visual options cannot be used with subtitle overlays');
+      runCli(['missing.srt', '--scene-background', 'generated', '--format', 'green']),
+    ).rejects.toThrow('Ambient and generated subtitle backgrounds require --format h264');
     await expect(
       runCli(['missing.srt', '--research', 'auto']),
-    ).rejects.toThrow('Narrated visual options cannot be used with subtitle overlays');
+    ).rejects.toThrow('Research options cannot be used with subtitle overlays');
   });
 
-  it('documents the v0.7.0 narrated and publish-kit options', async () => {
+  it('requires regeneration before enabling captions on a version-1 overlay plan', async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), 'legacy-overlay-captions-'));
+    temporaryDirectories.push(directory);
+    const planPath = resolve(directory, 'legacy.animation-plan.json');
+    await writeFile(planPath, JSON.stringify({
+      version: 1,
+      sourceSubtitle: resolve(directory, 'legacy.srt'),
+      generatedAt: '2026-08-22T00:00:00.000Z',
+      model: 'fixture',
+      clips: [{
+        id: 'animation-01', startCue: 1, endCue: 1, sourceStartMs: 0,
+        sourceEndMs: 2_000, durationMs: 2_000, transcript: 'Queue processing.',
+        template: 'callout', title: 'Queue', primaryItems: ['Queue'], secondaryItems: [],
+        leftLabel: '', rightLabel: '', reason: 'Legacy fixture.',
+      }],
+    }));
+    await expect(runCli([
+      '--render-plan', planPath, '--plan-only', '--captions', 'on',
+    ])).rejects.toThrow('Regenerate it from the original SRT/VTT');
+  });
+
+  it('documents the v0.8.0 visual-parity and publish-kit options', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     await runCli(['--help']);
     const output = String(log.mock.calls[0]?.[0]);
-    expect(output).toContain('youtube-animations 0.7.0');
+    expect(output).toContain('youtube-animations 0.8.0');
+    expect(output).toContain('--format <prores|webm|green|h264>');
+    expect(output).toContain('off, ambient, or generated');
     expect(output).toContain('--voice <auto|M1..M5|F1..F5>');
     expect(output).toContain('--captions <on|off>');
     expect(output).toContain('--scene-background <mode>');

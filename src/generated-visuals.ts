@@ -15,11 +15,11 @@ import {
   imageQualitySchema,
   renderAspectRatioSchema,
   type AspectRatioSelection,
-  type DraftNarratedPlan,
   type GeneratedVisualDirection,
   type ImageQuality,
+  type NarratedMediaAsset,
+  type NarratedSceneVisual,
   type RenderAspectRatio,
-  type TimedNarratedPlan,
   type VideoPalette,
 } from './types.js';
 import {videoPaletteFor} from './visual-palettes.js';
@@ -239,7 +239,11 @@ export interface MaterializeGeneratedVisualsOptions {
   generateImage?: GenerateSceneImage;
   model: string;
   outputDirectory: string;
-  plan: DraftNarratedPlan | TimedNarratedPlan;
+  plan: {
+    mediaAssets: NarratedMediaAsset[];
+    palette: VideoPalette;
+    scenes: Array<{id: string; visual: NarratedSceneVisual}>;
+  };
   quality: ImageQuality;
   regenerate: boolean;
   stem: string;

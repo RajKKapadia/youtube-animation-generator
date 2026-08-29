@@ -12,7 +12,7 @@ import {
 } from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {basename, dirname, extname, resolve} from 'node:path';
-import type {DraftNarratedPlan, TimedNarratedPlan} from './types.js';
+import type {NarratedMediaAsset} from './types.js';
 
 const MAX_LOCAL_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -124,7 +124,7 @@ export const stageSelectedLocalImages = async ({
 }: {
   catalog: DiscoveredLocalImage[];
   outputDirectory: string;
-  plan: DraftNarratedPlan;
+  plan: {mediaAssets: NarratedMediaAsset[]};
   stem: string;
 }): Promise<void> => {
   const requested = plan.mediaAssets.filter((asset) => asset.source === 'local');
@@ -170,7 +170,7 @@ export const stageSelectedLocalImages = async ({
     if (movedExisting && !await pathExists(finalDirectory)) {
       await rename(backupDirectory, finalDirectory);
     }
-    throw new Error('Could not transactionally copy selected local narrated-video images.', {cause: error});
+    throw new Error('Could not transactionally copy selected local video images.', {cause: error});
   }
 };
 
@@ -212,7 +212,7 @@ export const mirrorNarratedMediaCaches = async ({
   stem,
   targetDirectory,
 }: {
-  plan: DraftNarratedPlan | TimedNarratedPlan;
+  plan: {mediaAssets: NarratedMediaAsset[]};
   sourceDirectory: string;
   stem: string;
   targetDirectory: string;

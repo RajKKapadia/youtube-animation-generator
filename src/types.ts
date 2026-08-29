@@ -7,7 +7,10 @@ import {
   videoPaletteSchema,
   type VideoPalette,
 } from './visual-palettes.js';
-import {chartDatumGroundingIssue} from './source-grounding.js';
+import {
+  chartDatumGroundingIssue,
+  sourceContainsGroundedText,
+} from './source-grounding.js';
 
 export {narrationExpressionSchema, videoPaletteSchema};
 export type {NarrationExpression, VideoPalette};
@@ -249,7 +252,7 @@ export const animationClipSchema = animationContentSchema.extend({
   );
 });
 
-export type AnimationClip = z.infer<typeof animationClipSchema>;
+export type LegacyAnimationClip = z.infer<typeof animationClipSchema>;
 
 export const visualClipSchema = visualContentSchema.extend({
   id: z.string().min(1),
@@ -261,7 +264,7 @@ export const visualClipSchema = visualContentSchema.extend({
 
 export type VisualClip = z.infer<typeof visualClipSchema>;
 
-export const savedPlanSchema = z.object({
+const legacySavedPlanSchema = z.object({
   version: z.literal(1),
   sourceSubtitle: z.string().min(1),
   generatedAt: z.string().min(1),
@@ -269,8 +272,6 @@ export const savedPlanSchema = z.object({
   planningWarnings: z.array(z.string().min(1)).optional(),
   clips: z.array(animationClipSchema),
 });
-
-export type SavedPlan = z.infer<typeof savedPlanSchema>;
 
 const narrationTextSchema = z.string().min(1).max(120).refine(
   (text) => !/<(?:laugh|breath|sigh)>/i.test(text),
@@ -622,6 +623,268 @@ export const DEFAULT_NARRATED_SCENE_VISUAL: NarratedSceneVisual = {
   motif: 'none',
   assetId: null,
 };
+
+export const subtitleCaptionCueSchema = z.object({
+  cueIndex: z.number().int().positive(),
+  startMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().positive(),
+  text: z.string().min(1),
+});
+
+export type SubtitleCaptionCue = z.infer<typeof subtitleCaptionCueSchema>;
+
+export const subtitleAnimationSuggestionSchema = animationContentSchema.extend({
+  primaryItemStartCues: z.array(z.number().int().positive()).max(6),
+  secondaryItemStartCues: z.array(z.number().int().positive()).max(6),
+  backgroundPrompt: z.string().min(1).max(600),
+  visual: narratedVisualSuggestionSchema,
+  icons: sceneIconSelectionSchema,
+}).superRefine((suggestion, context) => {
+  for (const [field, itemCount] of [
+    ['primary', suggestion.primaryItems.length],
+    ['secondary', suggestion.secondaryItems.length],
+  ] as const) {
+    if (suggestion.icons[field].length !== itemCount) {
+      context.addIssue({
+        code: 'custom',
+        message: `${field} icon selections must contain one entry for every matching visual item.`,
+        path: ['icons', field],
+      });
+    }
+  }
+  if (suggestion.visual.kind === 'icon-spotlight' && !suggestion.icons.focal) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Icon spotlight clips require a focal icon selection.',
+      path: ['icons', 'focal'],
+    });
+  }
+});
+
+export type SubtitleAnimationSuggestion = z.infer<
+  typeof subtitleAnimationSuggestionSchema
+>;
+
+export const subtitleAnimationPlanResponseSchema = z.object({
+  palette: videoPaletteSchema,
+  animations: z.array(subtitleAnimationSuggestionSchema).max(12),
+});
+
+export const subtitleAnimationClipSchema = z.intersection(
+  animationClipSchema,
+  z.object({
+    backgroundPrompt: z.string().min(1).max(600),
+    visual: narratedSceneVisualSchema,
+    icons: sceneIconSelectionSchema.default(EMPTY_SCENE_ICON_SELECTION),
+    captionCues: z.array(subtitleCaptionCueSchema),
+  }),
+);
+
+export type AnimationClip = z.infer<typeof subtitleAnimationClipSchema>;
+
+const addSubtitlePlanIssues = (
+  plan: {
+    clips: AnimationClip[];
+    mediaAssets: NarratedMediaAsset[];
+  },
+  context: z.core.$RefinementCtx,
+): void => {
+  const mediaById = new Map(plan.mediaAssets.map((asset) => [asset.id, asset]));
+  if (mediaById.size !== plan.mediaAssets.length) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Subtitle media asset ids must be unique.',
+      path: ['mediaAssets'],
+    });
+  }
+  const usedMediaIds = new Set<string>();
+  let generatedCount = 0;
+  for (const [clipIndex, clip] of plan.clips.entries()) {
+    if (clip.template === 'comparison' && clip.secondaryItems.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Comparison clips require secondary items.',
+        path: ['clips', clipIndex, 'secondaryItems'],
+      });
+    }
+    for (const [field, itemCount] of [
+      ['primary', clip.primaryItems.length],
+      ['secondary', clip.secondaryItems.length],
+    ] as const) {
+      if (clip.icons[field].length !== 0 && clip.icons[field].length !== itemCount) {
+        context.addIssue({
+          code: 'custom',
+          message: `${field} icon selections must be empty for legacy fallback or match the item count.`,
+          path: ['clips', clipIndex, 'icons', field],
+        });
+      }
+    }
+    let previousCaptionStart = -1;
+    for (const [captionIndex, caption] of clip.captionCues.entries()) {
+      if (
+        caption.cueIndex < clip.startCue ||
+        caption.cueIndex > clip.endCue ||
+        caption.startMs < previousCaptionStart ||
+        caption.startMs + caption.durationMs > clip.durationMs
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Caption cues must be chronological and inside the clip cue/time range.',
+          path: ['clips', clipIndex, 'captionCues', captionIndex],
+        });
+      }
+      previousCaptionStart = caption.startMs;
+    }
+    if (clip.visual.kind === 'brand-showcase') {
+      for (const [labelIndex, label] of [
+        ...clip.primaryItems,
+        ...clip.secondaryItems,
+      ].entries()) {
+        if (!sourceContainsGroundedText(clip.transcript, label)) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Brand showcase labels must occur exactly in the selected subtitle cues.',
+            path: ['clips', clipIndex, labelIndex < clip.primaryItems.length ? 'primaryItems' : 'secondaryItems', labelIndex < clip.primaryItems.length ? labelIndex : labelIndex - clip.primaryItems.length],
+          });
+        }
+      }
+    }
+    if (clip.visual.kind === 'metric-focus') {
+      const sourceNumbers = new Set(
+        (clip.transcript.match(/[+-]?\d[\d,]*(?:\.\d+)?\s*%?/gu) ?? [])
+          .map((value) => value.replaceAll(',', '').replaceAll(' ', '')),
+      );
+      for (const claim of clip.primaryItems[0]?.match(/[+-]?\d[\d,]*(?:\.\d+)?\s*%?/gu) ?? []) {
+        if (!sourceNumbers.has(claim.replaceAll(',', '').replaceAll(' ', ''))) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Metric-focus numbers must occur exactly in the selected subtitle cues.',
+            path: ['clips', clipIndex, 'primaryItems', 0],
+          });
+        }
+      }
+    }
+    if (clip.visual.kind === 'data-visualization') {
+      for (const [datumIndex, datum] of clip.visual.chart.data.entries()) {
+        const issue = chartDatumGroundingIssue(clip.transcript, datum);
+        if (issue) {
+          context.addIssue({
+            code: 'custom',
+            message: issue,
+            path: ['clips', clipIndex, 'visual', 'chart', 'data', datumIndex],
+          });
+        }
+      }
+    }
+    if (clip.visual.kind !== 'image-focus') continue;
+    const media = mediaById.get(clip.visual.mediaId);
+    if (!media) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Image-focus clips must reference a saved media asset.',
+        path: ['clips', clipIndex, 'visual', 'mediaId'],
+      });
+      continue;
+    }
+    if (media.source !== clip.visual.source) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Image-focus source must match its saved media asset.',
+        path: ['clips', clipIndex, 'visual', 'source'],
+      });
+    }
+    if (usedMediaIds.has(media.id)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'A subtitle media asset can be used by only one clip.',
+        path: ['clips', clipIndex, 'visual', 'mediaId'],
+      });
+    }
+    usedMediaIds.add(media.id);
+    if (media.source === 'generated') {
+      generatedCount += 1;
+      if (!sourceContainsGroundedText(clip.transcript, media.direction.sourceEvidence)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Generated visual evidence must be an exact selected-cue excerpt.',
+          path: ['mediaAssets', plan.mediaAssets.indexOf(media), 'direction', 'sourceEvidence'],
+        });
+      }
+      for (const [anchorIndex, anchor] of media.direction.sourceAnchors.entries()) {
+        if (!sourceContainsGroundedText(clip.transcript, anchor)) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Generated visual anchors must occur in the selected subtitle cues.',
+            path: ['mediaAssets', plan.mediaAssets.indexOf(media), 'direction', 'sourceAnchors', anchorIndex],
+          });
+        }
+      }
+      if (!sourceContainsGroundedText(clip.transcript, media.direction.narrationBeat)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Generated visual narrationBeat must match selected subtitle text.',
+          path: ['mediaAssets', plan.mediaAssets.indexOf(media), 'direction', 'narrationBeat'],
+        });
+      }
+    }
+  }
+  if (generatedCount > 2) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Subtitle plans can contain at most two generated foreground clips.',
+      path: ['clips'],
+    });
+  }
+};
+
+export const subtitleSavedPlanV2Schema = z.object({
+  version: z.literal(2),
+  sourceSubtitle: z.string().min(1),
+  generatedAt: z.string().min(1),
+  model: z.string().min(1),
+  palette: videoPaletteSchema,
+  planningWarnings: z.array(z.string().min(1)).optional(),
+  assetAttributions: z.array(assetAttributionSchema).max(12).default([]),
+  mediaAssets: z.array(narratedMediaAssetSchema).max(12).default([]),
+  clips: z.array(subtitleAnimationClipSchema),
+}).superRefine(addSubtitlePlanIssues);
+
+const normalizeLegacySavedPlan = (
+  plan: z.infer<typeof legacySavedPlanSchema>,
+) => subtitleSavedPlanV2Schema.parse({
+  version: 2,
+  sourceSubtitle: plan.sourceSubtitle,
+  generatedAt: plan.generatedAt,
+  model: plan.model,
+  palette: 'cyan',
+  planningWarnings: plan.planningWarnings,
+  assetAttributions: [],
+  mediaAssets: [],
+  clips: plan.clips.map((clip) => ({
+    ...clip,
+    backgroundPrompt: `Abstract low-detail technical atmosphere for ${clip.title}.`,
+    visual: DEFAULT_NARRATED_SCENE_VISUAL,
+    icons: EMPTY_SCENE_ICON_SELECTION,
+    captionCues: [],
+  })),
+});
+
+export const savedPlanSchema = z.union([
+  subtitleSavedPlanV2Schema,
+  legacySavedPlanSchema.transform(normalizeLegacySavedPlan),
+]);
+
+export type SavedPlan = z.infer<typeof savedPlanSchema>;
+
+export interface RenderableVisualScene extends VisualContent {
+  id: string;
+  durationMs: number;
+  visual: NarratedSceneVisual;
+  icons: SceneIconSelection;
+  primaryItemTimings: VisualItemTiming[];
+  secondaryItemTimings: VisualItemTiming[];
+  activityCues: Array<{startMs: number; text: string}>;
+}
 
 const addNarrationSceneIssues = (
   scene: VisualContent & {beats: NarrationBeat[]; icons?: SceneIconSelection},
@@ -1556,6 +1819,9 @@ export type CaptionMode = z.infer<typeof captionModeSchema>;
 export const sceneBackgroundModeSchema = z.enum(['ambient', 'generated']);
 export type SceneBackgroundMode = z.infer<typeof sceneBackgroundModeSchema>;
 
+export const clipBackgroundModeSchema = z.enum(['off', 'ambient', 'generated']);
+export type ClipBackgroundMode = z.infer<typeof clipBackgroundModeSchema>;
+
 export const generatedVisualModeSchema = z.enum(['off', 'auto']);
 export type GeneratedVisualMode = z.infer<typeof generatedVisualModeSchema>;
 
@@ -1623,6 +1889,24 @@ export const renderInputSchema = z.object({
 
 export type RenderInput = z.infer<typeof renderInputSchema>;
 
+export const subtitleRenderInputSchema = z.object({
+  clip: subtitleAnimationClipSchema,
+  background: renderBackgroundSchema,
+  captions: captionModeSchema,
+  sceneBackground: clipBackgroundModeSchema,
+  backgroundAsset: z.string().min(1).optional(),
+  foregroundAssets: z.record(z.string(), z.string().min(1)).default({}),
+  fps: z.number().int().positive(),
+  palette: videoPaletteSchema,
+  profile: renderProfileSchema,
+  technologyIcons: z.record(z.string(), technologyBrandIconSchema).default({}),
+  localBrandAssets: z.record(z.string(), localBrandAssetSchema).default({}),
+  localIconAssets: z.record(z.string(), localIconAssetSchema).default({}),
+  motionAssets: z.record(z.string(), selectedMotionAssetSchema).default({}),
+});
+
+export type SubtitleRenderInput = z.infer<typeof subtitleRenderInputSchema>;
+
 export const narratedRenderInputSchema = z.object({
   plan: timedNarratedPlanSchema,
   captions: captionModeSchema,
@@ -1640,24 +1924,28 @@ export const narratedRenderInputSchema = z.object({
 
 export type NarratedRenderInput = z.infer<typeof narratedRenderInputSchema>;
 
-export type OutputFormat = 'prores' | 'webm' | 'green';
+export type OutputFormat = 'prores' | 'webm' | 'green' | 'h264';
 
 export interface ManifestClip extends AnimationClip {
   file: string;
 }
 
 export interface OutputManifest {
-  version: 2;
+  version: 3;
   sourceSubtitle: string;
   generatedAt: string;
   format: OutputFormat;
+  palette: VideoPalette;
+  captions: CaptionMode;
+  sceneBackground: ClipBackgroundMode;
+  assetAttributions: AssetAttribution[];
   aspectRatio: RenderAspectRatio;
   width: number;
   height: number;
   clips: ManifestClip[];
 }
 
-export const outputManifestSchema = z.object({
+const outputManifestV2Schema = z.object({
   version: z.literal(2),
   sourceSubtitle: z.string().min(1),
   generatedAt: z.string().min(1),
@@ -1667,3 +1955,23 @@ export const outputManifestSchema = z.object({
   height: z.number().int().positive(),
   clips: z.array(animationClipSchema.extend({file: z.string().min(1)})),
 });
+
+const outputManifestV3Schema = z.object({
+  version: z.literal(3),
+  sourceSubtitle: z.string().min(1),
+  generatedAt: z.string().min(1),
+  format: z.enum(['prores', 'webm', 'green', 'h264']),
+  palette: videoPaletteSchema,
+  captions: captionModeSchema,
+  sceneBackground: clipBackgroundModeSchema,
+  assetAttributions: z.array(assetAttributionSchema).max(12),
+  aspectRatio: renderAspectRatioSchema,
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  clips: z.array(subtitleAnimationClipSchema.and(z.object({file: z.string().min(1)}))),
+});
+
+export const outputManifestSchema = z.union([
+  outputManifestV3Schema,
+  outputManifestV2Schema,
+]);
