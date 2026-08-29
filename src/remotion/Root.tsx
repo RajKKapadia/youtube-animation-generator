@@ -3,15 +3,18 @@ import {Composition} from 'remotion';
 import {AnimationClip} from './AnimationClip.js';
 import {NarratedVideo} from './NarratedVideo.js';
 import {NarratedThumbnail} from './NarratedThumbnail.js';
+import {SubtitleClip} from './SubtitleClip.js';
 import type {
   NarratedRenderInput,
   PublishCoverInput,
   RenderInput,
+  SubtitleRenderInput,
 } from '../types.js';
 import {
   narratedRenderInputSchema,
   publishCoverInputSchema,
   renderInputSchema,
+  subtitleRenderInputSchema,
 } from '../types.js';
 import {RENDER_PROFILES} from '../render-profile.js';
 import {PUBLISH_COVER_PROFILES} from '../publish-profile.js';
@@ -46,6 +49,51 @@ const defaultProps: RenderInput = {
 
 const calculateMetadata: CalculateMetadataFunction<RenderInput> = async ({props}) => {
   const input = renderInputSchema.parse(props);
+  return {
+    durationInFrames: Math.max(1, Math.ceil((input.clip.durationMs / 1_000) * input.fps)),
+    fps: input.fps,
+    width: input.profile.width,
+    height: input.profile.height,
+  };
+};
+
+const defaultSubtitleProps: SubtitleRenderInput = {
+  ...defaultProps,
+  background: 'green',
+  captions: 'off',
+  sceneBackground: 'off',
+  foregroundAssets: {},
+  localBrandAssets: {},
+  localIconAssets: {},
+  motionAssets: {},
+  clip: {
+    ...defaultProps.clip,
+    startCue: 1,
+    endCue: 1,
+    sourceStartMs: 0,
+    sourceEndMs: 6_000,
+    transcript: 'A request moves through a queue.',
+    primaryItemTimings: [
+      {cueIndex: 1, startMs: 0},
+      {cueIndex: 1, startMs: 0},
+      {cueIndex: 1, startMs: 2_000},
+      {cueIndex: 1, startMs: 4_000},
+      {cueIndex: 1, startMs: 4_000},
+    ],
+    secondaryItemTimings: [],
+    backgroundPrompt: 'Abstract request pipeline with flowing data trails.',
+    visual: {
+      kind: 'diagram',
+      motion: 'reveal',
+      motif: 'none',
+      assetId: null,
+    },
+    captionCues: [],
+  },
+};
+
+const calculateSubtitleMetadata: CalculateMetadataFunction<SubtitleRenderInput> = async ({props}) => {
+  const input = subtitleRenderInputSchema.parse(props);
   return {
     durationInFrames: Math.max(1, Math.ceil((input.clip.durationMs / 1_000) * input.fps)),
     fps: input.fps,
@@ -251,6 +299,16 @@ export const RemotionRoot = () => (
       height={1080}
       defaultProps={defaultProps}
       calculateMetadata={calculateMetadata}
+    />
+    <Composition
+      id="SubtitleClip"
+      component={SubtitleClip}
+      durationInFrames={180}
+      fps={30}
+      width={1920}
+      height={1080}
+      defaultProps={defaultSubtitleProps}
+      calculateMetadata={calculateSubtitleMetadata}
     />
     <Composition
       id="NarratedVideo"

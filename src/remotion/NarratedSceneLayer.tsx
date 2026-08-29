@@ -96,7 +96,7 @@ export const SceneBackdrop = ({
   asset?: string | undefined;
   mode: SceneBackgroundMode;
   palette: VideoPalette;
-  scene: TimedNarrationScene;
+  scene: Pick<TimedNarrationScene, 'id'>;
 }) => {
   if (mode === 'generated' && !asset) {
     throw new Error(`Generated background asset is missing for scene ${scene.id}.`);
@@ -198,21 +198,35 @@ export const captionPhraseAtMs = (
     currentMs < candidate.startMs + candidate.durationMs,
   );
 
-export const PhraseCaption = ({
+export interface TimedCaptionCue {
+  startMs: number;
+  durationMs: number;
+  text: string;
+}
+
+export const timedCaptionAtMs = (
+  cues: TimedCaptionCue[],
+  currentMs: number,
+) => cues.find((candidate) =>
+  currentMs >= candidate.startMs &&
+  currentMs < candidate.startMs + candidate.durationMs,
+);
+
+export const TimedCaptionLayer = ({
   captions,
+  cues,
   profile,
-  scene,
 }: {
   captions: CaptionMode;
+  cues: TimedCaptionCue[];
   profile: RenderProfile;
-  scene: TimedNarrationScene;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   if (captions === 'off') return null;
 
   const currentMs = (frame / fps) * 1_000;
-  const phrase = captionPhraseAtMs(scene, currentMs);
+  const phrase = timedCaptionAtMs(cues, currentMs);
   if (!phrase) return null;
 
   const phraseFrame = Math.round((phrase.startMs / 1_000) * fps);
@@ -285,3 +299,17 @@ export const PhraseCaption = ({
     </div>
   );
 };
+
+export const PhraseCaption = ({
+  captions,
+  profile,
+  scene,
+}: {
+  captions: CaptionMode;
+  profile: RenderProfile;
+  scene: TimedNarrationScene;
+}) => <TimedCaptionLayer
+  captions={captions}
+  cues={scene.beats.flatMap((beat) => beat.phrases)}
+  profile={profile}
+/>;

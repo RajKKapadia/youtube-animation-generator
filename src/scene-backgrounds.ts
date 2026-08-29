@@ -9,7 +9,6 @@ import {
   imageQualitySchema,
   renderAspectRatioSchema,
   type AspectRatioSelection,
-  type DraftNarrationScene,
   type ImageQuality,
   type RenderAspectRatio,
   type VideoPalette,
@@ -58,7 +57,7 @@ const safeFilenamePart = (value: string): string =>
   value.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'scene';
 
 export const sceneBackgroundPrompt = (
-  scene: Pick<DraftNarrationScene, 'backgroundPrompt' | 'title'>,
+  scene: {backgroundPrompt: string; title: string},
   aspectRatio: RenderAspectRatio,
   palette: VideoPalette,
 ): string => {
@@ -189,7 +188,7 @@ export interface MaterializeSceneBackgroundsOptions {
   palette: VideoPalette;
   quality: ImageQuality;
   regenerate: boolean;
-  scenes: DraftNarrationScene[];
+  scenes: Array<{backgroundPrompt: string; id: string; title: string}>;
   stem: string;
 }
 

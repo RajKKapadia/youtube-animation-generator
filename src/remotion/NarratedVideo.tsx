@@ -10,6 +10,18 @@ import {NarratedVisualLayer} from './NarratedVisualLayer.js';
 import {LocalBrandAssetsProvider} from './TechnologyBadge.js';
 import {LocalIconAssetsProvider} from './SemanticIcon.js';
 
+const renderableNarratedScene = (
+  scene: NarratedRenderInput['plan']['scenes'][number],
+) => ({
+  ...scene,
+  activityCues: scene.beats.map((beat) => ({
+    startMs: beat.startMs,
+    text: beat.phrases.map(({text}) => text).join(' '),
+  })),
+  primaryItemTimings: scene.primaryItemTimings.map(({startMs}) => ({startMs})),
+  secondaryItemTimings: scene.secondaryItemTimings.map(({startMs}) => ({startMs})),
+});
+
 export const NarratedVideo = ({
   audioFile,
   backgroundAssets,
@@ -62,7 +74,7 @@ export const NarratedVideo = ({
               motionAssets={motionAssets}
               palette={plan.palette}
               profile={profile}
-              scene={scene}
+              scene={renderableNarratedScene(scene)}
               technologyIcons={technologyIcons}
             />
             <PhraseCaption captions={captions} profile={profile} scene={scene} />

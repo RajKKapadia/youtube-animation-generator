@@ -1,19 +1,25 @@
 import {existsSync} from 'node:fs';
-import {mkdir} from 'node:fs/promises';
-import {dirname, resolve} from 'node:path';
+import {copyFile, mkdir, mkdtemp, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {basename, dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {bundle} from '@remotion/bundler';
 import {renderMedia, selectComposition} from '@remotion/renderer';
 import type {
   AspectRatioSelection,
   AnimationClip,
+  CaptionMode,
+  ClipBackgroundMode,
   ManifestClip,
   OutputFormat,
   RenderBackground,
   RenderProfile,
-  TechnologyBrandIcon,
+  SavedPlan,
 } from './types.js';
 import {aspectSuffix, profilesForSelection} from './render-profile.js';
+import type {GeneratedVisualAssets} from './generated-visuals.js';
+import type {SceneBackgroundAssets} from './scene-backgrounds.js';
+import {stageVisualRenderAssets, type StagedVisualAssets} from './visual-render-assets.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -49,6 +55,7 @@ const extensionForFormat = (format: OutputFormat): string => {
     case 'webm':
       return 'webm';
     case 'green':
+    case 'h264':
       return 'mp4';
   }
 };
@@ -67,34 +74,56 @@ export const filenameForClip = (
   format: OutputFormat,
   profile: RenderProfile = profilesForSelection('16:9')[0]!,
 ): string =>
-  `${timestampForFilename(clip.sourceStartMs)}-${String(index + 1).padStart(2, '0')}-${clip.template}${aspectSuffix(profile.aspectRatio)}.${extensionForFormat(format)}`;
+  `${timestampForFilename(clip.sourceStartMs)}-${String(index + 1).padStart(2, '0')}-${!clip.visual || clip.visual.kind === 'diagram' ? clip.template : clip.visual.kind}${aspectSuffix(profile.aspectRatio)}.${extensionForFormat(format)}`;
 
 const renderOne = async ({
   background,
+  backgroundAsset,
+  captions,
   clip,
   force,
   format,
   fps,
   outputPath,
+  palette,
   profile,
+  sceneBackground,
   serveUrl,
-  technologyIcons,
+  stagedAssets,
 }: {
   background: RenderBackground;
+  backgroundAsset?: string | undefined;
+  captions: CaptionMode;
   clip: AnimationClip;
   force: boolean;
   format: OutputFormat;
   fps: number;
   outputPath: string;
+  palette: SavedPlan['palette'];
   profile: RenderProfile;
+  sceneBackground: ClipBackgroundMode;
   serveUrl: string;
-  technologyIcons: Record<string, TechnologyBrandIcon>;
+  stagedAssets: StagedVisualAssets;
 }): Promise<void> => {
-  const inputProps = {background, clip, fps, profile, technologyIcons};
+  const inputProps = {
+    background,
+    ...(backgroundAsset ? {backgroundAsset} : {}),
+    captions,
+    clip,
+    foregroundAssets: stagedAssets.foregroundAssets[profile.aspectRatio],
+    fps,
+    localBrandAssets: stagedAssets.localBrandAssets,
+    localIconAssets: stagedAssets.localIconAssets,
+    motionAssets: stagedAssets.motionAssets,
+    palette,
+    profile,
+    sceneBackground,
+    technologyIcons: stagedAssets.technologyIcons,
+  };
   const browserExecutable = findBrowserExecutable();
   const composition = await selectComposition({
     serveUrl,
-    id: 'AnimationClip',
+    id: 'SubtitleClip',
     inputProps,
     logLevel: 'warn',
     ...(browserExecutable ? {browserExecutable} : {}),
@@ -150,11 +179,16 @@ const renderOne = async ({
 
 export interface RenderClipsOptions {
   aspectRatio: AspectRatioSelection;
-  clips: AnimationClip[];
+  backgroundAssets?: SceneBackgroundAssets | undefined;
+  captions: CaptionMode;
+  foregroundAssets?: GeneratedVisualAssets | undefined;
   force: boolean;
   format: OutputFormat;
   fps: number;
   outputDirectory: string;
+  plan: SavedPlan;
+  planDirectory: string;
+  sceneBackground: ClipBackgroundMode;
 }
 
 export interface RenderedClipProfile {
@@ -169,7 +203,7 @@ export const renderClips = async (
 
   const profiles = profilesForSelection(options.aspectRatio);
   const outputs = profiles.flatMap((profile) =>
-    options.clips.map((clip, index) => {
+    options.plan.clips.map((clip, index) => {
       const file = filenameForClip(clip, index, options.format, profile);
       return {clip, file, outputPath: resolve(options.outputDirectory, file), profile};
     }),
@@ -188,59 +222,99 @@ export const renderClips = async (
     return profiles.map((profile) => ({profile, clips: []}));
   }
 
-  console.log('Bundling animation templates...');
-  const serveUrl = await bundle({
-    entryPoint: findEntryPoint(),
-    webpackOverride: (config) => ({
-      ...config,
-      resolve: {
-        ...config.resolve,
-        extensionAlias: {
-          ...config.resolve?.extensionAlias,
-          '.js': ['.js', '.ts', '.tsx'],
-        },
-      },
-    }),
-    onProgress: (progress) => {
-      if (progress === 1) {
-        console.log('Templates bundled.');
+  const publicDirectory = await mkdtemp(resolve(tmpdir(), 'youtube-animation-clips-public-'));
+  try {
+    const publicBackgroundAssets: SceneBackgroundAssets = {'16:9': {}, '9:16': {}};
+    if (options.sceneBackground === 'generated') {
+      for (const output of outputs) {
+        const asset = options.backgroundAssets?.[output.profile.aspectRatio]?.[output.clip.id];
+        if (!asset || !existsSync(asset)) {
+          throw new Error(
+            `Generated background does not exist for ${output.clip.id} (${output.profile.aspectRatio}).`,
+          );
+        }
+        const publicName = basename(asset);
+        await copyFile(asset, resolve(publicDirectory, publicName));
+        publicBackgroundAssets[output.profile.aspectRatio][output.clip.id] = publicName;
       }
-    },
-  });
-
-  const background: RenderBackground = options.format === 'green' ? 'green' : 'transparent';
-  const {resolveTechnologyBrandIcons} = await import('./technology-catalog.js');
-  const technologyIcons = resolveTechnologyBrandIcons(
-    options.clips.flatMap((clip) => [
-      ...clip.primaryItems,
-      ...clip.secondaryItems,
-    ]),
-  );
-  const rendered = new Map<string, ManifestClip[]>();
-  for (const profile of profiles) {
-    rendered.set(profile.aspectRatio, []);
-  }
-
-  for (const [index, output] of outputs.entries()) {
-    console.log(
-      `[${index + 1}/${outputs.length}] ${output.clip.title} -> ${output.file}`,
-    );
-    await renderOne({
-      background,
-      clip: output.clip,
-      force: options.force,
-      format: options.format,
-      fps: options.fps,
-      outputPath: output.outputPath,
-      profile: output.profile,
-      serveUrl,
-      technologyIcons,
+    }
+    const scenes = options.plan.clips.map((clip) => ({
+      id: clip.id,
+      durationMs: clip.durationMs,
+      template: clip.template,
+      title: clip.title,
+      primaryItems: clip.primaryItems,
+      secondaryItems: clip.secondaryItems,
+      leftLabel: clip.leftLabel,
+      rightLabel: clip.rightLabel,
+      reason: clip.reason,
+      visual: clip.visual,
+      icons: clip.icons,
+      primaryItemTimings: clip.primaryItemTimings?.map(({startMs}) => ({startMs})) ?? [],
+      secondaryItemTimings: clip.secondaryItemTimings?.map(({startMs}) => ({startMs})) ?? [],
+      activityCues: clip.captionCues.map(({startMs, text}) => ({startMs, text})),
+    }));
+    const sourceById = new Map(options.plan.clips.map((clip) => [clip.id, clip.transcript]));
+    const stagedAssets = await stageVisualRenderAssets({
+      foregroundAssets: options.foregroundAssets,
+      mediaAssets: options.plan.mediaAssets,
+      planDirectory: options.planDirectory,
+      profiles,
+      publicDirectory,
+      scenes,
+      sourceTextForScene: (scene) => sourceById.get(scene.id) ?? '',
     });
-    rendered.get(output.profile.aspectRatio)!.push({...output.clip, file: output.file});
-  }
 
-  return profiles.map((profile) => ({
-    profile,
-    clips: rendered.get(profile.aspectRatio) ?? [],
-  }));
+    console.log('Bundling animation templates...');
+    const serveUrl = await bundle({
+      entryPoint: findEntryPoint(),
+      publicDir: publicDirectory,
+      webpackOverride: (config) => ({
+        ...config,
+        resolve: {
+          ...config.resolve,
+          extensionAlias: {
+            ...config.resolve?.extensionAlias,
+            '.js': ['.js', '.ts', '.tsx'],
+          },
+        },
+      }),
+      onProgress: (progress) => {
+        if (progress === 1) console.log('Templates bundled.');
+      },
+    });
+
+    const background: RenderBackground = options.format === 'green' ? 'green' : 'transparent';
+    const rendered = new Map<string, ManifestClip[]>();
+    for (const profile of profiles) rendered.set(profile.aspectRatio, []);
+
+    for (const [index, output] of outputs.entries()) {
+      console.log(
+        `[${index + 1}/${outputs.length}] ${output.clip.title} -> ${output.file}`,
+      );
+      await renderOne({
+        background,
+        backgroundAsset: publicBackgroundAssets[output.profile.aspectRatio][output.clip.id],
+        captions: options.captions,
+        clip: output.clip,
+        force: options.force,
+        format: options.format,
+        fps: options.fps,
+        outputPath: output.outputPath,
+        palette: options.plan.palette,
+        profile: output.profile,
+        sceneBackground: options.sceneBackground,
+        serveUrl,
+        stagedAssets,
+      });
+      rendered.get(output.profile.aspectRatio)!.push({...output.clip, file: output.file});
+    }
+
+    return profiles.map((profile) => ({
+      profile,
+      clips: rendered.get(profile.aspectRatio) ?? [],
+    }));
+  } finally {
+    await rm(publicDirectory, {recursive: true, force: true});
+  }
 };

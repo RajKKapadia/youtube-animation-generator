@@ -1,0 +1,152 @@
+{
+  "version": 2,
+  "sourceSubtitle": "fixtures/visual-parity.srt",
+  "generatedAt": "2026-08-29T00:00:00.000Z",
+  "model": "offline-fixture",
+  "palette": "violet",
+  "planningWarnings": [],
+  "assetAttributions": [],
+  "mediaAssets": [],
+  "clips": [
+    {
+      "id": "animation-01",
+      "startCue": 1,
+      "endCue": 1,
+      "sourceStartMs": 0,
+      "sourceEndMs": 4000,
+      "durationMs": 4000,
+      "template": "process-flow",
+      "title": "Durable request pipeline",
+      "primaryItems": ["Client", "API", "Queue", "Worker"],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Shows the spoken request path.",
+      "transcript": "A Client request moves through the API, Queue, and Worker.",
+      "primaryItemTimings": [
+        {"cueIndex": 1, "startMs": 200},
+        {"cueIndex": 1, "startMs": 900},
+        {"cueIndex": 1, "startMs": 1600},
+        {"cueIndex": 1, "startMs": 2300}
+      ],
+      "secondaryItemTimings": [],
+      "backgroundPrompt": "Abstract violet technical light field with a quiet center and no text.",
+      "visual": {
+        "kind": "agent-workflow",
+        "motion": "orbit",
+        "motif": "ai-agent",
+        "assetId": "ai-agent-pulse"
+      },
+      "icons": {
+        "focal": "ai-agent",
+        "primary": ["user", "api-endpoint", "queue", "worker"],
+        "secondary": []
+      },
+      "captionCues": [
+        {
+          "cueIndex": 1,
+          "startMs": 0,
+          "durationMs": 4000,
+          "text": "A Client request moves through the API, Queue, and Worker."
+        }
+      ]
+    },
+    {
+      "id": "animation-02",
+      "startCue": 2,
+      "endCue": 3,
+      "sourceStartMs": 4500,
+      "sourceEndMs": 9000,
+      "durationMs": 4500,
+      "template": "comparison",
+      "title": "Source-backed throughput",
+      "primaryItems": ["Current system"],
+      "secondaryItems": ["Existing best"],
+      "leftLabel": "Current",
+      "rightLabel": "Baseline",
+      "reason": "Compares the two exact subtitle values.",
+      "transcript": "Current system reached 85,448 tokens/s/kW. Existing best reached 44,960 tokens/s/kW.",
+      "primaryItemTimings": [
+        {"cueIndex": 2, "startMs": 0}
+      ],
+      "secondaryItemTimings": [
+        {"cueIndex": 3, "startMs": 2300}
+      ],
+      "backgroundPrompt": "Abstract violet analytical light field with a quiet center and no text.",
+      "visual": {
+        "kind": "data-visualization",
+        "motion": "count-up",
+        "motif": "analytics",
+        "assetId": null,
+        "chart": {
+          "type": "grouped-bars",
+          "title": "Peak throughput",
+          "data": [
+            {
+              "id": "current",
+              "label": "Current system",
+              "value": 85448,
+              "unit": "tokens/s/kW",
+              "precision": 0,
+              "sourceEvidence": "Current system reached 85,448 tokens/s/kW.",
+              "sourceToken": "85,448"
+            },
+            {
+              "id": "baseline",
+              "label": "Existing best",
+              "value": 44960,
+              "unit": "tokens/s/kW",
+              "precision": 0,
+              "sourceEvidence": "Existing best reached 44,960 tokens/s/kW.",
+              "sourceToken": "44,960"
+            }
+          ],
+          "series": [
+            {"id": "new", "label": "Current"},
+            {"id": "old", "label": "Existing"}
+          ],
+          "categories": [
+            {
+              "id": "throughput",
+              "label": "Throughput",
+              "values": [
+                {"seriesId": "new", "datumId": "current"},
+                {"seriesId": "old", "datumId": "baseline"}
+              ]
+            }
+          ],
+          "cards": [],
+          "derivedAnnotations": [
+            {
+              "id": "ratio",
+              "label": "Higher",
+              "operation": "ratio",
+              "currentDatumId": "current",
+              "baselineDatumId": "baseline",
+              "precision": 1
+            }
+          ]
+        }
+      },
+      "icons": {
+        "focal": "analytics-chart",
+        "primary": ["analytics-chart"],
+        "secondary": ["analytics-chart"]
+      },
+      "captionCues": [
+        {
+          "cueIndex": 2,
+          "startMs": 0,
+          "durationMs": 2000,
+          "text": "Current system reached 85,448 tokens/s/kW."
+        },
+        {
+          "cueIndex": 3,
+          "startMs": 2300,
+          "durationMs": 2200,
+          "text": "Existing best reached 44,960 tokens/s/kW."
+        }
+      ]
+    }
+  ]
+}
