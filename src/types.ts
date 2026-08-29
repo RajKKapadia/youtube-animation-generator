@@ -27,6 +27,30 @@ export type RenderAspectRatio = z.infer<typeof renderAspectRatioSchema>;
 export const aspectRatioSelectionSchema = z.enum(['16:9', '9:16', 'both']);
 export type AspectRatioSelection = z.infer<typeof aspectRatioSelectionSchema>;
 
+export const iconIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+
+export const sceneIconSelectionSchema = z.object({
+  focal: iconIdSchema.nullable(),
+  primary: z.array(iconIdSchema.nullable()).max(6),
+  secondary: z.array(iconIdSchema.nullable()).max(6),
+});
+
+export type SceneIconSelection = z.infer<typeof sceneIconSelectionSchema>;
+
+export const EMPTY_SCENE_ICON_SELECTION: SceneIconSelection = {
+  focal: null,
+  primary: [],
+  secondary: [],
+};
+
+export const assetAttributionSchema = z.object({
+  assetId: iconIdSchema,
+  attribution: z.string().min(1).max(180),
+  sourceUrl: z.url(),
+});
+
+export type AssetAttribution = z.infer<typeof assetAttributionSchema>;
+
 export const webResearchModeSchema = z.enum(['off', 'auto', 'required']);
 export type WebResearchMode = z.infer<typeof webResearchModeSchema>;
 
@@ -230,6 +254,7 @@ export type AnimationClip = z.infer<typeof animationClipSchema>;
 export const visualClipSchema = visualContentSchema.extend({
   id: z.string().min(1),
   durationMs: z.number().int().positive(),
+  icons: sceneIconSelectionSchema.default(EMPTY_SCENE_ICON_SELECTION),
   primaryItemTimings: z.array(visualItemTimingSchema).max(6).optional(),
   secondaryItemTimings: z.array(visualItemTimingSchema).max(6).optional(),
 });
@@ -599,7 +624,7 @@ export const DEFAULT_NARRATED_SCENE_VISUAL: NarratedSceneVisual = {
 };
 
 const addNarrationSceneIssues = (
-  scene: VisualContent & {beats: NarrationBeat[]},
+  scene: VisualContent & {beats: NarrationBeat[]; icons?: SceneIconSelection},
   context: z.core.$RefinementCtx,
 ): void => {
   if (scene.template === 'comparison' && scene.secondaryItems.length === 0) {
@@ -638,12 +663,57 @@ const addNarrationSceneIssues = (
       });
     }
   }
+
+  if (scene.icons) {
+    for (const [field, itemCount] of [
+      ['primary', scene.primaryItems.length],
+      ['secondary', scene.secondaryItems.length],
+    ] as const) {
+      const selections = scene.icons[field];
+      if (selections.length !== 0 && selections.length !== itemCount) {
+        context.addIssue({
+          code: 'custom',
+          message: `${field} icon selections must be empty for legacy fallback or contain one entry for every matching visual item.`,
+          path: ['icons', field],
+        });
+      }
+    }
+  }
+};
+
+const addSuggestedIconIssues = (
+  scene: VisualContent & {
+    icons: SceneIconSelection;
+    visual: NarratedVisualSuggestion;
+  },
+  context: z.core.$RefinementCtx,
+): void => {
+  for (const [field, itemCount] of [
+    ['primary', scene.primaryItems.length],
+    ['secondary', scene.secondaryItems.length],
+  ] as const) {
+    if (scene.icons[field].length !== itemCount) {
+      context.addIssue({
+        code: 'custom',
+        message: `${field} icon selections must contain one entry for every matching visual item.`,
+        path: ['icons', field],
+      });
+    }
+  }
+  if (scene.visual.kind === 'icon-spotlight' && !scene.icons.focal) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Icon spotlight scenes require a focal icon selection.',
+      path: ['icons', 'focal'],
+    });
+  }
 };
 
 export const draftNarrationSceneSchema = visualContentSchema.extend({
   id: z.string().min(1).max(80),
   backgroundPrompt: z.string().min(1).max(600),
   visual: narratedSceneVisualSchema,
+  icons: sceneIconSelectionSchema.default(EMPTY_SCENE_ICON_SELECTION),
   beats: z.array(narrationBeatSchema).min(1).max(12),
 }).superRefine(addNarrationSceneIssues);
 
@@ -651,8 +721,12 @@ export const draftNarrationSceneSuggestionSchema = visualContentSchema.extend({
   id: z.string().min(1).max(80),
   backgroundPrompt: z.string().min(1).max(600),
   visual: narratedVisualSuggestionSchema,
+  icons: sceneIconSelectionSchema,
   beats: z.array(narrationBeatSchema).min(1).max(12),
-}).superRefine(addNarrationSceneIssues);
+}).superRefine((scene, context) => {
+  addNarrationSceneIssues(scene, context);
+  addSuggestedIconIssues(scene, context);
+});
 
 export type DraftNarrationSceneSuggestion = z.infer<
   typeof draftNarrationSceneSuggestionSchema
@@ -782,6 +856,7 @@ export const draftNarratedPlanSchema = z.object({
   title: z.string().min(1).max(100),
   palette: videoPaletteSchema,
   planningWarnings: z.array(z.string().min(1)).optional(),
+  assetAttributions: z.array(assetAttributionSchema).max(12).default([]),
   mediaAssets: z.array(narratedMediaAssetSchema).max(8),
   scenes: z.array(draftNarrationSceneSchema).min(1).max(6),
 }).superRefine((plan, context) => {
@@ -843,6 +918,7 @@ export const timedNarrationSceneSchema = visualContentSchema.extend({
   id: z.string().min(1).max(80),
   backgroundPrompt: z.string().min(1).max(600),
   visual: narratedSceneVisualSchema,
+  icons: sceneIconSelectionSchema.default(EMPTY_SCENE_ICON_SELECTION),
   startMs: z.number().int().nonnegative(),
   durationMs: z.number().int().positive(),
   beats: z.array(timedNarrationBeatSchema).min(1).max(12),
@@ -906,6 +982,7 @@ export const timedNarratedPlanSchema = z.object({
   title: z.string().min(1).max(100),
   palette: videoPaletteSchema,
   planningWarnings: z.array(z.string().min(1)).optional(),
+  assetAttributions: z.array(assetAttributionSchema).max(12).default([]),
   mediaAssets: z.array(narratedMediaAssetSchema).max(8),
   sampleRate: z.number().int().positive(),
   voice: z.string().min(1),
@@ -1456,6 +1533,7 @@ export const narratedPublishPlanSchema = z.object({
   generatedAt: z.string().min(1),
   model: z.string().min(1),
   language: z.string().min(1),
+  assetCredits: z.array(assetAttributionSchema).max(12).default([]),
   youtube: youtubePublishMetadataSchema,
   thumbnail: publishThumbnailMetadataSchema,
 });
@@ -1464,6 +1542,7 @@ export type NarratedPublishPlan = z.infer<typeof narratedPublishPlanSchema>;
 
 export const publishSceneSchema = visualContentSchema.extend({
   id: z.string().min(1).max(80),
+  icons: sceneIconSelectionSchema.default(EMPTY_SCENE_ICON_SELECTION),
 });
 
 export type PublishScene = z.infer<typeof publishSceneSchema>;
@@ -1501,6 +1580,14 @@ export const localBrandAssetSchema = z.object({
 
 export type LocalBrandAsset = z.infer<typeof localBrandAssetSchema>;
 
+export const localIconAssetSchema = z.object({
+  id: iconIdSchema,
+  file: z.string().min(1),
+  colorPolicy: z.enum(['original', 'monochrome-allowed']),
+});
+
+export type LocalIconAsset = z.infer<typeof localIconAssetSchema>;
+
 export const selectedMotionAssetSchema = z.object({
   id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u),
   file: z.string().min(1),
@@ -1519,6 +1606,7 @@ export const publishCoverInputSchema = z.object({
   scene: publishSceneSchema,
   profile: renderProfileSchema,
   technologyIcons: z.record(z.string(), technologyBrandIconSchema).default({}),
+  localIconAssets: z.record(z.string(), localIconAssetSchema).default({}),
 });
 
 export type PublishCoverInput = z.infer<typeof publishCoverInputSchema>;
@@ -1546,6 +1634,7 @@ export const narratedRenderInputSchema = z.object({
   audioFile: z.string().min(1),
   technologyIcons: z.record(z.string(), technologyBrandIconSchema).default({}),
   localBrandAssets: z.record(z.string(), localBrandAssetSchema).default({}),
+  localIconAssets: z.record(z.string(), localIconAssetSchema).default({}),
   motionAssets: z.record(z.string(), selectedMotionAssetSchema).default({}),
 });
 

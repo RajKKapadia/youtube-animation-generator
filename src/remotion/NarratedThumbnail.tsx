@@ -7,10 +7,13 @@ import type {
 } from '../types.js';
 import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
 import {
+  SemanticIconsProvider,
   TechnologyBadge,
   TechnologyIconsProvider,
 } from './TechnologyBadge.js';
 import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
+import {iconRecordForItems} from '../icon-catalog.js';
+import {LocalIconAssetsProvider} from './SemanticIcon.js';
 
 const ItemCard = ({
   accent,
@@ -285,6 +288,7 @@ const StaticBackdrop = ({accent}: {accent: ReturnType<typeof accentFor>}) => (
 );
 
 export const NarratedThumbnail = ({
+  localIconAssets,
   profile,
   publish,
   scene,
@@ -292,11 +296,18 @@ export const NarratedThumbnail = ({
 }: PublishCoverInput) => {
   const vertical = profile.aspectRatio === '9:16';
   const accent = accentFor(publish.thumbnail.accent);
+  const semanticIcons = iconRecordForItems({
+    primaryItems: scene.primaryItems,
+    secondaryItems: scene.secondaryItems,
+    icons: scene.icons,
+  });
   return (
-    <TechnologyIconsProvider icons={technologyIcons}>
-      <AbsoluteFill
-        style={{backgroundColor: accent.background.start, overflow: 'hidden'}}
-      >
+    <LocalIconAssetsProvider assets={localIconAssets}>
+      <TechnologyIconsProvider icons={technologyIcons}>
+        <SemanticIconsProvider icons={semanticIcons}>
+        <AbsoluteFill
+          style={{backgroundColor: accent.background.start, overflow: 'hidden'}}
+        >
         <StaticBackdrop accent={accent} />
         <div
           style={{
@@ -372,7 +383,9 @@ export const NarratedThumbnail = ({
             <SceneMotif accent={accent} scene={scene} vertical={vertical} />
           </div>
         </div>
-      </AbsoluteFill>
-    </TechnologyIconsProvider>
+        </AbsoluteFill>
+        </SemanticIconsProvider>
+      </TechnologyIconsProvider>
+    </LocalIconAssetsProvider>
   );
 };

@@ -1,6 +1,7 @@
 import {existsSync} from 'node:fs';
-import {mkdir} from 'node:fs/promises';
+import {copyFile, mkdir, mkdtemp, rm} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
+import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {bundle} from '@remotion/bundler';
 import {renderStill, selectComposition} from '@remotion/renderer';
@@ -9,6 +10,8 @@ import {
   publishCoverSuffix,
 } from './publish-profile.js';
 import {resolveTechnologyBrandIcons} from './technology-catalog.js';
+import {assetFilePath, iconAssetForId, loadAssetRegistry} from './asset-registry.js';
+import {semanticIconDefinitionFor} from './icon-catalog.js';
 import type {
   AspectRatioSelection,
   NarratedPublishPlan,
@@ -78,53 +81,84 @@ export const renderPublishCovers = async (
     }
   }
 
-  console.log('Bundling code-native publish-cover templates...');
-  const serveUrl = await bundle({
-    entryPoint: findEntryPoint(),
-    webpackOverride: (config) => ({
-      ...config,
-      resolve: {
-        ...config.resolve,
-        extensionAlias: {
-          ...config.resolve?.extensionAlias,
-          '.js': ['.js', '.ts', '.tsx'],
-        },
-      },
-    }),
-  });
-  const technologyIcons = resolveTechnologyBrandIcons([
-    ...options.scene.primaryItems,
-    ...options.scene.secondaryItems,
-  ]);
-  const browserExecutable = findBrowserExecutable();
+  const publicDirectory = await mkdtemp(resolve(tmpdir(), 'youtube-publish-icons-'));
+  try {
+    const registry = await loadAssetRegistry();
+    const localIconAssets: Record<string, {
+      id: string;
+      file: string;
+      colorPolicy: 'original' | 'monochrome-allowed';
+    }> = {};
+    const selectedIconIds = new Set([
+      ...(options.scene.icons.focal ? [options.scene.icons.focal] : []),
+      ...options.scene.icons.primary.flatMap((id) => id ? [id] : []),
+      ...options.scene.icons.secondary.flatMap((id) => id ? [id] : []),
+    ]);
+    for (const iconId of selectedIconIds) {
+      if (semanticIconDefinitionFor(iconId)) continue;
+      const asset = iconAssetForId(registry, iconId);
+      if (!asset) throw new Error(`Publish scene references unregistered icon "${iconId}".`);
+      const publicName = `icon-${asset.id}.svg`;
+      await copyFile(assetFilePath(registry, asset.file), resolve(publicDirectory, publicName));
+      localIconAssets[asset.id] = {
+        id: asset.id,
+        file: publicName,
+        colorPolicy: asset.colorPolicy,
+      };
+    }
 
-  for (const [index, output] of outputs.entries()) {
-    const inputProps = {
-      publish: options.publish,
-      scene: options.scene,
-      profile: output.profile,
-      technologyIcons,
-    };
-    const composition = await selectComposition({
-      serveUrl,
-      id: 'NarratedThumbnail',
-      inputProps,
-      logLevel: 'warn',
-      ...(browserExecutable ? {browserExecutable} : {}),
+    console.log('Bundling code-native publish-cover templates...');
+    const serveUrl = await bundle({
+      entryPoint: findEntryPoint(),
+      publicDir: publicDirectory,
+      webpackOverride: (config) => ({
+        ...config,
+        resolve: {
+          ...config.resolve,
+          extensionAlias: {
+            ...config.resolve?.extensionAlias,
+            '.js': ['.js', '.ts', '.tsx'],
+          },
+        },
+      }),
     });
-    console.log(
-      `[${index + 1}/${outputs.length}] ${output.profile.aspectRatio} -> ${output.file}`,
-    );
-    await renderStill({
-      serveUrl,
-      composition,
-      inputProps,
-      output: output.outputPath,
-      frame: 0,
-      imageFormat: 'png',
-      logLevel: 'warn',
-      ...(browserExecutable ? {browserExecutable} : {}),
-    });
+    const technologyIcons = resolveTechnologyBrandIcons([
+      ...options.scene.primaryItems,
+      ...options.scene.secondaryItems,
+    ]);
+    const browserExecutable = findBrowserExecutable();
+
+    for (const [index, output] of outputs.entries()) {
+      const inputProps = {
+        publish: options.publish,
+        scene: options.scene,
+        profile: output.profile,
+        technologyIcons,
+        localIconAssets,
+      };
+      const composition = await selectComposition({
+        serveUrl,
+        id: 'NarratedThumbnail',
+        inputProps,
+        logLevel: 'warn',
+        ...(browserExecutable ? {browserExecutable} : {}),
+      });
+      console.log(
+        `[${index + 1}/${outputs.length}] ${output.profile.aspectRatio} -> ${output.file}`,
+      );
+      await renderStill({
+        serveUrl,
+        composition,
+        inputProps,
+        output: output.outputPath,
+        frame: 0,
+        imageFormat: 'png',
+        logLevel: 'warn',
+        ...(browserExecutable ? {browserExecutable} : {}),
+      });
+    }
+    return outputs;
+  } finally {
+    await rm(publicDirectory, {recursive: true, force: true});
   }
-  return outputs;
 };

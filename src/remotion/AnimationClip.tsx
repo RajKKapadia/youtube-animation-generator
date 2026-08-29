@@ -11,9 +11,11 @@ import {isVerticalDimensions, RENDER_PROFILES} from '../render-profile.js';
 import type {RenderProfile} from '../types.js';
 import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
 import {
+  SemanticIconsProvider,
   TechnologyBadge,
   TechnologyIconsProvider,
 } from './TechnologyBadge.js';
+import {iconRecordForItems} from '../icon-catalog.js';
 import {
   createConnectionWindow,
   createRevealSchedule,
@@ -928,6 +930,11 @@ export const AnimationClip = ({
   technologyIcons,
 }: RenderInput) => {
   const theme = videoPaletteFor(palette);
+  const semanticIcons = iconRecordForItems({
+    primaryItems: clip.primaryItems,
+    secondaryItems: clip.secondaryItems,
+    icons: clip.icons ?? {focal: null, primary: [], secondary: []},
+  });
   const content = (() => {
     switch (clip.template) {
       case 'process-flow':
@@ -957,7 +964,9 @@ export const AnimationClip = ({
       <RenderProfileContext.Provider value={profile}>
         <ContentTopInsetContext.Provider value={contentTopInset}>
           <TechnologyIconsProvider icons={technologyIcons}>
-            {content}
+            <SemanticIconsProvider icons={semanticIcons}>
+              {content}
+            </SemanticIconsProvider>
           </TechnologyIconsProvider>
         </ContentTopInsetContext.Provider>
       </RenderProfileContext.Provider>

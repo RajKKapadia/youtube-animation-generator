@@ -1,50 +1,16 @@
 import {createContext, useContext, type ReactNode} from 'react';
 import {Img, staticFile} from 'remotion';
-import {
-  Activity,
-  Archive,
-  AudioLines,
-  Bot,
-  BrainCircuit,
-  CalendarClock,
-  ChartNoAxesCombined,
-  CircleEllipsis,
-  Cloud,
-  Code2,
-  Database,
-  Download,
-  FileText,
-  Globe2,
-  HardDrive,
-  KeyRound,
-  ListOrdered,
-  Mail,
-  MessageCircle,
-  Network,
-  RefreshCw,
-  Search,
-  Server,
-  ShieldCheck,
-  Shuffle,
-  Smartphone,
-  TriangleAlert,
-  Upload,
-  UserRound,
-  UsersRound,
-  Video,
-  WalletCards,
-  Webhook,
-  Zap,
-  type LucideIcon,
-} from 'lucide-react';
 import type {LocalBrandAsset, TechnologyBrandIcon} from '../types.js';
+import {semanticIconIdForText, type SemanticIconId} from '../icon-catalog.js';
 import {
   technologyIconKindFor,
   type TechnologyIconKind,
 } from './technology.js';
+import {VisualIcon} from './SemanticIcon.js';
 
 const TechnologyIconsContext = createContext<Record<string, TechnologyBrandIcon>>({});
 const LocalBrandAssetsContext = createContext<Record<string, LocalBrandAsset>>({});
+const SemanticIconsContext = createContext<Record<string, string>>({});
 
 const usesDarkBadgeBackground = (icon: TechnologyBrandIcon | undefined): boolean => {
   if (!icon) {
@@ -80,55 +46,53 @@ export const LocalBrandAssetsProvider = ({
   </LocalBrandAssetsContext.Provider>
 );
 
-const SEMANTIC_ICONS: Record<TechnologyIconKind, LucideIcon> = {
-  ai: BrainCircuit,
-  analytics: ChartNoAxesCombined,
-  api: Webhook,
-  audio: AudioLines,
-  auth: KeyRound,
-  cache: Archive,
-  cloud: Cloud,
-  code: Code2,
-  database: Database,
-  document: FileText,
-  download: Download,
-  email: Mail,
-  error: TriangleAlert,
-  event: Zap,
-  generic: CircleEllipsis,
-  message: MessageCircle,
-  mobile: Smartphone,
-  monitoring: Activity,
-  network: Network,
-  payment: WalletCards,
-  queue: ListOrdered,
-  retry: RefreshCw,
-  schedule: CalendarClock,
-  search: Search,
-  security: ShieldCheck,
-  server: Server,
-  storage: HardDrive,
-  transform: Shuffle,
-  upload: Upload,
-  user: UserRound,
-  users: UsersRound,
-  video: Video,
-  web: Globe2,
-  webhook: Webhook,
-  worker: Bot,
-};
+export const SemanticIconsProvider = ({
+  children,
+  icons,
+}: {
+  children: ReactNode;
+  icons: Record<string, string>;
+}) => (
+  <SemanticIconsContext.Provider value={icons}>
+    {children}
+  </SemanticIconsContext.Provider>
+);
 
-const GenericGlyph = ({kind}: {kind: TechnologyIconKind}) => {
-  const Icon = SEMANTIC_ICONS[kind];
-  return (
-    <Icon
-      aria-hidden="true"
-      color="#0F172A"
-      height="66%"
-      strokeWidth={2.2}
-      width="66%"
-    />
-  );
+const ICON_ID_FOR_LEGACY_KIND: Partial<Record<TechnologyIconKind, SemanticIconId>> = {
+  ai: 'ai-model',
+  analytics: 'analytics-chart',
+  api: 'api-endpoint',
+  audio: 'audio-wave',
+  auth: 'auth-key',
+  cache: 'cache-archive',
+  cloud: 'cloud',
+  code: 'code',
+  database: 'data-database',
+  document: 'document',
+  download: 'download',
+  email: 'email',
+  error: 'error-warning',
+  event: 'event-trigger',
+  message: 'message-chat',
+  mobile: 'mobile',
+  monitoring: 'monitoring',
+  network: 'network',
+  payment: 'payment',
+  queue: 'queue',
+  retry: 'retry',
+  schedule: 'schedule',
+  search: 'search',
+  security: 'security',
+  server: 'server',
+  storage: 'storage',
+  transform: 'transform',
+  upload: 'upload',
+  user: 'user',
+  users: 'users',
+  video: 'video',
+  web: 'web',
+  webhook: 'webhook',
+  worker: 'worker',
 };
 
 export const technologyBadgeSourceFor = (
@@ -136,12 +100,23 @@ export const technologyBadgeSourceFor = (
   icons: Record<string, TechnologyBrandIcon>,
 ): 'brand' | 'semantic' => icons[label] ? 'brand' : 'semantic';
 
-export const TechnologyBadge = ({label, size = 60}: {label: string; size?: number}) => {
+export const TechnologyBadge = ({
+  iconId,
+  label,
+  size = 60,
+}: {
+  iconId?: string | null;
+  label: string;
+  size?: number;
+}) => {
   const icons = useContext(TechnologyIconsContext);
   const localAssets = useContext(LocalBrandAssetsContext);
+  const semanticIcons = useContext(SemanticIconsContext);
   const kind = technologyIconKindFor(label);
   const icon = icons[label];
   const localAsset = localAssets[label];
+  const explicitIconId = iconId ?? semanticIcons[label];
+  const fallbackIconId = semanticIconIdForText(label) ?? ICON_ID_FOR_LEGACY_KIND[kind];
   const darkBackground = usesDarkBadgeBackground(icon);
 
   return (
@@ -161,7 +136,9 @@ export const TechnologyBadge = ({label, size = 60}: {label: string; size?: numbe
         width: size,
       }}
     >
-      {icon ? (
+      {explicitIconId ? (
+        <VisualIcon color="#0F172A" id={explicitIconId} size="66%" strokeWidth={2.2} />
+      ) : icon ? (
         <svg aria-hidden="true" height="62%" viewBox="0 0 24 24" width="62%">
           <path d={icon.path} fill={`#${icon.hex}`} />
         </svg>
@@ -172,7 +149,7 @@ export const TechnologyBadge = ({label, size = 60}: {label: string; size?: numbe
           style={{height: '68%', objectFit: 'contain', width: '68%'}}
         />
       ) : (
-        <GenericGlyph kind={kind} />
+        <VisualIcon color="#0F172A" id={fallbackIconId} size="66%" strokeWidth={2.2} />
       )}
     </div>
   );

@@ -8,6 +8,7 @@ import {
 import {videoPaletteFor} from '../visual-palettes.js';
 import {NarratedVisualLayer} from './NarratedVisualLayer.js';
 import {LocalBrandAssetsProvider} from './TechnologyBadge.js';
+import {LocalIconAssetsProvider} from './SemanticIcon.js';
 
 export const NarratedVideo = ({
   audioFile,
@@ -16,6 +17,7 @@ export const NarratedVideo = ({
   foregroundAssets,
   fps,
   localBrandAssets,
+  localIconAssets,
   motionAssets,
   plan,
   profile,
@@ -23,9 +25,10 @@ export const NarratedVideo = ({
   technologyIcons,
 }: NarratedRenderInput) => (
   <LocalBrandAssetsProvider assets={localBrandAssets}>
-    <AbsoluteFill
-      style={{backgroundColor: videoPaletteFor(plan.palette).background.start}}
-    >
+    <LocalIconAssetsProvider assets={localIconAssets}>
+      <AbsoluteFill
+        style={{backgroundColor: videoPaletteFor(plan.palette).background.start}}
+      >
       {plan.scenes[0] ? (
         <SceneBackdrop
           mode="ambient"
@@ -66,6 +69,7 @@ export const NarratedVideo = ({
           </AbsoluteFill>
         </Sequence>
       ))}
-    </AbsoluteFill>
+      </AbsoluteFill>
+    </LocalIconAssetsProvider>
   </LocalBrandAssetsProvider>
 );

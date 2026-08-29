@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {
   assertSourceBackedNarratedVisuals,
+  materializeNarratedVisuals,
   narrationScriptMarkdown,
   narratedVisualPlanningWarnings,
   recoverUnsupportedNarratedVisuals,
@@ -67,6 +68,24 @@ describe('draftNarratedPlanSchema', () => {
     const parsed = draftNarratedPlanSchema.parse(validPlan);
     expect(parsed.scenes).toHaveLength(1);
     expect(parsed.palette).toBe('emerald');
+    expect(parsed.scenes[0]!.icons).toEqual({focal: null, primary: [], secondary: []});
+  });
+
+  it('persists explicit icon selections and validates their item alignment', () => {
+    const explicit = structuredClone(validPlan);
+    Object.assign(explicit.scenes[0]!, {
+      icons: {
+        focal: 'queue',
+        primary: ['user', 'queue', 'worker'],
+        secondary: [],
+      },
+    });
+    expect(draftNarratedPlanSchema.parse(explicit).scenes[0]!.icons.primary)
+      .toEqual(['user', 'queue', 'worker']);
+    explicit.scenes[0]!.icons.primary.pop();
+    expect(() => draftNarratedPlanSchema.parse(explicit)).toThrow(
+      'one entry for every matching visual item',
+    );
   });
 
   it('keeps original source and web research metadata paired', () => {
@@ -370,6 +389,7 @@ describe('narrated visual planning warnings', () => {
   const registry: AssetRegistry = {
     assetRoot: '/tmp/assets',
     brandAssets: [],
+    iconAssets: [],
     motionAssets: [],
     warnings: [],
   };
@@ -540,6 +560,115 @@ describe('narrated visual planning warnings', () => {
       scenes: [0, 1, 2].map((index) => ({...generatedScene, id: `generated-${index}`})),
       generatedVisuals: 'auto',
     })).toThrow('more than two generated foreground scenes');
+  });
+
+  it('rejects an unrelated chat icon and agent animation for a hardware standard', () => {
+    const scene = structuredClone(validPlan.scenes[0]!);
+    const result = materializeNarratedVisuals({
+      registry: {
+        assetRoot: '/tmp/assets',
+        brandAssets: [],
+        iconAssets: [],
+        warnings: [],
+        motionAssets: [{
+          id: 'ai-agent-pulse',
+          motifs: ['automation'],
+          keywords: ['AI agent', 'automation', 'tool use'],
+          file: 'motion/ai-agent-pulse.json',
+          sourceUrl: 'https://example.com/agent',
+          creator: 'Fixture',
+          license: 'Fixture',
+          licenseUrl: null,
+          attribution: 'Fixture',
+          loop: 'loop',
+          playbackRate: 1,
+          priority: 100,
+          colorMap: {},
+        }],
+      },
+      scenes: [{
+        ...scene,
+        title: 'A common language for hardware',
+        primaryItems: ['Model Hardware Standard', 'CPU', 'GPU accelerator'],
+        beats: [{
+          ...scene.beats[0]!,
+          phrases: [{id: 'standard-phrase', text: 'One standard connects model hardware.'}],
+          primaryItemIndices: [0, 1, 2],
+        }],
+        icons: {
+          focal: 'message-chat',
+          primary: ['message-chat', 'hardware-cpu', 'hardware-accelerator'],
+          secondary: [],
+        },
+        visual: {kind: 'icon-spotlight', motion: 'pulse', motif: 'automation'},
+      }],
+    });
+    expect(result.scenes[0]!.icons).toEqual({
+      focal: 'standard-protocol',
+      primary: ['standard-protocol', 'hardware-cpu', 'hardware-accelerator'],
+      secondary: [],
+    });
+    expect(result.scenes[0]!.visual.assetId).toBeNull();
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('message-chat'),
+      expect.stringContaining('no registered animation matched'),
+    ]));
+  });
+
+  it('keeps literal icons for Rust benefits and a mixed-language workflow', () => {
+    const base = structuredClone(validPlan.scenes[0]!);
+    const result = materializeNarratedVisuals({
+      registry: {
+        assetRoot: '/tmp/assets',
+        brandAssets: [],
+        iconAssets: [],
+        warnings: [],
+        motionAssets: [],
+      },
+      scenes: [{
+        ...base,
+        id: 'why-rust',
+        title: 'Why Teams Choose Rust',
+        primaryItems: [
+          'Memory safety',
+          'Near-C / C++ performance',
+          'Single native executable',
+          'Concurrency and system work',
+        ],
+        icons: {
+          focal: 'security',
+          primary: ['security', 'hardware-cpu', 'code', 'automation-workflow'],
+          secondary: [],
+        },
+        visual: {kind: 'icon-spotlight', motion: 'reveal', motif: 'security'},
+      }, {
+        ...base,
+        id: 'likely-future',
+        title: 'The Likely Future',
+        primaryItems: [
+          'AI-assisted migration',
+          'Tests, benchmarks, and review',
+          'Mixed-language product',
+          'Rust performance core',
+        ],
+        icons: {
+          focal: 'ai-agent',
+          primary: ['ai-agent', 'analytics-chart', 'standard-compatible', 'hardware-cpu'],
+          secondary: [],
+        },
+        visual: {kind: 'agent-workflow', motion: 'flow', motif: 'ai-agent'},
+      }],
+    });
+    expect(result.scenes[0]!.icons).toEqual({
+      focal: 'security',
+      primary: ['security', 'hardware-cpu', 'code', 'automation-workflow'],
+      secondary: [],
+    });
+    expect(result.scenes[1]!.icons).toEqual({
+      focal: 'ai-agent',
+      primary: ['ai-agent', 'analytics-chart', 'standard-compatible', 'hardware-cpu'],
+      secondary: [],
+    });
   });
 });
 

@@ -3,7 +3,7 @@ import {loadAssetRegistry} from './asset-registry.js';
 const main = async () => {
   const registry = await loadAssetRegistry();
   console.log(
-    `Validated ${registry.motionAssets.length} motion asset(s) and ${registry.brandAssets.length} brand asset(s).`,
+    `Validated ${registry.iconAssets.length} icon asset(s), ${registry.motionAssets.length} motion asset(s), and ${registry.brandAssets.length} brand asset(s).`,
   );
   for (const warning of registry.warnings) {
     console.warn(`Manual review required: ${warning}`);

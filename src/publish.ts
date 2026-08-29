@@ -5,6 +5,7 @@ import {z} from 'zod';
 import {joinNarrationPhrases} from './narration-planner.js';
 import {
   narratedPublishPlanSchema,
+  type AssetAttribution,
   type NarratedPlan,
   type NarratedPublishPlan,
   type VideoPalette,
@@ -14,7 +15,7 @@ const youtubePublishResponseSchema = z.object({
   youtube: z.object({
     title: z.string().min(1).max(70),
     alternateTitles: z.array(z.string().min(1).max(70)).length(2),
-    description: z.string().min(1).max(1_800),
+    description: z.string().min(1).max(1_400),
     tags: z.array(z.string().min(1).max(80)).min(15).max(20),
     hashtags: z.array(z.string().min(1).max(32)).min(3).max(5),
   }),
@@ -70,6 +71,7 @@ export const narratedTranscript = (plan: NarratedPlan): string =>
     .join('\n\n');
 
 export const materializePublishPlan = ({
+  assetAttributions = [],
   generatedAt,
   language,
   model,
@@ -77,6 +79,7 @@ export const materializePublishPlan = ({
   response,
   sourcePlan,
 }: {
+  assetAttributions?: AssetAttribution[];
   generatedAt: string;
   language: string;
   model: string;
@@ -90,7 +93,13 @@ export const materializePublishPlan = ({
   const description = [
     response.youtube.description.trim(),
     hashtags.map((hashtag) => `#${hashtag}`).join(' '),
-  ].join('\n\n');
+    assetAttributions.length > 0
+      ? `Asset credits:\n${assetAttributions.map(({attribution, sourceUrl}) => `- ${attribution}: ${sourceUrl}`).join('\n')}`
+      : '',
+  ].filter(Boolean).join('\n\n');
+  if (description.length > 2_000) {
+    throw new Error('Required asset credits do not fit in the YouTube description limit. Shorten the base description or asset attribution text.');
+  }
 
   return narratedPublishPlanSchema.parse({
     version: 1,
@@ -99,6 +108,7 @@ export const materializePublishPlan = ({
     generatedAt,
     model,
     language,
+    assetCredits: assetAttributions,
     youtube: {
       title: response.youtube.title.trim(),
       alternateTitles: uniqueCaseInsensitive(response.youtube.alternateTitles),
@@ -187,6 +197,7 @@ export const generateNarratedPublishPlan = async (
   }
 
   const plan = materializePublishPlan({
+    assetAttributions: options.plan.assetAttributions,
     generatedAt: new Date().toISOString(),
     language: options.plan.language,
     model: options.model,
@@ -218,6 +229,12 @@ ${plan.youtube.tags.join(', ')}
 ## Description hashtags
 
 ${plan.youtube.hashtags.map((hashtag) => `#${hashtag}`).join(' ')}
+
+## Asset credits
+
+${plan.assetCredits.length > 0
+    ? plan.assetCredits.map(({attribution, sourceUrl}) => `- ${attribution}: ${sourceUrl}`).join('\n')
+    : 'No per-video asset attribution is required.'}
 
 ## Thumbnail and cover
 

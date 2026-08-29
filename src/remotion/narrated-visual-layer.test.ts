@@ -4,7 +4,10 @@ import {
   lottieSourceFrameAt,
   recolorLottieAnimation,
 } from './NarratedMotionAsset.js';
-import {metricDisplayAtProgress} from './NarratedVisualLayer.js';
+import {
+  metricDisplayAtProgress,
+  verticalAgentWorkflowNodeClearance,
+} from './NarratedVisualLayer.js';
 
 const asset: SelectedMotionAsset = {
   id: 'fixture',
@@ -20,6 +23,10 @@ describe('narrated visual motion', () => {
     expect(metricDisplayAtProgress('Revenue grew 42.5%', 0.5)).toBe('Revenue grew 21.3%');
     expect(metricDisplayAtProgress('Revenue grew 42.5%', 1)).toBe('Revenue grew 42.5%');
     expect(metricDisplayAtProgress('No sourced number', 0.5)).toBe('No sourced number');
+  });
+
+  it('reserves visible clearance below vertical workflow orbit labels', () => {
+    expect(verticalAgentWorkflowNodeClearance()).toBeGreaterThanOrEqual(16);
   });
 
   it('selects stable scene-relative Lottie frames for loop and hold behavior', () => {

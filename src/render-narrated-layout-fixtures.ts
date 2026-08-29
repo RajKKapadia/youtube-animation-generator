@@ -11,14 +11,16 @@ import {
   timedNarratedPlanSchema,
   type NarratedSceneVisual,
   type NarratedMediaAsset,
+  type SceneIconSelection,
   type SelectedMotionAsset,
 } from './types.js';
 import {writePcm16Wav} from './supertonic/wav.js';
 import {exactTechnologyBrandIconFor} from './technology-catalog.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
+const outputArgument = process.argv.slice(2).find((argument) => argument !== '--');
 const outputDirectory = resolve(
-  process.argv[2] ?? '/tmp/youtube-animation-narrated-layout-fixtures',
+  outputArgument ?? '/tmp/youtube-animation-narrated-layout-fixtures',
 );
 const entryPoint = existsSync(resolve(currentDirectory, 'remotion/index.js'))
   ? resolve(currentDirectory, 'remotion/index.js')
@@ -27,6 +29,7 @@ const entryPoint = existsSync(resolve(currentDirectory, 'remotion/index.js'))
 const TREATMENTS: Array<{
   fixtureId?: string;
   items: string[];
+  icons?: SceneIconSelection;
   mediaAssets?: NarratedMediaAsset[];
   sourceText?: string;
   title: string;
@@ -36,6 +39,18 @@ const TREATMENTS: Array<{
     title: 'An AI agent coordinates tools while keeping each action understandable',
     items: ['Search', 'API', 'Database', 'Document', 'Message', 'Security'],
     visual: {kind: 'agent-workflow', motion: 'orbit', motif: 'ai-agent', assetId: 'ai-agent-pulse'},
+  },
+  {
+    fixtureId: 'mixed-language-workflow',
+    title: 'The Likely Future',
+    items: [
+      'AI-assisted migration',
+      'Tests, benchmarks, and review',
+      'Mixed-language product',
+      'Rust performance core',
+    ],
+    sourceText: 'AI-assisted migration still needs tests, benchmarks, and review. The likely future is a mixed-language product with a Rust performance core.',
+    visual: {kind: 'agent-workflow', motion: 'flow', motif: 'ai-agent', assetId: null},
   },
   {
     title: 'Exact company and product marks remain recognizable and undistorted',
@@ -53,9 +68,27 @@ const TREATMENTS: Array<{
     visual: {kind: 'metric-focus', motion: 'count-up', motif: 'analytics', assetId: null},
   },
   {
-    title: 'A single visual idea gets the focus before the supporting details arrive',
-    items: ['Document automation', 'Extract', 'Validate', 'Approve', 'Deliver', 'Archive'],
-    visual: {kind: 'icon-spotlight', motion: 'scan', motif: 'automation', assetId: 'ai-agent-pulse'},
+    title: 'A common language for hardware',
+    items: ['Model Hardware Standard', 'CPU', 'GPU accelerator', 'Memory', 'AI model'],
+    sourceText: 'A Model Hardware Standard gives CPUs, GPU accelerators, memory, and AI models a common language.',
+    icons: {
+      focal: 'standard-protocol',
+      primary: ['standard-protocol', 'hardware-cpu', 'hardware-accelerator', 'hardware-memory', 'ai-model'],
+      secondary: [],
+    },
+    visual: {kind: 'icon-spotlight', motion: 'pulse', motif: 'automation', assetId: null},
+  },
+  {
+    fixtureId: 'rust-benefits-spotlight',
+    title: 'Why Teams Choose Rust',
+    items: [
+      'Memory safety',
+      'Near-C / C++ performance',
+      'Single native executable',
+      'Concurrency and system work',
+    ],
+    sourceText: 'Teams choose Rust for memory safety, near-C and C++ performance, a single native executable, concurrency, and system work.',
+    visual: {kind: 'icon-spotlight', motion: 'reveal', motif: 'security', assetId: null},
   },
   {
     fixtureId: 'local-image-focus',
@@ -183,6 +216,7 @@ const makePlan = (treatment: typeof TREATMENTS[number]) => timedNarratedPlanSche
     leftLabel: '',
     rightLabel: '',
     reason: 'Worst-case narrated visual layout fixture.',
+    icons: treatment.icons ?? {focal: null, primary: [], secondary: []},
     visual: treatment.visual,
     beats: [{
       id: 'fixture-beat',

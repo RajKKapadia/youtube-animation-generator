@@ -34,6 +34,13 @@ https://github.com/simple-icons/simple-icons/blob/develop/DISCLAIMER.md
 
 `assets/motion/ai-agent-pulse.json` was authored for this repository. Its provenance, attribution, palette mapping, and use policy are recorded in `assets/motion/manifest.json`.
 
+## Curated external icon assets
+
+External SVG icons are not fetched at runtime. When present, their source, creator,
+license, attribution requirement, and video-credit text are recorded per asset in
+`assets/icons/manifest.json`. Required credits for icons actually used by a plan are
+also carried into its generated publish description and Markdown sidecar.
+
 ## Lucide Icons
 
 Semantic fallback icons are provided by `lucide-react`:

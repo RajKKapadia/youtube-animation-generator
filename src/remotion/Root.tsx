@@ -40,6 +40,7 @@ const defaultProps: RenderInput = {
     leftLabel: '',
     rightLabel: '',
     reason: 'Preview animation',
+    icons: {focal: null, primary: [], secondary: []},
   },
 };
 
@@ -62,6 +63,7 @@ const defaultNarratedProps: NarratedRenderInput = {
   profile: RENDER_PROFILES['16:9'],
   technologyIcons: {},
   localBrandAssets: {},
+  localIconAssets: {},
   motionAssets: {},
   plan: {
     version: 6,
@@ -74,6 +76,7 @@ const defaultNarratedProps: NarratedRenderInput = {
     language: 'en',
     title: 'Request flow',
     palette: 'cyan',
+    assetAttributions: [],
     mediaAssets: [],
     sampleRate: 44_100,
     voice: 'M1',
@@ -95,6 +98,11 @@ const defaultNarratedProps: NarratedRenderInput = {
       leftLabel: '',
       rightLabel: '',
       reason: 'Preview',
+      icons: {
+        focal: null,
+        primary: ['user', 'queue', 'worker'],
+        secondary: [],
+      },
       visual: {
         kind: 'diagram',
         motion: 'reveal',
@@ -167,6 +175,7 @@ const defaultPublishCoverProps: PublishCoverInput = {
     generatedAt: '2026-08-25T00:00:00.000Z',
     model: 'preview',
     language: 'en',
+    assetCredits: [],
     youtube: {
       title: 'Understand Queues with One Simple Request Flow',
       alternateTitles: [
@@ -209,8 +218,14 @@ const defaultPublishCoverProps: PublishCoverInput = {
     leftLabel: '',
     rightLabel: '',
     reason: 'Shows how work moves independently.',
+    icons: {
+      focal: 'queue',
+      primary: ['user', 'queue', 'worker'],
+      secondary: [],
+    },
   },
   technologyIcons: {},
+  localIconAssets: {},
 };
 
 const calculatePublishCoverMetadata: CalculateMetadataFunction<PublishCoverInput> = async ({

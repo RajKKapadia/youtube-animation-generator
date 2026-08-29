@@ -7,6 +7,7 @@ import {
   narratedVisualMotifSchema,
   type NarratedVisualMotif,
 } from './types.js';
+import {semanticIconDefinitionFor} from './icon-catalog.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -33,6 +34,7 @@ export const motionAssetManifestSchema = z.object({
     creator: z.string().trim().min(1),
     license: z.string().trim().min(1),
     licenseUrl: z.url().nullable(),
+    attributionRequired: z.boolean().default(false),
     attribution: z.string().trim().min(1),
     loop: z.enum(['once', 'loop']),
     playbackRate: z.number().positive().max(4).default(1),
@@ -70,9 +72,33 @@ export type BrandAssetDefinition = z.infer<
   typeof brandAssetManifestSchema
 >['assets'][number];
 
+export const iconAssetManifestSchema = z.object({
+  version: z.literal(1),
+  assets: z.array(z.object({
+    id: assetIdSchema,
+    keywords: z.array(z.string().trim().min(1)).min(1),
+    file: relativeAssetPathSchema.refine(
+      (value) => value.toLocaleLowerCase().endsWith('.svg'),
+      'Curated icon assets must be SVG files.',
+    ),
+    sourceUrl: z.url(),
+    creator: z.string().trim().min(1),
+    license: z.string().trim().min(1),
+    licenseUrl: z.url().nullable(),
+    attributionRequired: z.boolean(),
+    attribution: z.string().trim().min(1).max(180),
+    colorPolicy: z.enum(['original', 'monochrome-allowed']),
+  })),
+});
+
+export type IconAssetDefinition = z.infer<
+  typeof iconAssetManifestSchema
+>['assets'][number];
+
 export interface AssetRegistry {
   assetRoot: string;
   brandAssets: BrandAssetDefinition[];
+  iconAssets: IconAssetDefinition[];
   motionAssets: MotionAssetDefinition[];
   warnings: string[];
 }
@@ -175,12 +201,15 @@ export const normalizeAssetLabel = (value: string): string =>
 export const loadAssetRegistry = async (
   assetRoot = defaultAssetRoot(),
 ): Promise<AssetRegistry> => {
-  const [motionManifest, brandManifest] = await Promise.all([
+  const [motionManifest, brandManifest, iconManifest] = await Promise.all([
     readJson(resolve(assetRoot, 'motion/manifest.json')).then((value) =>
       motionAssetManifestSchema.parse(value),
     ),
     readJson(resolve(assetRoot, 'brands/manifest.json')).then((value) =>
       brandAssetManifestSchema.parse(value),
+    ),
+    readJson(resolve(assetRoot, 'icons/manifest.json')).then((value) =>
+      iconAssetManifestSchema.parse(value),
     ),
   ]);
 
@@ -201,6 +230,15 @@ export const loadAssetRegistry = async (
     ),
     'brand alias',
   );
+  assertUnique(
+    iconManifest.assets.map(({id}) => ({label: `icon asset ${id}`, value: id})),
+    'icon asset id',
+  );
+  for (const asset of iconManifest.assets) {
+    if (semanticIconDefinitionFor(asset.id)) {
+      throw new Error(`Local icon asset id "${asset.id}" conflicts with a built-in semantic icon.`);
+    }
+  }
 
   const warnings: string[] = [];
   for (const asset of motionManifest.assets) {
@@ -214,10 +252,16 @@ export const loadAssetRegistry = async (
     await access(path, constants.R_OK);
     validateSvg(await readFile(path, 'utf8'), `Brand asset ${asset.id}`);
   }
+  for (const asset of iconManifest.assets) {
+    const path = resolvedAssetPath(assetRoot, asset.file);
+    await access(path, constants.R_OK);
+    validateSvg(await readFile(path, 'utf8'), `Icon asset ${asset.id}`);
+  }
 
   return {
     assetRoot: resolve(assetRoot),
     brandAssets: brandManifest.assets,
+    iconAssets: iconManifest.assets,
     motionAssets: [...motionManifest.assets].sort(
       (left, right) => right.priority - left.priority || left.id.localeCompare(right.id),
     ),
@@ -231,6 +275,40 @@ export const motionAssetForMotif = (
 ): MotionAssetDefinition | undefined => motif === 'none'
   ? undefined
   : registry.motionAssets.find((asset) => asset.motifs.includes(motif));
+
+export const motionAssetForScene = (
+  registry: AssetRegistry,
+  motif: NarratedVisualMotif,
+  sceneText: string,
+): MotionAssetDefinition | undefined => {
+  if (motif === 'none') return undefined;
+  const normalizedScene = ` ${normalizeAssetLabel(sceneText)} `;
+  const candidates = registry.motionAssets
+    .filter((asset) => asset.motifs.includes(motif))
+    .map((asset) => ({
+      asset,
+      score: asset.keywords.reduce((score, keyword) => {
+        const normalizedKeyword = normalizeAssetLabel(keyword);
+        if (!normalizedKeyword || !normalizedScene.includes(` ${normalizedKeyword} `)) {
+          return score;
+        }
+        return score + normalizedKeyword.split(' ').length;
+      }, 0),
+    }))
+    .filter(({score}) => score > 0)
+    .sort((left, right) =>
+      right.score - left.score ||
+      right.asset.priority - left.asset.priority ||
+      left.asset.id.localeCompare(right.asset.id),
+    );
+  return candidates[0]?.asset;
+};
+
+export const iconAssetForId = (
+  registry: AssetRegistry,
+  id: string,
+): IconAssetDefinition | undefined =>
+  registry.iconAssets.find((asset) => asset.id === id);
 
 export const brandAssetForLabel = (
   registry: AssetRegistry,
