@@ -23,6 +23,7 @@ import {
   getBeatTransitionFrames,
 } from './timing.js';
 import {videoPaletteFor} from '../visual-palettes.js';
+import {chromaKeySafeEffects, keySafeShadow} from './chroma-key.js';
 
 const COLORS = {
   ink: '#F8FAFC',
@@ -84,7 +85,9 @@ const titleStyle: CSSProperties = {
   margin: 0,
   maxWidth: 1500,
   textAlign: 'center',
-  textShadow: '0 3px 0 rgba(2,6,23,0.96), 0 14px 38px rgba(0,0,0,0.48)',
+  textShadow: keySafeShadow(
+    '0 3px 0 rgba(2,6,23,0.96), 0 14px 38px rgba(0,0,0,0.48)',
+  ),
   WebkitTextStroke: '2px rgba(2, 6, 23, 0.96)',
 };
 
@@ -92,7 +95,7 @@ const floatingTitleStyle: CSSProperties = {
   background: 'rgba(2, 6, 23, 0.78)',
   border: '2px solid rgba(255, 255, 255, 0.24)',
   borderRadius: 26,
-  boxShadow: '0 18px 50px rgba(2, 6, 23, 0.4)',
+  boxShadow: keySafeShadow('0 18px 50px rgba(2, 6, 23, 0.4)'),
   padding: '18px 34px 22px',
 };
 
@@ -171,7 +174,7 @@ const NodeCard = ({
         background: COLORS.panel,
         border: `2px solid ${COLORS.border}`,
         borderRadius: 24,
-        boxShadow: '0 24px 55px rgba(0,0,0,0.36)',
+        boxShadow: keySafeShadow('0 24px 55px rgba(0,0,0,0.36)'),
         color: COLORS.ink,
         display: 'flex',
         height: vertical ? 150 : 216,
@@ -381,7 +384,7 @@ const ComparisonColumn = ({
         background: COLORS.panel,
         border: `2px solid ${COLORS.border}`,
         borderRadius: 30,
-        boxShadow: '0 28px 70px rgba(0,0,0,0.38)',
+        boxShadow: keySafeShadow('0 28px 70px rgba(0,0,0,0.38)'),
         minHeight: vertical ? 420 : 500,
         opacity: entrance,
         overflow: 'hidden',
@@ -839,7 +842,7 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
           background: COLORS.panel,
           border: `3px solid ${COLORS.primary}`,
           borderRadius: 38,
-          boxShadow: '0 30px 90px rgba(0,0,0,0.42)',
+          boxShadow: keySafeShadow('0 30px 90px rgba(0,0,0,0.42)'),
           maxWidth: vertical ? 936 : 1380,
           width: vertical ? 936 : undefined,
           opacity: entrance,
@@ -953,6 +956,7 @@ export const AnimationClip = ({
       style={{
         '--video-primary': theme.accents.primary,
         '--video-secondary': theme.accents.secondary,
+        ...chromaKeySafeEffects(background === 'green'),
         backgroundColor:
           background === 'green'
             ? '#00FF00'

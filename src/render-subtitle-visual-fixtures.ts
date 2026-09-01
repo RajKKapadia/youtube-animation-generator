@@ -147,6 +147,19 @@ const main = async () => {
         await renderStill({serveUrl, composition, inputProps, output: resolve(outputDirectory, `background-${mode}-${profile.aspectRatio.replace(':', 'x')}.png`), frame: Math.floor(composition.durationInFrames / 2), imageFormat: 'png', browserExecutable, logLevel: 'warn'});
         rendered += 1;
       }
+      for (const chromaKeySample of clips.filter(({visual}) =>
+        visual.kind === 'agent-workflow' || visual.kind === 'network-map')) {
+        const inputProps = {
+          background: 'green' as const,
+          captions: 'off' as const,
+          clip: chromaKeySample,
+          foregroundAssets: {}, fps: 30, localBrandAssets: {}, localIconAssets: {}, motionAssets,
+          palette: 'emerald' as const, profile, sceneBackground: 'off' as const, technologyIcons,
+        };
+        const composition = await selectComposition({serveUrl, id: 'SubtitleClip', inputProps, browserExecutable, logLevel: 'warn'});
+        await renderStill({serveUrl, composition, inputProps, output: resolve(outputDirectory, `background-green-${chromaKeySample.visual.kind}-${profile.aspectRatio.replace(':', 'x')}.png`), frame: Math.floor(composition.durationInFrames / 2), imageFormat: 'png', browserExecutable, logLevel: 'warn'});
+        rendered += 1;
+      }
     }
     console.log(`Rendered ${rendered} subtitle visual fixture stills to ${outputDirectory}`);
   } finally {

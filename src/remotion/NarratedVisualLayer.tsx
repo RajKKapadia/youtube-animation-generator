@@ -36,6 +36,7 @@ import {
   sceneEntranceExit,
   timedProgress,
 } from './cinematic-motion.js';
+import {keySafeShadow} from './chroma-key.js';
 
 const clamp = {
   extrapolateLeft: 'clamp' as const,
@@ -79,7 +80,7 @@ const SceneTitle = ({profile, title}: {profile: RenderProfile; title: string}) =
         margin: '0 auto',
         maxWidth: vertical ? 850 : 1460,
         textAlign: 'center',
-        textShadow: '0 4px 18px rgba(2,6,23,0.92)',
+        textShadow: keySafeShadow('0 4px 18px rgba(2,6,23,0.92)'),
       }}
     >
       <FittedText
@@ -99,7 +100,7 @@ const SceneTitle = ({profile, title}: {profile: RenderProfile; title: string}) =
 const panelStyle = (accent: string): CSSProperties => ({
   background: 'linear-gradient(145deg, rgba(15,23,42,0.94), rgba(30,41,59,0.88))',
   border: `2px solid ${hexToRgba(accent, 0.42)}`,
-  boxShadow: '0 28px 64px rgba(2,6,23,0.44)',
+  boxShadow: keySafeShadow('0 28px 64px rgba(2,6,23,0.44)'),
 });
 
 export const VERTICAL_AGENT_WORKFLOW_GEOMETRY = {
@@ -132,7 +133,7 @@ const ItemChip = ({
       background: 'rgba(15,23,42,0.92)',
       border: '2px solid rgba(148,163,184,0.28)',
       borderRadius: 22,
-      boxShadow: '0 18px 40px rgba(2,6,23,0.36)',
+      boxShadow: keySafeShadow('0 18px 40px rgba(2,6,23,0.36)'),
       boxSizing: 'border-box',
       display: 'flex',
       gap: fill ? 16 : 18,
@@ -299,7 +300,7 @@ const AgentWorkflow = ({
             style={{
               background: theme.accents.secondary,
               borderRadius: '50%',
-              boxShadow: `0 0 24px ${theme.accents.secondary}`,
+              boxShadow: keySafeShadow(`0 0 24px ${theme.accents.secondary}`),
               height: 16,
               left: `${18 + travel * 64}%`,
               opacity: travel < 1 ? 1 : 0,
@@ -740,7 +741,7 @@ const IconSpotlight = ({
                 style={{
                   background: theme.accents.secondary,
                   borderRadius: '50%',
-                  boxShadow: `0 0 24px ${theme.accents.secondary}`,
+                  boxShadow: keySafeShadow(`0 0 24px ${theme.accents.secondary}`),
                   height: 18,
                   left: `calc(50% + ${Math.cos(orbitAngle) * orbitRadiusX}px)`,
                   position: 'absolute',
