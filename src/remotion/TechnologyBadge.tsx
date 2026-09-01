@@ -7,6 +7,7 @@ import {
   type TechnologyIconKind,
 } from './technology.js';
 import {VisualIcon} from './SemanticIcon.js';
+import {keySafeShadow} from './chroma-key.js';
 
 const TechnologyIconsContext = createContext<Record<string, TechnologyBrandIcon>>({});
 const LocalBrandAssetsContext = createContext<Record<string, LocalBrandAsset>>({});
@@ -128,7 +129,7 @@ export const TechnologyBadge = ({
           : 'rgba(248, 250, 252, 0.98)',
         border: '2px solid rgba(255, 255, 255, 0.72)',
         borderRadius: Math.round(size * 0.28),
-        boxShadow: '0 8px 20px rgba(2, 6, 23, 0.32)',
+        boxShadow: keySafeShadow('0 8px 20px rgba(2, 6, 23, 0.32)'),
         display: 'flex',
         flex: `0 0 ${size}px`,
         height: size,
