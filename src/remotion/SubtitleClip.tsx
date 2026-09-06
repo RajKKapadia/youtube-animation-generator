@@ -10,6 +10,7 @@ import {
 } from './NarratedSceneLayer.js';
 import {LocalIconAssetsProvider} from './SemanticIcon.js';
 import {LocalBrandAssetsProvider} from './TechnologyBadge.js';
+import {chromaKeySafeEffects} from './chroma-key.js';
 
 const fallbackTimings = (
   total: number,
@@ -73,6 +74,7 @@ export const SubtitleClip = ({
       <LocalIconAssetsProvider assets={localIconAssets}>
         <AbsoluteFill
           style={{
+            ...chromaKeySafeEffects(background === 'green'),
             backgroundColor: sceneBackground === 'off'
               ? background === 'green'
                 ? '#00FF00'

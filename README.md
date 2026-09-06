@@ -501,7 +501,7 @@ pnpm fixtures:subtitle-visuals -- /tmp/youtube-animation-subtitle-visual-fixture
 pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixtures
 ```
 
-Together, these commands cover the four diagram templates and all eight visual kinds with early, middle, and completed states in both orientations. The subtitle fixture also covers caption-off green output, caption-on ambient output, and a mock generated background without an API call. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping, logo distortion, Lottie flicker, chart readability, and unsafe positioning.
+Together, these commands cover the four diagram templates and all eight visual kinds with early, middle, and completed states in both orientations. The subtitle fixture also covers caption-off green output for legacy and modern visual paths, caption-on ambient output, and a mock generated background without an API call. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping, logo distortion, chroma-key spill, Lottie flicker, chart readability, and unsafe positioning.
 
 Render narrated MP4 fixtures with captions in both orientations. The second command uses local mock artwork to exercise the generated-image rendering path without an API call:
 

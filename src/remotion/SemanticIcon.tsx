@@ -50,6 +50,7 @@ import {
   semanticIconDefinitionFor,
   type SemanticIconId,
 } from '../icon-catalog.js';
+import {keySafeFilter} from './chroma-key.js';
 
 const ICON_COMPONENTS: Record<SemanticIconId, LucideIcon> = {
   'standard-protocol': Braces,
@@ -195,7 +196,7 @@ export const AnimatedVisualIcon = ({
         id={id}
         size="74%"
         strokeWidth={1.75}
-        style={{filter: `drop-shadow(0 0 22px ${secondaryColor}66)`}}
+        style={{filter: keySafeFilter(`drop-shadow(0 0 22px ${secondaryColor}66)`)}}
       />
     </div>
   );
