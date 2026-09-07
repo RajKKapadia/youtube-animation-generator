@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {discoverLocalCode, validateSavedCode} from './local-code.js';
 
 import {access, mkdir, readFile, stat, writeFile} from 'node:fs/promises';
 import {constants} from 'node:fs';
@@ -61,7 +62,7 @@ import {
 } from './supertonic/protocol.js';
 import {selectSupertonicVoice} from './supertonic/voice-selection.js';
 
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';
 const FORMATS = new Set<OutputFormat>(['prores', 'webm', 'green', 'h264']);
 
 const help = `youtube-animations ${VERSION}
@@ -74,6 +75,8 @@ Usage:
   youtube-animations publish <narrated-plan.json> [options]
   youtube-animations --render-plan <plan.json> [options]
   youtube-animations create --render-plan <narrated-plan.json> [options]
+
+Optional visual inputs: sibling images/ and code/ folders. Markdown fenced code is also supported.
 
 Shared options:
   --aspect-ratio <16:9|9:16|both>  Output orientation (default: 16:9)
@@ -307,10 +310,11 @@ const loadPlan = async (
 ): Promise<{kind: 'narrated'; plan: NarratedPlan} | {kind: 'subtitle'; plan: SavedPlan}> => {
   const raw = await readJson(filePath);
   const narrated = narratedPlanSchema.safeParse(raw);
-  if (narrated.success) return {kind: 'narrated', plan: narrated.data};
+  if (narrated.success) { validateSavedCode(narrated.data.scenes); return {kind: 'narrated', plan: narrated.data}; }
   const subtitle = savedPlanSchema.safeParse(raw);
-  if (subtitle.success) return {kind: 'subtitle', plan: subtitle.data};
-  throw new Error(`Plan is neither a valid subtitle plan nor narrated-video plan: ${filePath}`);
+  if (subtitle.success) { validateSavedCode(subtitle.data.clips); return {kind: 'subtitle', plan: subtitle.data}; }
+  const issues = raw && typeof raw === 'object' && 'kind' in raw && raw.kind === 'narrated-video' ? narrated.error : subtitle.error;
+  throw new Error(`Invalid saved plan ${filePath}: ${issues.message}`);
 };
 
 interface CommonRuntimeOptions {
@@ -488,13 +492,16 @@ const runSubtitleWorkflow = async ({
       console.log(`Found ${localImages.length} valid local image${localImages.length === 1 ? '' : 's'} in ${resolve(dirname(subtitlePath), 'images')}.`);
     }
     console.log(`Planning up to ${maxSuggestions} animations with ${model}...`);
+    const code = await discoverLocalCode({sourcePath: subtitlePath});
     plan = await planAnimations(cues, {
+      codeSources: code.sources,
       generatedVisuals: visual.generatedVisuals,
       localImages,
       maxSuggestions,
       model,
       sourceSubtitle: subtitlePath,
     });
+    plan.planningWarnings = [...code.warnings, ...(plan.planningWarnings ?? [])];
   }
 
   const stem = fileStem(plan.sourceSubtitle);
@@ -570,7 +577,7 @@ const runSubtitleWorkflow = async ({
 
   for (const rendered of renderedProfiles) {
     const manifest: OutputManifest = {
-      version: 3,
+      version: 4,
       sourceSubtitle: plan.sourceSubtitle,
       generatedAt: new Date().toISOString(),
       format,
@@ -767,7 +774,9 @@ const runNarratedWorkflow = async ({
       );
       console.log(`Saved research report: ${researched.paths.markdown}`);
     }
+    const code = await discoverLocalCode({sourcePath, sourceText});
     draft = await planNarratedVideo({
+      codeSources: code.sources,
       generatedVisuals: visual.generatedVisuals,
       language,
       localImages,
@@ -776,6 +785,7 @@ const runNarratedWorkflow = async ({
       sourceText: planningSourceText,
       targetDurationSeconds,
     });
+    draft.planningWarnings = [...code.warnings, ...(draft.planningWarnings ?? [])];
     await stageSelectedLocalImages({
       catalog: localImages,
       outputDirectory,

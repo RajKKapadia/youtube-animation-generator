@@ -186,7 +186,7 @@ const TREATMENTS: Array<{
 ];
 
 const makePlan = (treatment: typeof TREATMENTS[number]) => timedNarratedPlanSchema.parse({
-  version: 6,
+  version: 7,
   kind: 'narrated-video',
   stage: 'timed',
   sourceText: treatment.sourceText ?? `OpenAI React PostgreSQL Docker Kubernetes Next.js ${treatment.items.join(' ')}`,

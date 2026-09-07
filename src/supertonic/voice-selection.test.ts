@@ -4,7 +4,7 @@ import {selectSupertonicVoice} from './voice-selection.js';
 
 const planFor = (title: string, sourceText: string): DraftNarratedPlan =>
   draftNarratedPlanSchema.parse({
-    version: 6,
+    version: 7,
     kind: 'narrated-video',
     stage: 'draft',
     sourceText,

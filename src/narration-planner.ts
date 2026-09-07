@@ -1,3 +1,5 @@
+import {EXPLAINER_PLANNING_PROMPT, explainerGroundingIssue, visualTreatmentKey} from './explainer-visuals.js';
+import {codeCatalogPrompt, codeSelectionIssue, materializeCodeVisual, type CodeSource} from './local-code.js';
 import OpenAI from 'openai';
 import {zodTextFormat} from 'openai/helpers/zod';
 import {z} from 'zod';
@@ -43,7 +45,7 @@ const narrationResponseSchema = z.object({
   scenes: z.array(draftNarrationSceneSuggestionSchema).min(1).max(6),
 });
 
-const SYSTEM_PROMPT = `You are a precise visual writer and director for short educational videos.
+const SYSTEM_PROMPT = EXPLAINER_PLANNING_PROMPT + '\n\n' + `You are a precise visual writer and director for short educational videos.
 
 Turn the supplied source into a self-contained narration and storyboard. Stay faithful to the source: do not invent facts, examples, numbers, claims, or conclusions. Open with a concise hook, build a clear explanation, and finish with a useful conclusion. The narration must sound natural when read aloud and must not refer to the source document.
 
@@ -53,7 +55,7 @@ Use at most six scenes and only these visual templates:
 - timeline: primaryItems are ordered stages and secondaryItems is empty.
 - callout: primaryItems are concise takeaways and secondaryItems is empty.
 
-Also choose one visual treatment for every scene. Use this strict priority: a source-backed data visualization first when related values explain the point; then a highly relevant supplied local image; then a generated image only when enabled and when a concrete source-backed subject/action/environment is visually useful; otherwise use a code-native treatment.
+Also choose one visual treatment for every scene. Among equally suitable treatments, prefer: a source-backed data visualization first when related values explain the point; then a highly relevant supplied local image; then a generated image only when enabled and when a concrete source-backed subject/action/environment is visually useful; otherwise use a code-native treatment.
 - diagram: use one of the four templates above for processes, comparisons, timelines, and compact callouts.
 - agent-workflow: use a central AI agent with orbiting tools and request/result tokens. Use only when an agent or autonomous workflow is genuinely central to the source.
 - brand-showcase: use only exact company or product names explicitly present in the source. Put those names in primaryItems without descriptive prose. Never invent a brand.
@@ -63,7 +65,7 @@ Also choose one visual treatment for every scene. Use this strict priority: a so
 - image-focus: use a supplied local image at most once, or a generated image only under the generated-image rules below. For screenshots and diagrams prefer contain with a blurred backplate; use cover for photographs. Choose push-in, pan, or drift and a restrained focal position.
 - data-visualization: use only when the source has enough related numeric values. Use grouped-bars for 1-4 categories and 1-3 series, or metric-cards for 2-4 closely related metrics. Every datum must preserve a stable id, exact source label, numeric value, unit, precision, extractive sourceEvidence, and the exact sourceToken. Copy evidence without paraphrasing or reordering it; source line breaks and table whitespace may be collapsed to single spaces. Derived annotations must contain only operand ids plus ratio, difference, or percent-change; do not calculate their display value.
 
-Choose a compatible motion: diagram supports reveal, flow, pulse, or scan; agent-workflow supports flow, orbit, or pulse; brand-showcase supports reveal or drift; network-map supports flow, orbit, or pulse; metric-focus supports reveal, count-up, or pulse; icon-spotlight supports reveal, pulse, scan, or drift; image-focus supports push-in, pan, or drift; data-visualization supports reveal or count-up. Choose a controlled motif from none, ai-agent, automation, data, search, document, message, analytics, cloud, or security. Use none only for diagrams. Keep template fields truthful and useful as a static fallback: process-flow for agent workflows and network maps, and callout for brand showcases, metric focus, icon spotlights, image focus, and data visualization.
+Choose a compatible motion: diagram supports reveal, flow, pulse, or scan; agent-workflow supports flow, orbit, or pulse; brand-showcase supports reveal or drift; network-map supports flow, orbit, or pulse; metric-focus supports reveal, count-up, or pulse; icon-spotlight supports reveal, pulse, scan, or drift; image-focus supports push-in, pan, or drift; data-visualization supports reveal or count-up. Choose a controlled motif from none, ai-agent, automation, data, search, document, message, analytics, cloud, or security. Use none for neutral diagrams or new explainer treatments without a semantic motif. Keep template fields truthful and useful as a static fallback: process-flow for agent workflows and network maps, and callout for brand showcases, metric focus, icon spotlights, image focus, and data visualization.
 
 Also provide an icons object for every scene. focal is one available icon id or null. primary and secondary contain exactly one icon id or null for every corresponding visible item. An icon-spotlight must have a focal icon. Choose icons by the literal meaning of the visible item or central relationship, not merely by the broad motif. Use null for exact brands, photographs, charts, or when no available icon is genuinely relevant. Do not invent icon ids. An animated asset is appropriate only when its subject matches the scene; broad motif similarity alone is insufficient.
 
@@ -119,6 +121,7 @@ interface NarratedVisualGroundingState {
 const sourceBackedVisualIssue = ({
   generatedVisuals,
   localImageIds,
+  codeSources = [],
   scene,
   sourceNumbers,
   sourceText,
@@ -126,11 +129,15 @@ const sourceBackedVisualIssue = ({
 }: {
   generatedVisuals: 'off' | 'auto';
   localImageIds: Set<string>;
+  codeSources?: CodeSource[];
   scene: DraftNarrationSceneSuggestion;
   sourceNumbers: Set<string>;
   sourceText: string;
   state: NarratedVisualGroundingState;
 }): string | null => {
+  const explainerIssue = explainerGroundingIssue(scene, sourceText);
+  if (explainerIssue) return explainerIssue;
+  if (scene.visual.kind === 'code-walkthrough') return codeSelectionIssue(scene.visual, codeSources);
   if (scene.visual.kind === 'brand-showcase') {
     for (const label of [...scene.primaryItems, ...scene.secondaryItems]) {
       if (!sourceContainsLabel(sourceText, label)) {
@@ -150,7 +157,8 @@ const sourceBackedVisualIssue = ({
     for (const datum of scene.visual.chart.data) {
       const normalizedToken = datum.sourceToken.replaceAll(',', '').replaceAll(' ', '');
       const issue = chartDatumGroundingIssue(sourceText, datum);
-      if (issue || !sourceNumbers.has(normalizedToken)) {
+      const numericValue = Number(normalizedToken.replace(/%$/u, ''));
+      if (issue || !sourceNumbers.has(normalizedToken) || !Number.isFinite(numericValue) || numericValue !== datum.value) {
         return `Chart datum ${datum.id} in scene ${scene.id} is not exactly supported by the source text${issue ? `: ${issue}` : '.'}`;
       }
     }
@@ -207,11 +215,13 @@ export const assertSourceBackedNarratedVisuals = ({
   sourceText,
   generatedVisuals = 'auto',
   localImageIds = new Set<string>(),
+  codeSources = [],
 }: {
   scenes: DraftNarrationSceneSuggestion[];
   sourceText: string;
   generatedVisuals?: 'off' | 'auto';
   localImageIds?: Set<string>;
+  codeSources?: CodeSource[];
 }): void => {
   const sourceNumbers = new Set(numericClaims(sourceText));
   const state: NarratedVisualGroundingState = {
@@ -222,6 +232,7 @@ export const assertSourceBackedNarratedVisuals = ({
     const issue = sourceBackedVisualIssue({
       generatedVisuals,
       localImageIds,
+      codeSources,
       scene,
       sourceNumbers,
       sourceText,
@@ -236,11 +247,13 @@ export const recoverUnsupportedNarratedVisuals = ({
   sourceText,
   generatedVisuals = 'auto',
   localImageIds = new Set<string>(),
+  codeSources = [],
 }: {
   scenes: DraftNarrationSceneSuggestion[];
   sourceText: string;
   generatedVisuals?: 'off' | 'auto';
   localImageIds?: Set<string>;
+  codeSources?: CodeSource[];
 }): {scenes: DraftNarrationSceneSuggestion[]; warnings: string[]} => {
   const sourceNumbers = new Set(numericClaims(sourceText));
   const state: NarratedVisualGroundingState = {
@@ -252,6 +265,7 @@ export const recoverUnsupportedNarratedVisuals = ({
     const issue = sourceBackedVisualIssue({
       generatedVisuals,
       localImageIds,
+      codeSources,
       scene,
       sourceNumbers,
       sourceText,
@@ -283,12 +297,12 @@ export const narratedVisualPlanningWarnings = ({
   sourceText: string;
 }): string[] => {
   const warnings = [...registry.warnings];
-  if (scenes.length >= 4 && new Set(scenes.map(({visual}) => visual.kind)).size < 3) {
+  if (scenes.length >= 4 && new Set(scenes.map(({visual}) => visualTreatmentKey(visual))).size < 3) {
     warnings.push(
       'The source supported fewer than three truthful visual treatments; the saved plan preserves accuracy over forced variety.',
     );
   }
-  if (scenes.some((scene, index) => index > 0 && scene.visual.kind === scenes[index - 1]?.visual.kind)) {
+  if (scenes.some((scene, index) => index > 0 && visualTreatmentKey(scene.visual) === visualTreatmentKey(scenes[index - 1]!.visual))) {
     warnings.push(
       'Adjacent scenes repeat a visual treatment because the planner could not select a truthful alternative.',
     );
@@ -313,10 +327,12 @@ export const narratedVisualPlanningWarnings = ({
 
 export const materializeNarratedVisuals = ({
   localImages = [],
+  codeSources = [],
   registry,
   scenes,
 }: {
   localImages?: DiscoveredLocalImage[];
+  codeSources?: CodeSource[];
   registry: AssetRegistry;
   scenes: DraftNarrationSceneSuggestion[];
 }): {
@@ -407,6 +423,8 @@ export const materializeNarratedVisuals = ({
 
   const materializedScenes = scenes.map((scene) => {
     const icons = materializeIcons(scene);
+    if (scene.visual.kind === 'code-walkthrough') return {...scene, icons, visual: materializeCodeVisual(scene.visual, codeSources)};
+    if (scene.visual.kind === 'kinetic-text' || scene.visual.kind === 'before-after' || scene.visual.kind === 'sequence-diagram' || scene.visual.kind === 'layered-architecture') return {...scene, icons, visual: {...scene.visual, assetId: null}};
     if (scene.visual.kind === 'image-focus') {
       if (scene.visual.source === 'local') {
         const image = scene.visual.localImageId
@@ -511,6 +529,7 @@ export interface NarrationPlanOptions {
   generatedVisuals: 'off' | 'auto';
   language: string;
   localImages?: DiscoveredLocalImage[];
+  codeSources?: CodeSource[];
   model: string;
   originalSourceText?: string;
   research?: WebResearchBundle;
@@ -532,6 +551,7 @@ export const planNarratedVideo = async (
     options.targetDurationSeconds,
   );
   const localImages = options.localImages ?? [];
+  const codeSources = options.codeSources ?? [];
   const registry = await loadAssetRegistry();
   const imageCatalog = localImages.length === 0
     ? 'No local images were supplied.'
@@ -544,7 +564,7 @@ export const planNarratedVideo = async (
     `"${options.language}". Aim for about ${targetWords} spoken words. ` +
     `Use no more than ${expressionLimit} non-neutral voice ` +
     `expression${expressionLimit === 1 ? '' : 's'} across the complete video.\n` +
-    `${generationRule}\n${imageCatalog}\n\n` +
+    `${generationRule}\n${imageCatalog}\n${codeCatalogPrompt(codeSources)}\n\n` +
     `AVAILABLE ICON IDS:\n${semanticIconCatalogPrompt()}${registry.iconAssets.length > 0
       ? `\n${registry.iconAssets.map((asset) => `- ${asset.id}: ${asset.keywords.join(', ')}`).join('\n')}`
       : ''}\n\n` +
@@ -578,15 +598,18 @@ export const planNarratedVideo = async (
     sourceText: options.sourceText,
     generatedVisuals: options.generatedVisuals,
     localImageIds: new Set(localImages.map(({id}) => id)),
+    codeSources,
   });
   assertSourceBackedNarratedVisuals({
     scenes: recovered.scenes,
     sourceText: options.sourceText,
     generatedVisuals: options.generatedVisuals,
     localImageIds: new Set(localImages.map(({id}) => id)),
+    codeSources,
   });
   const materialized = materializeNarratedVisuals({
     localImages,
+    codeSources,
     registry,
     scenes: recovered.scenes,
   });
@@ -601,7 +624,7 @@ export const planNarratedVideo = async (
   ])];
 
   return draftNarratedPlanSchema.parse({
-    version: 6,
+    version: 7,
     kind: 'narrated-video',
     stage: 'draft',
     sourceText: options.sourceText,

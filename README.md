@@ -1,6 +1,6 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, optional cited web research can enrich narrated sources, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Both video workflows support deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, curated local Lottie assets, coherent cinematic palettes, and optional scene backgrounds. Subtitle inputs remain separate editor-ready clips; they never synthesize or edit audio.
+Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, optional cited web research can enrich narrated sources, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Both video workflows support kinetic typography, before/after transformations, supplied-code walkthroughs, request/response sequences, layered architecture builds, line charts, deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, curated local Lottie assets, coherent cinematic palettes, and optional scene backgrounds. Subtitle inputs remain separate editor-ready clips; they never synthesize or edit audio.
 
 The current CLI supports three workflows:
 
@@ -60,7 +60,7 @@ summary-video/summary.backgrounds/
 
 With `--aspect-ratio both`, `summary-9x16.mp4` is rendered from the same narration, voiceover, and sample-derived timeline.
 
-Subtitle input keeps its existing editor-oriented output names. Vertical files insert `-9x16` before the extension, and enriched placement manifests are version 3:
+Subtitle input keeps its existing editor-oriented output names. Vertical files insert `-9x16` before the extension, and enriched placement manifests are version 4:
 
 ```text
 /videos/animations/
@@ -158,7 +158,7 @@ pnpm run animations create summary.md \
 
 Research options apply only while planning a new narrated video. Subtitle overlays, saved-plan rendering, image validation, and publish-kit generation do not run web searches.
 
-Every version-6 scene persists a discriminated `visual` object plus explicit `icons` selections. `icons.focal` identifies the scene's central semantic symbol, while `icons.primary` and `icons.secondary` align one-for-one with visible items. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated, subject-matched local Lottie asset or remains `null` for code-native icon motion. `image-focus` instead references a plan-level local/generated media id, while `data-visualization` stores its validated chart specification. Older version-6 files without icon selections load with conservative label fallbacks; versions 1–5 still normalize with their original diagram/default behavior and no new foreground media. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. If truthful source material cannot support that variety, the saved plan receives a warning instead of being rejected or padded with invented content.
+Every version-7 scene persists a discriminated `visual` object plus explicit `icons` selections. `icons.focal` identifies the scene's central semantic symbol, while `icons.primary` and `icons.secondary` align one-for-one with visible items. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated, subject-matched local Lottie asset or remains `null` for code-native icon motion. `image-focus` instead references a plan-level local/generated media id, while `data-visualization` stores its validated chart specification. Older version-6 files without icon selections load with conservative label fallbacks; versions 1–5 still normalize with their original diagram/default behavior and no new foreground media. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. If truthful source material cannot support that variety, the saved plan receives a warning instead of being rejected or padded with invented content.
 
 ### Local foreground images
 
@@ -179,6 +179,44 @@ The planner receives each valid file as a high-detail Base64 image with a stable
 When the source contains enough related values, the planner can select grouped comparison bars or 2–4 metric cards. Every datum preserves its stable id, exact label, numeric value, unit, precision, numeric token, and exact evidence excerpt. Ratios, differences, and percentage changes save operand ids only; the renderer computes and marks their deterministic rounded display with `≈`. Grouped bars are vertical in 16:9 and horizontal in 9:16. A single isolated fact continues to use `metric-focus`.
 
 Markdown tables and wrapped source text are checked with normalized whitespace, so an otherwise exact row does not fail merely because its cells were separated by tabs or newlines. If a proposed chart, generated/local image reference, metric, or brand treatment still cannot be verified against the source, the planner preserves the narration and replaces only that optional treatment with a code-native diagram. The CLI prints the reason under `Planning warnings`, and the warning is saved in the draft plan for review; unsupported values are never rendered as a chart.
+
+### Supplied code walkthroughs
+
+Place optional source files directly in a `code/` folder beside either the Markdown/text source or subtitle file. Markdown fenced blocks are also available as code sources:
+
+```text
+/videos/
+├── tutorial.srt
+└── code/
+    ├── endpoint.py
+    └── request.js
+```
+
+```bash
+pnpm run animations tutorial.srt --plan-only
+pnpm run animations create tutorial.md --plan-only --aspect-ratio both
+```
+
+The planner sees numbered code lines and selects an exact source range relevant to the explanation. The materializer extracts it locally; code is never rewritten or executed. Saved plans embed the excerpt, language, filename, source line range, and checksums, so rerenders do not need the original folder. The supplied explanation remains the authority for what is narrated; code comments and strings are untrusted data.
+
+Supported extensions are `.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.json`, `.sql`, `.sh`, and `.txt`. Discovery is nonrecursive, excludes symlinks, and accepts at most 10 sources, 32 KiB each, and 128 KiB total including fenced blocks. Invalid or oversized inputs produce planning warnings. Selected excerpts contain at most 12 lines of 60 columns each; indentation is preserved and tabs display as four spaces. No eligible excerpt means the planner uses another treatment. Saved-plan edits with a mismatched snippet checksum must be regenerated from the supplied source.
+
+### New explainer selection and saved-plan controls
+
+Both planners choose animations automatically according to the explanation's structure. Edit a saved scene/clip's `visual` object to override the choice. New visual payloads reference existing primary/secondary item indices, so the same narration beats or subtitle cues still control the reveal timing:
+
+| Treatment | Payload and compatible motion |
+| --- | --- |
+| `kinetic-text` | Existing primary items; `reveal` or `pulse` |
+| `before-after` | `pairs` with primary/secondary item indices and exact source evidence; `reveal` |
+| `code-walkthrough` | Source ID/range, embedded `excerpt`, and `highlights` linking primary items to absolute code line ranges; `scan` |
+| `sequence-diagram` | Named `participants` and ordered `messages` with endpoints, primary item index, and evidence; `flow` |
+| `layered-architecture` | `layerOrder` and evidence supporting all layers and their order; `reveal` |
+| `data-visualization`, chart type `line-chart` | `points` referencing x/y datum IDs and primary items; `reveal` |
+
+Line charts use 2–6 observations with numeric x values in strictly increasing order, consistent units on each axis, proportional axes, and straight connecting segments. Both coordinates must preserve exact source values, tokens, and evidence. Dates and numeric coordinates are not inferred from categorical labels. Line-chart `series`, `categories`, `cards`, and `derivedAnnotations` are empty. Point readouts display exact values without count-up. Unsupported optional selections fall back to a diagram with a warning; invalid saved payloads fail validation.
+
+New animations retain stable reading time, with transitions taking at most 40% of the next available reveal window. All are supported in native 16:9 and 9:16, including green and transparent subtitle exports. Subtitle clips remain audio-free.
 
 ### Grounded generated foreground illustrations
 
@@ -354,7 +392,7 @@ pnpm run animations --render-plan animations/episode.animation-plan.json
 
 New overlay plans speech-align visible items to subtitle cues. Saved version-1 plans remain compatible and fall back to evenly distributed reveals when item timings are absent. Version-3 output manifests retain `aspectRatio`, `width`, and `height` and add palette, captions, scene background, and asset-credit metadata while landscape filenames remain unchanged.
 
-Version-2 subtitle plans select one palette and can use all narrated visual treatments. Put relevant PNG, JPEG, or WebP files in an `images/` directory beside the subtitle file; each selected image is copied once into the plan output for deterministic rerenders. Exact chart values, brand names, metrics, and generated-image evidence must occur in the selected cue range. An unsupported optional treatment falls back to a diagram with a saved warning instead of rendering invented information.
+Version-3 subtitle plans select one palette and can use all narrated visual treatments. Put relevant PNG, JPEG, or WebP files in an `images/` directory beside the subtitle file; each selected image is copied once into the plan output for deterministic rerenders. Exact chart values, brand names, metrics, and generated-image evidence must occur in the selected cue range. An unsupported optional treatment falls back to a diagram with a saved warning instead of rendering invented information.
 
 Opt into exact cue captions and an opaque ambient H.264 clip:
 
@@ -439,7 +477,7 @@ Subtitle inputs default to an adjacent `animations/` directory. Narrated source 
 - `timeline` — ordered stages or events
 - `callout` — definitions, concepts, and important statistics
 
-These four layouts remain available under `visual.kind: "diagram"`. Narrated videos and version-2 subtitle plans also support:
+These four layouts remain available under `visual.kind: "diagram"`. Narrated videos and version-3 subtitle plans also support:
 
 - `agent-workflow` — one central agent, surrounding tools, and beat-driven request/result activity
 - `brand-showcase` — exact product or company marks with staggered entrances and very slow drift
@@ -447,13 +485,18 @@ These four layouts remain available under `visual.kind: "diagram"`. Narrated vid
 - `metric-focus` — an exact source-backed number or claim with count-up and supporting context
 - `icon-spotlight` — one dominant semantic, brand, or local Lottie visual with supporting chips
 - `image-focus` — one relevant local or grounded generated foreground image with cinematic pan, drift, or push-in
-- `data-visualization` — exact grouped bars or metric cards with renderer-computed derived annotations
+- `data-visualization` — exact grouped bars, metric cards, or a single-series line chart; existing bars/cards support renderer-computed derived annotations
+- `kinetic-text` — 1–4 large, exact source statements with timed reveal or emphasis
+- `before-after` — 1–3 explicitly supported transformations with paired labels and controlled wipes
+- `code-walkthrough` — a literal supplied code excerpt with speech-timed line highlights
+- `sequence-diagram` — 2–4 participants exchanging 2–6 directed, source-supported messages
+- `layered-architecture` — 2–6 source-ordered layers assembled progressively
 
 All treatments use the same motion grammar: narration-beat or subtitle-cue entrances, stable hold frames, small ambient movement, and one dominant moving element. They do not use random motion, constant bouncing, rapid spinning, or effects behind the protected caption lane.
 
 Titles and labels are measured and fitted into their bounds. Icon resolution is deterministic: an explicit, relevance-checked scene icon is tried first; an exact Simple Icons name or explicit brand alias is tried second; an exact entry from `assets/brands/manifest.json` is tried third; and a conservative Lucide label fallback is used last. The built-in catalog includes standards/protocols, compatibility, CPUs, accelerators, memory, circuits, AI models, and the existing software-system concepts. Brand showcases do not use fuzzy matching. Missing or ambiguous logos produce a planning warning; brand names absent from the source and source-unsupported metric numbers are rejected before the plan is saved. The renderer never fabricates a mark or silently substitutes another company. Original logo colors are preserved unless a curated manifest explicitly allows monochrome use.
 
-Narrated plan files remain version 6. New subtitle animation plans are version 2 and persist the same palette, treatment, icons, media, captions, background prompts, warnings, and required asset credits; subtitle output manifests are version 3 and record the render-time caption/background settings. Version-1 subtitle plans normalize to cyan diagrams and render unchanged with the default caption/background-off options. Captions require regeneration because legacy files do not contain original per-cue timing.
+Narrated plan files are version 7. New subtitle animation plans are version 3 and persist the same palette, treatment, icons, media, captions, background prompts, warnings, and required asset credits; subtitle output manifests are version 4 and record the render-time caption/background settings. Narrated versions 1–6, subtitle versions 1–2, and placement manifests 2–3 remain readable. Existing visuals and timing are preserved during normalization. New treatments require the new plan version. Version-1 subtitle plans normalize to cyan diagrams and render unchanged with the default caption/background-off options. Captions require regeneration because legacy files do not contain original per-cue timing.
 
 Ambient backgrounds are generated entirely in Remotion from palette-driven deterministic gradients, moving light fields, a subtle grid, and a vignette. The same palette drives diagram accents and new publish covers. Generated backgrounds use native `2048×1152` and `1152×2048` JPEG assets, receive the stored palette direction in their prompt, add a slow pan/zoom plus neutral readability overlays, and never silently fall back to ambient when generation was requested. Changing the palette changes the prompt hash, so cached images cannot silently retain the previous color family.
 
@@ -471,7 +514,7 @@ Asset intake workflow:
 
 1. Obtain a logo SVG from the company's official brand or press kit, or obtain an SVG/Lottie from an approved source under a license that covers the intended video use. Never use an AI-generated company logo.
 2. Put the selected file under `assets/brands/`, `assets/icons/`, or `assets/motion/`. For a custom animation, Jitter, Lottielab, or SVGator can export Lottie from controlled SVG artwork.
-3. Add complete provenance, semantic keywords, attribution, and playback/color metadata to the matching manifest. Mark external icons that require per-video credit with `attributionRequired: true`; used credits are persisted in narrated plans and version-2 subtitle plans, copied into subtitle placement manifests, and appended to generated narrated publish Markdown. For third-party assets, also add any required notice to `THIRD_PARTY_NOTICES.md`.
+3. Add complete provenance, semantic keywords, attribution, and playback/color metadata to the matching manifest. Mark external icons that require per-video credit with `attributionRequired: true`; used credits are persisted in narrated plans and version-3 subtitle plans, copied into subtitle placement manifests, and appended to generated narrated publish Markdown. For third-party assets, also add any required notice to `THIRD_PARTY_NOTICES.md`.
 4. Run `pnpm assets:validate`, `pnpm test`, `pnpm check`, and `pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixtures` before assigning the asset ID to a scene.
 5. Inspect early, middle, and final frames in both orientations, then render the representative narrated MP4 fixture to check for flicker and caption collisions.
 
@@ -501,7 +544,19 @@ pnpm fixtures:subtitle-visuals -- /tmp/youtube-animation-subtitle-visual-fixture
 pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixtures
 ```
 
-Together, these commands cover the four diagram templates and all eight visual kinds with early, middle, and completed states in both orientations. The subtitle fixture also covers caption-off green output for legacy and modern visual paths, caption-on ambient output, and a mock generated background without an API call. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping, logo distortion, chroma-key spill, Lottie flicker, chart readability, and unsafe positioning.
+Together, these commands cover the four diagram templates and the original eight visual kinds with early, middle, and completed states in both orientations. The subtitle fixture also covers caption-off green output for legacy and modern visual paths, caption-on ambient output, and a mock generated background without an API call. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping, logo distortion, chroma-key spill, Lottie flicker, chart readability, and unsafe positioning.
+
+Render the six new treatments as a complete offline gallery:
+
+```bash
+pnpm fixtures:explainers -- /tmp/youtube-animation-explainer-gallery
+# Faster layout inspection, without video encoding:
+pnpm fixtures:explainers -- /tmp/youtube-animation-explainer-gallery --stills-only
+# Edge cases: 12-line code, long messages sharing a cue, clustered/constant chart data:
+pnpm fixtures:explainers -- /tmp/youtube-animation-explainer-gallery --stress-only
+```
+
+Open the generated `index.html`. It includes early/middle/completed stills for both workflows, green and transparent overlays, and supplied-background fixtures. The full run also writes individual audio-free green MP4s, representative alpha WebMs, and two narrated montage MP4s. Narrated previews use a silent timing track; no OpenAI call or speech synthesis is required. Editable draft/timed narration and subtitle plans are saved beside the gallery.
 
 Render narrated MP4 fixtures with captions in both orientations. The second command uses local mock artwork to exercise the generated-image rendering path without an API call:
 

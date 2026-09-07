@@ -74,7 +74,7 @@ describe('narrated CLI plan-only path', () => {
     const planPath = resolve(directory, 'summary.narration-plan.json');
     const evidence = 'Warehouse robots move sealed packages through a sorting hall.';
     await writeFile(planPath, JSON.stringify({
-      version: 6,
+      version: 7,
       kind: 'narrated-video',
       stage: 'draft',
       sourceText: evidence,
@@ -161,11 +161,11 @@ describe('narrated CLI plan-only path', () => {
     ])).rejects.toThrow('Regenerate it from the original SRT/VTT');
   });
 
-  it('documents the v0.8.0 visual-parity and publish-kit options', async () => {
+  it('documents the v0.9.0 visual-parity and publish-kit options', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     await runCli(['--help']);
     const output = String(log.mock.calls[0]?.[0]);
-    expect(output).toContain('youtube-animations 0.8.0');
+    expect(output).toContain('youtube-animations 0.9.0');
     expect(output).toContain('--format <prores|webm|green|h264>');
     expect(output).toContain('off, ambient, or generated');
     expect(output).toContain('--voice <auto|M1..M5|F1..F5>');
