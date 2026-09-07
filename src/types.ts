@@ -1,3 +1,4 @@
+import {explainerSuggestionSchema, explainerSceneSchema, explainerStructureIssue, explainerGroundingIssue, visualMotifSchema} from './explainer-visuals.js';
 import {z} from 'zod';
 import {
   narrationExpressionSchema,
@@ -304,6 +305,7 @@ export const narratedVisualKindSchema = z.enum([
   'icon-spotlight',
   'image-focus',
   'data-visualization',
+  'kinetic-text', 'before-after', 'code-walkthrough', 'sequence-diagram', 'layered-architecture',
 ]);
 
 export type NarratedVisualKind = z.infer<typeof narratedVisualKindSchema>;
@@ -322,18 +324,7 @@ export const narratedMotionSchema = z.enum([
 
 export type NarratedMotion = z.infer<typeof narratedMotionSchema>;
 
-export const narratedVisualMotifSchema = z.enum([
-  'none',
-  'ai-agent',
-  'automation',
-  'data',
-  'search',
-  'document',
-  'message',
-  'analytics',
-  'cloud',
-  'security',
-]);
+export const narratedVisualMotifSchema = visualMotifSchema;
 
 export type NarratedVisualMotif = z.infer<typeof narratedVisualMotifSchema>;
 
@@ -346,6 +337,8 @@ const ALLOWED_NARRATED_MOTIONS: Record<NarratedVisualKind, NarratedMotion[]> = {
   'icon-spotlight': ['reveal', 'pulse', 'scan', 'drift'],
   'image-focus': ['push-in', 'pan', 'drift'],
   'data-visualization': ['reveal', 'count-up'],
+  'kinetic-text': ['reveal', 'pulse'], 'before-after': ['reveal'],
+  'code-walkthrough': ['scan'], 'sequence-diagram': ['flow'], 'layered-architecture': ['reveal'],
 };
 
 const addNarratedVisualIssues = (
@@ -442,7 +435,7 @@ const metricCardSchema = z.object({
   annotationId: assetIdSchema.nullable(),
 });
 
-export const dataVisualizationSchema = z.object({
+const legacyDataVisualizationSchema = z.object({
   type: z.enum(['grouped-bars', 'metric-cards']),
   title: z.string().min(1).max(100),
   data: z.array(chartDatumSchema).min(2).max(12),
@@ -497,6 +490,31 @@ export const dataVisualizationSchema = z.object({
     }
   }
 });
+
+const lineChartSchema = z.object({
+  type: z.literal('line-chart'), title: z.string().min(1).max(100),
+  data: z.array(chartDatumSchema).min(4).max(12),
+  series: z.array(chartSeriesSchema).length(0), categories: z.array(chartCategorySchema).length(0),
+  cards: z.array(metricCardSchema).length(0), derivedAnnotations: z.array(chartDerivedAnnotationSchema).length(0),
+  points: z.array(z.object({xDatumId: assetIdSchema, yDatumId: assetIdSchema, primaryItemIndex: z.number().int().min(0).max(5)})).min(2).max(6),
+}).superRefine((chart, context) => {
+  const byId = new Map(chart.data.map((datum) => [datum.id, datum]));
+  const used = new Set<string>();
+  let previousX = -Infinity;
+  let xUnit: string | undefined;
+  let yUnit: string | undefined;
+  let invalid = byId.size !== chart.data.length;
+  for (const [index, point] of chart.points.entries()) {
+    const x = byId.get(point.xDatumId), y = byId.get(point.yDatumId);
+    if (!x || !y || x.id === y.id || used.has(point.xDatumId) || used.has(point.yDatumId)) { invalid = true; continue; }
+    if (x.value <= previousX || (xUnit !== undefined && xUnit !== x.unit) || (yUnit !== undefined && yUnit !== y.unit) || point.primaryItemIndex !== index) invalid = true;
+    previousX = x.value; xUnit = x.unit; yUnit = y.unit;
+    used.add(x.id); used.add(y.id);
+  }
+  if (invalid || used.size !== chart.data.length) context.addIssue({code: 'custom', message: 'Line charts require unique referenced x/y data, strictly increasing x values, consistent units per axis, and ordered point item indices.', path: ['points']});
+});
+
+export const dataVisualizationSchema = z.union([legacyDataVisualizationSchema, lineChartSchema]);
 
 export type DataVisualization = z.infer<typeof dataVisualizationSchema>;
 
@@ -574,6 +592,7 @@ const dataVisualizationSuggestionSchema = z.object({
 });
 
 export const narratedVisualSuggestionSchema = z.union([
+  explainerSuggestionSchema,
   legacyNarratedVisualSuggestionSchema,
   imageFocusSuggestionSchema,
   dataVisualizationSuggestionSchema,
@@ -610,6 +629,7 @@ const dataVisualizationSceneVisualSchema = z.object({
 });
 
 export const narratedSceneVisualSchema = z.union([
+  explainerSceneSchema,
   legacyNarratedSceneVisualSchema,
   imageFocusSceneVisualSchema,
   dataVisualizationSceneVisualSchema,
@@ -640,6 +660,8 @@ export const subtitleAnimationSuggestionSchema = animationContentSchema.extend({
   visual: narratedVisualSuggestionSchema,
   icons: sceneIconSelectionSchema,
 }).superRefine((suggestion, context) => {
+  const issue = explainerStructureIssue(suggestion);
+  if (issue) context.addIssue({code: 'custom', message: issue, path: ['visual']});
   for (const [field, itemCount] of [
     ['primary', suggestion.primaryItems.length],
     ['secondary', suggestion.secondaryItems.length],
@@ -678,7 +700,10 @@ export const subtitleAnimationClipSchema = z.intersection(
     icons: sceneIconSelectionSchema.default(EMPTY_SCENE_ICON_SELECTION),
     captionCues: z.array(subtitleCaptionCueSchema),
   }),
-);
+).superRefine((clip, context) => {
+  const issue = explainerGroundingIssue(clip, clip.transcript);
+  if (issue) context.addIssue({code: 'custom', message: issue, path: ['visual']});
+});
 
 export type AnimationClip = z.infer<typeof subtitleAnimationClipSchema>;
 
@@ -837,8 +862,19 @@ const addSubtitlePlanIssues = (
   }
 };
 
-export const subtitleSavedPlanV2Schema = z.object({
-  version: z.literal(2),
+const isLegacyVisual = (visual: unknown): boolean => {
+  if (!visual || typeof visual !== 'object') return true;
+  const value = visual as {kind?: string; chart?: {type?: string}};
+  return ['diagram', 'agent-workflow', 'brand-showcase', 'network-map', 'metric-focus', 'icon-spotlight', 'image-focus', 'data-visualization'].includes(value.kind ?? '') && value.chart?.type !== 'line-chart';
+};
+const upgradeVisualPlan = (input: unknown, from: number, to: number, field: 'scenes' | 'clips'): unknown => {
+  if (!input || typeof input !== 'object') return input;
+  const plan = input as {version?: number; scenes?: Array<{visual?: unknown}>; clips?: Array<{visual?: unknown}>};
+  return plan.version === from && Array.isArray(plan[field]) && plan[field]!.every((item) => item !== null && typeof item === 'object' && isLegacyVisual(item.visual)) ? {...plan, version: to} : input;
+};
+
+export const subtitleSavedPlanV3Schema = z.object({
+  version: z.literal(3),
   sourceSubtitle: z.string().min(1),
   generatedAt: z.string().min(1),
   model: z.string().min(1),
@@ -851,8 +887,8 @@ export const subtitleSavedPlanV2Schema = z.object({
 
 const normalizeLegacySavedPlan = (
   plan: z.infer<typeof legacySavedPlanSchema>,
-) => subtitleSavedPlanV2Schema.parse({
-  version: 2,
+) => subtitleSavedPlanV3Schema.parse({
+  version: 3,
   sourceSubtitle: plan.sourceSubtitle,
   generatedAt: plan.generatedAt,
   model: plan.model,
@@ -869,7 +905,10 @@ const normalizeLegacySavedPlan = (
   })),
 });
 
+export const subtitleSavedPlanV2Schema = z.preprocess((input) => upgradeVisualPlan(input, 2, 3, 'clips'), subtitleSavedPlanV3Schema);
+
 export const savedPlanSchema = z.union([
+  subtitleSavedPlanV3Schema,
   subtitleSavedPlanV2Schema,
   legacySavedPlanSchema.transform(normalizeLegacySavedPlan),
 ]);
@@ -887,9 +926,13 @@ export interface RenderableVisualScene extends VisualContent {
 }
 
 const addNarrationSceneIssues = (
-  scene: VisualContent & {beats: NarrationBeat[]; icons?: SceneIconSelection},
+  scene: VisualContent & {beats: NarrationBeat[]; icons?: SceneIconSelection; visual?: NarratedSceneVisual | NarratedVisualSuggestion},
   context: z.core.$RefinementCtx,
 ): void => {
+  if (scene.visual) {
+    const issue = explainerStructureIssue({...scene, visual: scene.visual});
+    if (issue) context.addIssue({code: 'custom', message: issue, path: ['visual']});
+  }
   if (scene.template === 'comparison' && scene.secondaryItems.length === 0) {
     context.addIssue({
       code: 'custom',
@@ -1007,7 +1050,7 @@ export const maxNarrationExpressionsForDuration = (
 const addNarratedPlanIssues = (
   plan: {
     mediaAssets: NarratedMediaAsset[];
-    scenes: Array<{beats: NarrationBeat[]; visual: NarratedSceneVisual}>;
+    scenes: Array<VisualContent & {beats: NarrationBeat[]; visual: NarratedSceneVisual}>;
     sourceText: string;
     targetDurationSeconds: number;
   },
@@ -1059,6 +1102,8 @@ const addNarratedPlanIssues = (
   const usedMediaIds = new Set<string>();
   let generatedSceneCount = 0;
   for (const [sceneIndex, scene] of plan.scenes.entries()) {
+    const issue = explainerGroundingIssue(scene, plan.sourceText);
+    if (issue) context.addIssue({code: 'custom', message: issue, path: ['scenes', sceneIndex, 'visual']});
     if (scene.visual.kind === 'image-focus') {
       const asset = mediaById.get(scene.visual.mediaId);
       if (!asset || asset.source !== scene.visual.source) {
@@ -1106,7 +1151,7 @@ const addNarratedPlanIssues = (
 };
 
 export const draftNarratedPlanSchema = z.object({
-  version: z.literal(6),
+  version: z.literal(7),
   kind: z.literal('narrated-video'),
   stage: z.literal('draft'),
   sourceText: z.string().min(1),
@@ -1232,7 +1277,7 @@ export const timedNarrationSceneSchema = visualContentSchema.extend({
 export type TimedNarrationScene = z.infer<typeof timedNarrationSceneSchema>;
 
 export const timedNarratedPlanSchema = z.object({
-  version: z.literal(6),
+  version: z.literal(7),
   kind: z.literal('narrated-video'),
   stage: z.literal('timed'),
   sourceText: z.string().min(1),
@@ -1580,7 +1625,7 @@ const normalizeLegacyDraft = (
   plan: z.infer<typeof legacyDraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1599,7 +1644,7 @@ const normalizeLegacyTimed = (
   plan: z.infer<typeof legacyTimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1624,7 +1669,7 @@ const normalizeLegacyV2Draft = (
   plan: z.infer<typeof legacyV2DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1641,7 +1686,7 @@ const normalizeLegacyV2Timed = (
   plan: z.infer<typeof legacyV2TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1658,7 +1703,7 @@ const normalizeLegacyV3Draft = (
   plan: z.infer<typeof legacyV3DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1671,7 +1716,7 @@ const normalizeLegacyV3Timed = (
   plan: z.infer<typeof legacyV3TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1684,7 +1729,7 @@ const normalizeLegacyV4Draft = (
   plan: z.infer<typeof legacyV4DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
@@ -1696,7 +1741,7 @@ const normalizeLegacyV4Timed = (
   plan: z.infer<typeof legacyV4TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
@@ -1708,7 +1753,7 @@ const normalizeLegacyV5Draft = (
   plan: z.infer<typeof legacyV5DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   mediaAssets: [],
 });
 
@@ -1716,13 +1761,14 @@ const normalizeLegacyV5Timed = (
   plan: z.infer<typeof legacyV5TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 6,
+  version: 7,
   mediaAssets: [],
 });
 
 export const narratedPlanSchema = z.union([
   draftNarratedPlanSchema,
   timedNarratedPlanSchema,
+  z.preprocess((input) => upgradeVisualPlan(input, 6, 7, 'scenes'), z.union([draftNarratedPlanSchema, timedNarratedPlanSchema])),
   legacyV5DraftNarratedPlanSchema.transform(normalizeLegacyV5Draft),
   legacyV5TimedNarratedPlanSchema.transform(normalizeLegacyV5Timed),
   legacyV4DraftNarratedPlanSchema.transform(normalizeLegacyV4Draft),
@@ -1931,7 +1977,7 @@ export interface ManifestClip extends AnimationClip {
 }
 
 export interface OutputManifest {
-  version: 3;
+  version: 4;
   sourceSubtitle: string;
   generatedAt: string;
   format: OutputFormat;
@@ -1956,8 +2002,8 @@ const outputManifestV2Schema = z.object({
   clips: z.array(animationClipSchema.extend({file: z.string().min(1)})),
 });
 
-const outputManifestV3Schema = z.object({
-  version: z.literal(3),
+const outputManifestV4Schema = z.object({
+  version: z.literal(4),
   sourceSubtitle: z.string().min(1),
   generatedAt: z.string().min(1),
   format: z.enum(['prores', 'webm', 'green', 'h264']),
@@ -1972,6 +2018,7 @@ const outputManifestV3Schema = z.object({
 });
 
 export const outputManifestSchema = z.union([
-  outputManifestV3Schema,
+  outputManifestV4Schema,
+  z.preprocess((input) => upgradeVisualPlan(input, 3, 4, 'clips'), outputManifestV4Schema),
   outputManifestV2Schema,
 ]);

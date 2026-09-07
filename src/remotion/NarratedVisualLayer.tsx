@@ -1,3 +1,4 @@
+import {KineticText, BeforeAfter, CodeWalkthrough, SequenceDiagram, LayeredArchitecture, LineChart} from './ExplainerVisuals.js';
 import type {CSSProperties, ReactNode} from 'react';
 import {
   AbsoluteFill,
@@ -1165,6 +1166,11 @@ export const NarratedVisualLayer = ({
 
   const content = (() => {
     switch (scene.visual.kind) {
+      case 'kinetic-text': return <KineticText palette={palette} profile={profile} scene={scene} />;
+      case 'before-after': return <BeforeAfter palette={palette} profile={profile} scene={scene} />;
+      case 'code-walkthrough': return <CodeWalkthrough contentTopInset={contentTopInset} palette={palette} profile={profile} scene={scene} />;
+      case 'sequence-diagram': return <SequenceDiagram palette={palette} profile={profile} scene={scene} />;
+      case 'layered-architecture': return <LayeredArchitecture palette={palette} profile={profile} scene={scene} />;
       case 'agent-workflow':
         return <AgentWorkflow motionAssets={motionAssets} palette={palette} profile={profile} scene={scene} />;
       case 'brand-showcase':
@@ -1178,6 +1184,7 @@ export const NarratedVisualLayer = ({
       case 'image-focus':
         return <ImageFocus foregroundAssets={foregroundAssets} palette={palette} profile={profile} scene={scene} />;
       case 'data-visualization':
+        if (scene.visual.chart.type === 'line-chart') return <LineChart palette={palette} profile={profile} scene={scene} />;
         return <DataVisualizationView palette={palette} profile={profile} scene={scene} />;
     }
   })();

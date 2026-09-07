@@ -4,7 +4,7 @@ import type {DiscoveredLocalImage} from './local-images.js';
 import {
   outputManifestSchema,
   savedPlanSchema,
-  subtitleSavedPlanV2Schema,
+  subtitleSavedPlanV3Schema,
   type SubtitleAnimationSuggestion,
   type SubtitleCue,
 } from './types.js';
@@ -117,7 +117,7 @@ describe('subtitle visual parity plans', () => {
         leftLabel: '', rightLabel: '', reason: 'Legacy fixture.',
       }],
     });
-    expect(plan.version).toBe(2);
+    expect(plan.version).toBe(3);
     expect(plan.palette).toBe('cyan');
     expect(plan.clips[0]?.visual).toEqual({kind: 'diagram', motion: 'reveal', motif: 'none', assetId: null});
     expect(plan.clips[0]?.captionCues).toEqual([]);
@@ -134,7 +134,7 @@ describe('subtitle visual parity plans', () => {
       suggestions: [chartSuggestion()],
       warnings: [],
     });
-    expect(subtitleSavedPlanV2Schema.parse(plan)).toEqual(plan);
+    expect(subtitleSavedPlanV3Schema.parse(plan)).toEqual(plan);
     expect(plan.palette).toBe('emerald');
     expect(plan.clips[0]?.visual.kind).toBe('data-visualization');
     expect(plan.clips[0]?.captionCues).toEqual([

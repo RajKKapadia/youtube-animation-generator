@@ -10,7 +10,7 @@ import {draftNarratedPlanSchema, narratedPlanSchema} from './types.js';
 import type {AssetRegistry} from './asset-registry.js';
 
 const validPlan = {
-  version: 6 as const,
+  version: 7 as const,
   kind: 'narrated-video' as const,
   stage: 'draft' as const,
   sourceText: 'Queues let producers and consumers operate independently.',
@@ -192,7 +192,7 @@ describe('draftNarratedPlanSchema', () => {
       })),
     };
     const parsed = narratedPlanSchema.parse(JSON.parse(JSON.stringify(legacyV2)));
-    expect(parsed.version).toBe(6);
+    expect(parsed.version).toBe(7);
     expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.beats.map((beat) => beat.expression)).toEqual([
       'none',
@@ -212,7 +212,7 @@ describe('draftNarratedPlanSchema', () => {
       ...withoutPalette,
       version: 3,
     });
-    expect(parsed.version).toBe(6);
+    expect(parsed.version).toBe(7);
     expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.beats[0]!.expression).toBe('none');
   });
@@ -234,7 +234,7 @@ describe('draftNarratedPlanSchema', () => {
     };
     const raw = JSON.parse(JSON.stringify(legacy));
     const parsed = narratedPlanSchema.parse(raw);
-    expect(parsed.version).toBe(6);
+    expect(parsed.version).toBe(7);
     expect(parsed.palette).toBe('cyan');
     expect(parsed.scenes[0]!.backgroundPrompt).toContain('A queue decouples work');
     expect(parsed.scenes[0]!.beats[0]!.phrases).toEqual([
@@ -249,7 +249,7 @@ describe('draftNarratedPlanSchema', () => {
     const scenes = legacy.scenes as Array<Record<string, unknown>>;
     delete scenes[0]!.visual;
     const parsed = narratedPlanSchema.parse(legacy);
-    expect(parsed.version).toBe(6);
+    expect(parsed.version).toBe(7);
     expect(parsed.palette).toBe('emerald');
     expect(parsed.scenes[0]!.visual).toEqual({
       kind: 'diagram',
@@ -264,7 +264,7 @@ describe('draftNarratedPlanSchema', () => {
     legacy.version = 5;
     delete legacy.mediaAssets;
     const parsed = narratedPlanSchema.parse(legacy);
-    expect(parsed.version).toBe(6);
+    expect(parsed.version).toBe(7);
     expect(parsed.mediaAssets).toEqual([]);
     expect(parsed.scenes[0]!.visual.kind).toBe('diagram');
   });

@@ -1,3 +1,4 @@
+import {validateSavedCode} from './local-code.js';
 import {createHash} from 'node:crypto';
 import {copyFile, readFile} from 'node:fs/promises';
 import {basename, resolve} from 'node:path';
@@ -46,6 +47,7 @@ export const stageVisualRenderAssets = async ({
   scenes: RenderableVisualScene[];
   sourceTextForScene: (scene: RenderableVisualScene) => string;
 }): Promise<StagedVisualAssets> => {
+  validateSavedCode(scenes);
   const publicForegroundAssets: StagedVisualAssets['foregroundAssets'] = {
     '16:9': {},
     '9:16': {},
