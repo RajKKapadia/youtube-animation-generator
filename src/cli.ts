@@ -802,6 +802,7 @@ const runNarratedWorkflow = async ({
 
   await mkdir(outputDirectory, {recursive: true});
   const timedPath = resolve(outputDirectory, `${stem}.narration-timed.json`);
+  const regeneratedScriptPath = resolve(outputDirectory, `${stem}.narration-script.md`);
   const audioDirectoryName = `${stem}.audio`;
   const requestedVideoPaths = narratedOutputPaths({
     aspectRatio: common.aspectRatio,
@@ -809,7 +810,12 @@ const runNarratedWorkflow = async ({
     stem,
   }).map(({outputPath}) => outputPath);
   await preflightOutputs(
-    [timedPath, resolve(outputDirectory, audioDirectoryName), ...requestedVideoPaths],
+    [
+      timedPath,
+      resolve(outputDirectory, audioDirectoryName),
+      ...requestedVideoPaths,
+      ...(planPath ? [regeneratedScriptPath] : []),
+    ],
     common.force,
   );
   const selectedVoice = voice === 'auto'
@@ -848,6 +854,10 @@ const runNarratedWorkflow = async ({
     voice: selectedVoice.voice,
   });
   await writeJson(timedPath, timed, common.force);
+  if (planPath) {
+    await writeFile(regeneratedScriptPath, narrationScriptMarkdown(draft), 'utf8');
+    console.log(`Saved narration script: ${regeneratedScriptPath}`);
+  }
   console.log(`Saved timed plan: ${timedPath}`);
   console.log(`Saved voiceover: ${resolve(outputDirectory, timed.voiceoverFile)}`);
   await renderTimedNarration({

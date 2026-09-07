@@ -673,6 +673,13 @@ describe('narrated visual planning warnings', () => {
 });
 
 describe('narrationScriptMarkdown', () => {
+  it('writes spoken quantities while keeping the draft caption text unchanged', () => {
+    const plan = structuredClone(validPlan);
+    plan.scenes[0]!.beats[0]!.phrases = [{id: 'amount', text: 'Total ₹8,930.12 crore.'}];
+    expect(narrationScriptMarkdown(plan)).toContain('Total eight thousand nine hundred and thirty point one two crore rupees.');
+    expect(plan.scenes[0]!.beats[0]!.phrases[0]!.text).toBe('Total ₹8,930.12 crore.');
+  });
+
   it('writes the complete spoken script with reviewable expression cues', () => {
     const expressive = structuredClone(validPlan);
     expressive.scenes[0]!.beats[0]!.expression = 'breath';

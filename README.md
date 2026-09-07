@@ -134,6 +134,10 @@ The planning request creates a faithful hook, explanation, and conclusion using 
 
 Every visible item is anchored to exactly one semantic narration beat. A beat is one coherent utterance that can be spoken in a natural breath; its short ordered phrases are caption and reveal boundaries, not separate TTS calls. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
 
+English narration converts supported numbers to explicit spoken words before synthesis, while captions and visual labels retain their original notation. For example, `₹8,930.12 crore` becomes “eight thousand nine hundred and thirty point one two crore rupees.” Conversion preserves signs and all decimal digits, supports Indian and Western comma grouping, lakh/crore and thousand/million/billion magnitudes, ₹/$/€/£ currencies and INR/USD/EUR/GBP/Rs prefixes, percentages, and FII/DII/FPI initialisms. Long amounts get separate sentences during new planning; caption timing weights use the expanded speech text. Beat timings still come from the actual audio; phrase timings remain estimates, not word alignment.
+
+The exact text sent for each synthesis call is saved in `summary.audio/spoken-script.json`. Other languages and ambiguous literals (dates, times, ranges, fractions, software versions, identifiers, URLs, and scientific notation) retain their existing handling. Review or spell out those literals in the draft narration when their pronunciation matters. To regenerate existing audio with this conversion, render the **draft** `summary.narration-plan.json` with `--force`; rendering a timed plan reuses its saved audio. Preserve your chosen `--voice`, `--tts-speed`, and `--tts-steps` when regenerating.
+
 ### Grounded web research
 
 Web research is off by default. Enable an optional research pass before narrated planning:
