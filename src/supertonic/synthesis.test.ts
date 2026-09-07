@@ -95,6 +95,38 @@ describe('Supertonic worker JSON jobs', () => {
 });
 
 describe('synthesizeJob', () => {
+  it('speaks exact amounts, saves the actual script and weights captions by expanded speech', async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), 'supertonic-numbers-'));
+    temporaryDirectories.push(directory);
+    const phrases = [
+      {id: 'intro', text: 'Combined net buying was'},
+      {id: 'amount', text: '₹5,818.18 crore.'},
+    ];
+    const original = structuredClone(phrases);
+    const calls: string[] = [];
+    const result = await synthesizeJob({
+      assetsDirectory: '/unused', outputDirectory: directory, voice: 'M3', language: 'en', speed: 1.05, steps: 20,
+      scenes: [{id: 'cash', beats: [{id: 'total', expression: 'none', phrases}]}],
+    }, {
+      sampleRate: 1_000,
+      synthesize: async (text) => {
+        calls.push(text);
+        return {audio: new Float32Array(10_000), durationSeconds: 10};
+      },
+    });
+    expect(calls).toEqual(['Combined net buying was five thousand eight hundred and eighteen point one eight crore rupees.']);
+    expect(phrases).toEqual(original);
+    const timed = result.scenes[0]!.beats[0]!.phrases;
+    expect(timed.map(({id}) => id)).toEqual(['intro', 'amount']);
+    expect(timed.reduce((total, phrase) => total + phrase.sampleCount, 0)).toBe(10_000);
+    expect(timed[1]!.sampleCount).toBeGreaterThan(timed[0]!.sampleCount * 2);
+    expect(timed[1]!.startSample).toBe(timed[0]!.startSample + timed[0]!.sampleCount);
+    expect(result.totalSamples).toBe(10_600);
+    const script = JSON.parse(await readFile(resolve(directory, 'spoken-script.json'), 'utf8'));
+    expect(script).toMatchObject({version: 1, language: 'en', voice: 'M3', speed: 1.05, steps: 20,
+      scenes: [{id: 'cash', beats: [{id: 'total', text: calls[0]}]}]});
+  });
+
   it('runs inference sequentially and writes an exact combined PCM timeline', async () => {
     const directory = await mkdtemp(resolve(tmpdir(), 'supertonic-test-'));
     temporaryDirectories.push(directory);

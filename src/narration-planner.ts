@@ -14,6 +14,7 @@ import {
   type WebResearchBundle,
 } from './types.js';
 import {joinNarrationPhrases} from './narration-text.js';
+import {normalizeNarrationSpeech} from './narration-speech.js';
 import {
   brandAssetForLabel,
   iconAssetForId,
@@ -76,6 +77,8 @@ For a generated image, save a structured generatedDirection with an exact source
 When the video has four or more scenes, target at least three distinct visual treatments and avoid repeating the same treatment in adjacent scenes when the source supports an honest alternative. Truthfulness takes priority over variety.
 
 Divide every scene's spoken narration into semantic beats. Each beat must be one coherent utterance that can be spoken comfortably in a single breath, normally one sentence of roughly eight to twenty-four words. A beat is the speech boundary: start a new beat only where a natural spoken pause belongs.
+
+For numeric narration, count the words needed to SAY each number, not its compact written tokens. Give each long monetary amount or multi-digit decimal its own short sentence and semantic beat instead of crowding several figures into one breath. Preserve the exact value, sign, currency, unit, and every decimal digit; never round or omit precision just to fit the target duration. Prefer clear source-supported prose such as net buyers or net sellers when that is what a signed cash-flow figure means. Expand financial initialisms in narration when helpful. Keep numbers compact in caption phrases and visual labels: the English speech layer separately expands supported numbers and currencies into words. Keep each complete quantity (sign, currency, number, magnitude, and percent unit) together in one caption phrase. For ambiguous formats such as dates, times, ranges, versions, or identifiers, write the intended pronunciation as natural words in narration when needed; never guess a meaning that the source does not establish.
 
 Divide each beat into short ordered caption phrases, normally two to eight spoken words and never more than 120 characters. Caption phrases are display boundaries only: they are concatenated and synthesized as one continuous utterance without pauses between them. Make the concatenated phrases read as natural prose, and normally put sentence-ending punctuation only on the beat's final phrase. Phrase ids must be unique inside the scene. Together, the phrases are the entire spoken narration: do not add a separate beat-level narration field.
 
@@ -650,7 +653,9 @@ export const narrationScriptMarkdown = (plan: DraftNarratedPlan): string => {
   const sections = plan.scenes.map((scene, sceneIndex) => {
     const narration = scene.beats
       .map((beat) => {
-        const text = joinNarrationPhrases(beat.phrases, plan.language);
+        const text = normalizeNarrationSpeech(
+          joinNarrationPhrases(beat.phrases, plan.language), plan.language,
+        );
         return beat.expression === 'none'
           ? text
           : `*[${beat.expression}]* ${text}`;

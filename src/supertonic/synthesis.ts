@@ -1,8 +1,9 @@
-import {mkdir} from 'node:fs/promises';
+import {mkdir, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import type {SupertonicJob, SupertonicResult} from './protocol.js';
 import {applyNarrationExpression} from './expressions.js';
 import {trimSynthesizedWaveform, writePcm16Wav} from './wav.js';
+import {normalizeNarrationSpeech} from '../narration-speech.js';
 import {
   allocateNarrationPhraseSamples,
   joinNarrationPhrases,
@@ -36,6 +37,7 @@ export const synthesizeJob = async (
   const postRollSamples = Math.round(SCENE_POST_ROLL_SECONDS * engine.sampleRate);
   const audioChunks: Float32Array[] = [];
   const scenes: SupertonicResult['scenes'] = [];
+  const spokenScenes: {id: string; beats: {id: string; text: string}[]}[] = [];
   let cursor = 0;
   let beatNumber = 0;
 
@@ -45,6 +47,8 @@ export const synthesizeJob = async (
   };
 
   for (const scene of job.scenes) {
+    const spokenScene = {id: scene.id, beats: [] as {id: string; text: string}[]};
+    spokenScenes.push(spokenScene);
     const sceneStartSample = cursor;
     appendSilence(preRollSamples);
     const beats: SupertonicResult['scenes'][number]['beats'] = [];
@@ -54,9 +58,13 @@ export const synthesizeJob = async (
         appendSilence(betweenBeatSamples);
       }
       const beatStartSample = cursor;
-      const utterance = joinNarrationPhrases(beat.phrases, job.language);
+      const utterance = applyNarrationExpression(
+        normalizeNarrationSpeech(joinNarrationPhrases(beat.phrases, job.language), job.language),
+        beat.expression,
+      );
+      spokenScene.beats.push({id: beat.id, text: utterance});
       const synthesis = await engine.synthesize(
-        applyNarrationExpression(utterance, beat.expression),
+        utterance,
         job.language,
         job.steps,
         job.speed,
@@ -67,7 +75,9 @@ export const synthesizeJob = async (
         engine.sampleRate,
       );
       const phraseSampleCounts = allocateNarrationPhraseSamples(
-        beat.phrases,
+        beat.phrases.map(({text}) => ({
+          text: normalizeNarrationSpeech(text, job.language),
+        })),
         beatAudio.length,
       );
       let phraseStartSample = beatStartSample;
@@ -121,6 +131,14 @@ export const synthesizeJob = async (
     combined,
     engine.sampleRate,
   );
+  await writeFile(resolve(job.outputDirectory, 'spoken-script.json'), JSON.stringify({
+    version: 1,
+    language: job.language,
+    voice: job.voice,
+    speed: job.speed,
+    steps: job.steps,
+    scenes: spokenScenes,
+  }, null, 2) + '\n', 'utf8');
 
   return {
     sampleRate: engine.sampleRate,
