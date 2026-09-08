@@ -1914,6 +1914,7 @@ export const selectedMotionAssetSchema = z.object({
 export type SelectedMotionAsset = z.infer<typeof selectedMotionAssetSchema>;
 
 export const publishCoverInputSchema = z.object({
+  backgroundImageAsset: z.string().min(1).optional(),
   publish: narratedPublishPlanSchema,
   scene: publishSceneSchema,
   profile: renderProfileSchema,

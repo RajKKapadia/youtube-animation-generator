@@ -12,6 +12,7 @@ import {
 import {resolveTechnologyBrandIcons} from './technology-catalog.js';
 import {assetFilePath, iconAssetForId, loadAssetRegistry} from './asset-registry.js';
 import {semanticIconDefinitionFor} from './icon-catalog.js';
+import {stageImageBackground, type ImageBackground} from './image-background.js';
 import type {
   AspectRatioSelection,
   NarratedPublishPlan,
@@ -49,6 +50,7 @@ export interface PublishCoverOutput {
 
 export interface RenderPublishCoversOptions {
   aspectRatio: AspectRatioSelection;
+  imageBackground?: ImageBackground;
   force: boolean;
   outputDirectory: string;
   publish: NarratedPublishPlan;
@@ -81,8 +83,11 @@ export const renderPublishCovers = async (
     }
   }
 
-  const publicDirectory = await mkdtemp(resolve(tmpdir(), 'youtube-publish-icons-'));
+  const publicDirectory = await mkdtemp(resolve(tmpdir(), 'youtube-publish-assets-'));
   try {
+    const backgroundImageAsset = options.imageBackground
+      ? await stageImageBackground(options.imageBackground, publicDirectory)
+      : undefined;
     const registry = await loadAssetRegistry();
     const localIconAssets: Record<string, {
       id: string;
@@ -135,6 +140,7 @@ export const renderPublishCovers = async (
         profile: output.profile,
         technologyIcons,
         localIconAssets,
+        ...(backgroundImageAsset ? {backgroundImageAsset} : {}),
       };
       const composition = await selectComposition({
         serveUrl,

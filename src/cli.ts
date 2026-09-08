@@ -87,7 +87,7 @@ Shared options:
   --plan-only                       Save or validate a plan without rendering
   --render-plan <path>              Render an existing plan without calling OpenAI
   --force                           Replace previously generated files
-  --background-image <path>         Static local PNG/JPEG/WebP for all scenes; selects image mode
+  --background-image <path>         Static local PNG/JPEG/WebP for videos or both publish covers
                                     Original appearance, contain fit with black margins; repeat for rerenders
 
 Subtitle overlay options:
@@ -953,10 +953,18 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       'render-publish',
     ].includes(token.name),
   );
+  const imagePath = values['background-image'];
+  const sceneBackground = values['scene-background'] ?? (imagePath !== undefined ? 'image' : undefined);
+  if (imagePath !== undefined && sceneBackground !== 'image') {
+    throw new Error('--background-image cannot be combined with a different --scene-background mode.');
+  }
+  if (sceneBackground === 'image' && imagePath === undefined) {
+    throw new Error('--scene-background image requires --background-image <path>.');
+  }
+  if (values['regenerate-backgrounds'] && sceneBackground === 'image') {
+    throw new Error('--regenerate-backgrounds requires --scene-background generated.');
+  }
   if (publishCommand) {
-    if (values['background-image'] !== undefined || values['scene-background'] === 'image') {
-      throw new Error('Custom image backgrounds apply to videos, not publish covers.');
-    }
     if (usedResearchOption) {
       throw new Error('Research options can only be used with narrated-video creation.');
     }
@@ -978,22 +986,12 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
         : {}),
       planPath: resolve(positionals[1]!),
       ...(renderPublishPath ? {renderPublishPath} : {}),
+      ...(imagePath !== undefined ? {imageBackground: await validateImageBackground(imagePath)} : {}),
     });
     return;
   }
   if (usedPublishOnlyOption) {
     throw new Error('Publish-kit options can only be used with the publish command.');
-  }
-  const imagePath = values['background-image'];
-  const sceneBackground = values['scene-background'] ?? (imagePath !== undefined ? 'image' : undefined);
-  if (imagePath !== undefined && sceneBackground !== 'image') {
-    throw new Error('--background-image cannot be combined with a different --scene-background mode.');
-  }
-  if (sceneBackground === 'image' && imagePath === undefined) {
-    throw new Error('--scene-background image requires --background-image <path>.');
-  }
-  if (values['regenerate-backgrounds'] && sceneBackground === 'image') {
-    throw new Error('--regenerate-backgrounds requires --scene-background generated.');
   }
   const commonVisualOptions = {
     imageBackground: imagePath !== undefined ? await validateImageBackground(imagePath) : undefined,

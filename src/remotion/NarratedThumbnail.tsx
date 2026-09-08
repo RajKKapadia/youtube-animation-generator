@@ -1,11 +1,11 @@
 import type {CSSProperties, ReactNode} from 'react';
-import {AbsoluteFill} from 'remotion';
+import {AbsoluteFill, Img, staticFile} from 'remotion';
 import type {
   PublishAccent,
   PublishCoverInput,
   PublishScene,
 } from '../types.js';
-import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
+import {FittedText} from './FittedText.js';
 import {
   SemanticIconsProvider,
   TechnologyBadge,
@@ -14,45 +14,61 @@ import {
 import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 import {iconRecordForItems} from '../icon-catalog.js';
 import {LocalIconAssetsProvider} from './SemanticIcon.js';
+import {
+  COMPARISON_PADDING,
+  COVER_BORDER,
+  COVER_PANEL_PADDING,
+  publishCardLayout,
+  publishCoverLayout,
+  publishTextTokens,
+} from './publish-layout.js';
 
 const ItemCard = ({
   accent,
   compact,
   label,
+  width,
 }: {
   accent: ReturnType<typeof accentFor>;
   compact?: boolean;
   label: string;
-}) => (
-  <div
-    style={{
-      alignItems: 'center',
-      background: 'linear-gradient(135deg, rgba(15,23,42,0.96), rgba(15,23,42,0.76))',
-      border: `2px solid ${accent.soft}`,
-      borderRadius: compact ? 20 : 24,
-      boxShadow: '0 18px 38px rgba(2,6,23,0.34)',
-      display: 'flex',
-      gap: compact ? 14 : 18,
-      minHeight: compact ? 92 : 116,
-      padding: compact ? '14px 16px' : '17px 20px',
-      width: '100%',
-    }}
-  >
-    <TechnologyBadge label={label} size={compact ? 56 : 68} />
-    <FittedText
-      align="left"
-      fontWeight={800}
-      letterSpacing={-0.4}
-      lineHeight={1.04}
-      maxFontSize={compact ? 30 : 38}
-      maxHeight={compact ? 60 : 78}
-      maxLines={2}
-      maxWidth={compact ? 220 : 330}
-      style={{color: '#F8FAFC'}}
-      text={label}
-    />
-  </div>
-);
+  width: number;
+}) => {
+  const layout = publishCardLayout(width, compact ?? false);
+  return (
+    <div
+      style={{
+        alignItems: 'center',
+        background: 'linear-gradient(135deg, rgba(15,23,42,0.96), rgba(15,23,42,0.76))',
+        border: `2px solid ${accent.soft}`,
+        borderRadius: compact ? 20 : 24,
+        boxSizing: 'border-box',
+        boxShadow: '0 18px 38px rgba(2,6,23,0.34)',
+        display: 'flex',
+        flexDirection: layout.stacked ? 'column' : 'row',
+        gap: layout.gap,
+        minHeight: layout.height,
+        padding: `${layout.paddingY}px ${layout.paddingX}px`,
+        width,
+      }}
+    >
+      <TechnologyBadge label={label} size={layout.iconSize} />
+      <FittedText
+        align={layout.stacked ? 'center' : 'left'}
+        fontWeight={800}
+        letterSpacing={0}
+        lineHeight={1.16}
+        maxFontSize={layout.fontSize}
+        maxHeight={layout.textHeight}
+        maxLines={layout.maxLines}
+        maxWidth={layout.textWidth}
+        style={{color: '#F8FAFC', minWidth: 0, width: layout.textWidth}}
+        text={label}
+        wrapTokens={publishTextTokens(label)}
+      />
+    </div>
+  );
+};
 
 const accentFor = (accent: PublishAccent) => {
   const palette = videoPaletteFor(accent);
@@ -79,8 +95,9 @@ const Panel = ({
       background: 'rgba(2, 6, 23, 0.58)',
       border: '2px solid rgba(148,163,184,0.18)',
       borderRadius: 32,
+      boxSizing: 'border-box',
       boxShadow: `0 28px 90px rgba(2,6,23,0.5), 0 0 60px ${accent.soft}`,
-      padding: 24,
+      padding: COVER_PANEL_PADDING,
       ...style,
     }}
   >
@@ -92,11 +109,16 @@ const ComparisonMotif = ({
   accent,
   scene,
   vertical,
+  width,
 }: {
   accent: ReturnType<typeof accentFor>;
   scene: PublishScene;
   vertical: boolean;
+  width: number;
 }) => {
+  const gap = vertical ? 24 : 18;
+  const sideWidth = vertical ? width : (width - gap) / 2;
+  const innerWidth = sideWidth - 2 * (COMPARISON_PADDING + COVER_BORDER);
   const sides = [
     {
       label: scene.leftLabel || 'SIDE A',
@@ -111,9 +133,9 @@ const ComparisonMotif = ({
     <div
       style={{
         display: 'grid',
-        gap: vertical ? 24 : 18,
-        gridTemplateColumns: vertical ? '1fr' : '1fr 1fr',
-        width: '100%',
+        gap,
+        gridTemplateColumns: vertical ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))',
+        width,
       }}
     >
       {sides.map((side) => (
@@ -123,24 +145,31 @@ const ComparisonMotif = ({
             background: 'rgba(15,23,42,0.72)',
             border: `2px solid ${accent.soft}`,
             borderRadius: 24,
-            padding: 18,
+            boxSizing: 'border-box',
+            padding: COMPARISON_PADDING,
+            minWidth: 0,
           }}
         >
-          <div
+          <FittedText
+            align="left"
+            fontWeight={900}
+            letterSpacing={1}
+            lineHeight={1.15}
+            maxFontSize={vertical ? 27 : 20}
+            maxHeight={vertical ? 64 : 48}
+            maxLines={2}
+            maxWidth={innerWidth}
             style={{
               color: accent.bright,
-              fontFamily: RENDER_FONT_FAMILY,
-              fontSize: vertical ? 27 : 20,
-              fontWeight: 900,
-              letterSpacing: 2.4,
               marginBottom: 14,
+              textTransform: 'uppercase',
             }}
-          >
-            {side.label.toLocaleUpperCase()}
-          </div>
+            text={side.label}
+            wrapTokens={publishTextTokens(side.label)}
+          />
           <div style={{display: 'grid', gap: 12}}>
             {side.items.map((item) => (
-              <ItemCard accent={accent} compact label={item} key={item} />
+              <ItemCard accent={accent} compact label={item} key={item} width={innerWidth} />
             ))}
           </div>
         </div>
@@ -153,17 +182,19 @@ const FlowMotif = ({
   accent,
   scene,
   vertical,
+  width,
 }: {
   accent: ReturnType<typeof accentFor>;
   scene: PublishScene;
   vertical: boolean;
+  width: number;
 }) => {
   const items = [...scene.primaryItems, ...scene.secondaryItems].slice(0, 4);
   return (
     <div style={{display: 'grid', gap: vertical ? 24 : 16, width: '100%'}}>
       {items.map((item, index) => (
         <div key={item} style={{position: 'relative'}}>
-          <ItemCard accent={accent} compact={!vertical} label={item} />
+          <ItemCard accent={accent} compact={!vertical} label={item} width={width} />
           {index < items.length - 1 ? (
             <div
               style={{
@@ -188,54 +219,61 @@ const SceneMotif = ({
   accent,
   scene,
   vertical,
+  width,
 }: {
   accent: ReturnType<typeof accentFor>;
   scene: PublishScene;
   vertical: boolean;
-}) => (
-  <Panel accent={accent} style={{width: '100%'}}>
-    <div
-      style={{
-        alignItems: 'center',
-        display: 'flex',
-        gap: 12,
-        marginBottom: vertical ? 24 : 18,
-      }}
-    >
+  width: number;
+}) => {
+  const innerWidth = width - 2 * (COVER_PANEL_PADDING + COVER_BORDER);
+  return (
+    <Panel accent={accent} style={{width}}>
       <div
         style={{
-          background: accent.bright,
-          borderRadius: 99,
-          boxShadow: `0 0 24px ${accent.glow}`,
-          height: 10,
-          width: 10,
+          alignItems: 'center',
+          display: 'flex',
+          gap: 12,
+          marginBottom: vertical ? 24 : 18,
         }}
-      />
-      <FittedText
-        align="left"
-        fontWeight={900}
-        letterSpacing={1.4}
-        lineHeight={1}
-        maxFontSize={vertical ? 30 : 22}
-        maxHeight={vertical ? 36 : 28}
-        maxLines={1}
-        maxWidth={vertical ? 720 : 370}
-        style={{
-          color: '#CBD5E1',
-          flex: 1,
-          minWidth: 0,
-          textTransform: 'uppercase',
-        }}
-        text={scene.title}
-      />
-    </div>
-    {scene.template === 'comparison' ? (
-      <ComparisonMotif accent={accent} scene={scene} vertical={vertical} />
-    ) : (
-      <FlowMotif accent={accent} scene={scene} vertical={vertical} />
-    )}
-  </Panel>
-);
+      >
+        <div
+          style={{
+            background: accent.bright,
+            borderRadius: 99,
+            boxShadow: `0 0 24px ${accent.glow}`,
+            height: 10,
+            width: 10,
+            flex: '0 0 10px',
+          }}
+        />
+        <FittedText
+          align="left"
+          fontWeight={900}
+          letterSpacing={1}
+          lineHeight={1.15}
+          maxFontSize={vertical ? 30 : 22}
+          maxHeight={vertical ? 70 : 52}
+          maxLines={2}
+          maxWidth={innerWidth - 22}
+          style={{
+            color: '#CBD5E1',
+            flex: 1,
+            minWidth: 0,
+            textTransform: 'uppercase',
+          }}
+          text={scene.title}
+          wrapTokens={publishTextTokens(scene.title)}
+        />
+      </div>
+      {scene.template === 'comparison' ? (
+        <ComparisonMotif accent={accent} scene={scene} vertical={vertical} width={innerWidth} />
+      ) : (
+        <FlowMotif accent={accent} scene={scene} vertical={vertical} width={innerWidth} />
+      )}
+    </Panel>
+  );
+};
 
 const StaticBackdrop = ({accent}: {accent: ReturnType<typeof accentFor>}) => (
   <AbsoluteFill style={{backgroundColor: accent.background.start}}>
@@ -288,13 +326,15 @@ const StaticBackdrop = ({accent}: {accent: ReturnType<typeof accentFor>}) => (
 );
 
 export const NarratedThumbnail = ({
+  backgroundImageAsset,
   localIconAssets,
   profile,
   publish,
   scene,
   technologyIcons,
 }: PublishCoverInput) => {
-  const vertical = profile.aspectRatio === '9:16';
+  const layout = publishCoverLayout(profile);
+  const {vertical} = layout;
   const accent = accentFor(publish.thumbnail.accent);
   const semanticIcons = iconRecordForItems({
     primaryItems: scene.primaryItems,
@@ -305,85 +345,102 @@ export const NarratedThumbnail = ({
     <LocalIconAssetsProvider assets={localIconAssets}>
       <TechnologyIconsProvider icons={technologyIcons}>
         <SemanticIconsProvider icons={semanticIcons}>
-        <AbsoluteFill
-          style={{backgroundColor: accent.background.start, overflow: 'hidden'}}
-        >
-        <StaticBackdrop accent={accent} />
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: vertical ? 'column' : 'row',
-            gap: vertical ? 84 : 56,
-            inset: `${profile.safeArea.top}px ${profile.safeArea.right}px ${profile.safeArea.bottom}px ${profile.safeArea.left}px`,
-            position: 'absolute',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              flex: vertical ? '0 0 auto' : '1 1 58%',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              minWidth: 0,
-            }}
+          <AbsoluteFill
+            style={{backgroundColor: accent.background.start, overflow: 'hidden'}}
           >
+            {backgroundImageAsset ? (
+              <AbsoluteFill style={{backgroundColor: '#000000'}}>
+                <Img
+                  src={staticFile(backgroundImageAsset)}
+                  style={{width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center'}}
+                />
+              </AbsoluteFill>
+            ) : <StaticBackdrop accent={accent} />}
             <div
               style={{
-                alignSelf: vertical ? 'center' : 'flex-start',
-                background: accent.soft,
-                border: `2px solid ${accent.bright}`,
-                borderRadius: 999,
-                color: accent.bright,
-                fontFamily: RENDER_FONT_FAMILY,
-                fontSize: vertical ? 32 : 20,
-                fontWeight: 900,
-                letterSpacing: vertical ? 3.4 : 2.6,
-                marginBottom: vertical ? 44 : 28,
-                padding: vertical ? '16px 26px' : '10px 18px',
-                textTransform: 'uppercase',
+                display: 'grid',
+                gridTemplateColumns: vertical ? 'minmax(0, 1fr)' : `${layout.titleWidth}px ${layout.panelWidth}px`,
+                gridTemplateRows: vertical ? 'auto minmax(0, 1fr)' : 'minmax(0, 1fr)',
+                gap: layout.gap,
+                inset: `${profile.safeArea.top}px ${profile.safeArea.right}px ${profile.safeArea.bottom}px ${profile.safeArea.left}px`,
+                position: 'absolute',
               }}
             >
-              {publish.thumbnail.eyebrow}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  minWidth: 0,
+                }}
+              >
+                <div
+                  style={{
+                    alignSelf: vertical ? 'center' : 'flex-start',
+                    background: accent.soft,
+                    border: `2px solid ${accent.bright}`,
+                    borderRadius: 999,
+                    color: accent.bright,
+                    boxSizing: 'border-box',
+                    maxWidth: layout.titleWidth,
+                    marginBottom: vertical ? 44 : 28,
+                    padding: vertical ? '16px 26px' : '10px 18px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  <FittedText
+                    align={vertical ? 'center' : 'left'}
+                    fontWeight={900}
+                    letterSpacing={vertical ? 2.4 : 1.6}
+                    lineHeight={1.15}
+                    maxFontSize={vertical ? 32 : 20}
+                    maxHeight={vertical ? 38 : 24}
+                    maxLines={1}
+                    maxWidth={layout.titleWidth - (vertical ? 56 : 40)}
+                    style={{textTransform: 'uppercase'}}
+                    text={publish.thumbnail.eyebrow}
+                    wrapTokens={publishTextTokens(publish.thumbnail.eyebrow)}
+                  />
+                </div>
+                <FittedText
+                  align={vertical ? 'center' : 'left'}
+                  fontWeight={950}
+                  letterSpacing={vertical ? -1.2 : -0.8}
+                  lineHeight={1.08}
+                  maxFontSize={vertical ? 118 : 90}
+                  maxHeight={vertical ? 500 : 310}
+                  maxLines={vertical ? 4 : 3}
+                  maxWidth={layout.titleWidth}
+                  style={{
+                    color: '#F8FAFC',
+                    filter: 'drop-shadow(0 18px 34px rgba(2,6,23,0.52))',
+                  }}
+                  text={publish.thumbnail.headline}
+                  wrapTokens={publishTextTokens(publish.thumbnail.headline)}
+                />
+                <div
+                  style={{
+                    background: `linear-gradient(90deg, ${accent.bright}, transparent)`,
+                    borderRadius: 999,
+                    height: vertical ? 10 : 8,
+                    margin: vertical ? '42px auto 0' : '34px 0 0',
+                    width: vertical ? 250 : 190,
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  minHeight: 0,
+                  minWidth: 0,
+                }}
+              >
+                <SceneMotif accent={accent} scene={scene} vertical={vertical} width={layout.panelWidth} />
+              </div>
             </div>
-            <FittedText
-              align={vertical ? 'center' : 'left'}
-              fontWeight={950}
-              letterSpacing={vertical ? -3.2 : -2.8}
-              lineHeight={0.96}
-              maxFontSize={vertical ? 118 : 90}
-              maxHeight={vertical ? 500 : 310}
-              maxLines={vertical ? 4 : 3}
-              maxWidth={vertical ? 900 : 690}
-              style={{
-                color: '#F8FAFC',
-                filter: 'drop-shadow(0 18px 34px rgba(2,6,23,0.52))',
-              }}
-              text={publish.thumbnail.headline}
-            />
-            <div
-              style={{
-                background: `linear-gradient(90deg, ${accent.bright}, transparent)`,
-                borderRadius: 999,
-                height: vertical ? 10 : 8,
-                margin: vertical ? '42px auto 0' : '34px 0 0',
-                width: vertical ? 250 : 190,
-              }}
-            />
-          </div>
-          <div
-            style={{
-              alignItems: 'center',
-              display: 'flex',
-              flex: vertical ? '1 1 auto' : '0 0 39%',
-              justifyContent: 'center',
-              minHeight: 0,
-              minWidth: 0,
-            }}
-          >
-            <SceneMotif accent={accent} scene={scene} vertical={vertical} />
-          </div>
-        </div>
-        </AbsoluteFill>
+          </AbsoluteFill>
         </SemanticIconsProvider>
       </TechnologyIconsProvider>
     </LocalIconAssetsProvider>

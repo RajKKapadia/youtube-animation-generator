@@ -94,8 +94,6 @@ describe('custom background CLI workflows', () => {
       .rejects.toThrow('requires --background-image');
     await expect(runCli(['create', 'missing.md', '--background-image', imagePath, '--regenerate-backgrounds']))
       .rejects.toThrow('--regenerate-backgrounds requires');
-    await expect(runCli(['publish', 'missing.json', '--background-image', imagePath]))
-      .rejects.toThrow('not publish covers');
     expect(renderClips).not.toHaveBeenCalled();
     expect(renderNarratedVideo).not.toHaveBeenCalled();
   });
