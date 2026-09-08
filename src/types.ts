@@ -1862,10 +1862,10 @@ export type RenderBackground = z.infer<typeof renderBackgroundSchema>;
 export const captionModeSchema = z.enum(['on', 'off']);
 export type CaptionMode = z.infer<typeof captionModeSchema>;
 
-export const sceneBackgroundModeSchema = z.enum(['ambient', 'generated']);
+export const sceneBackgroundModeSchema = z.enum(['ambient', 'generated', 'image']);
 export type SceneBackgroundMode = z.infer<typeof sceneBackgroundModeSchema>;
 
-export const clipBackgroundModeSchema = z.enum(['off', 'ambient', 'generated']);
+export const clipBackgroundModeSchema = z.enum(['off', 'ambient', 'generated', 'image']);
 export type ClipBackgroundMode = z.infer<typeof clipBackgroundModeSchema>;
 
 export const generatedVisualModeSchema = z.enum(['off', 'auto']);

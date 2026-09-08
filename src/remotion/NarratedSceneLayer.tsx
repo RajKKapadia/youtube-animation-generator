@@ -99,6 +99,31 @@ export const SceneBackdrop = ({
   palette: VideoPalette;
   scene: Pick<TimedNarrationScene, 'id'>;
 }) => {
+  if (mode === 'image') {
+    if (!asset) throw new Error(`Image background asset is missing for scene ${scene.id}.`);
+    return (
+      <AbsoluteFill style={{backgroundColor: '#000000'}}>
+        <Img
+          src={staticFile(asset)}
+          style={{height: '100%', width: '100%', objectFit: 'contain', objectPosition: 'center'}}
+        />
+      </AbsoluteFill>
+    );
+  }
+  return <AnimatedSceneBackdrop asset={asset} mode={mode} palette={palette} scene={scene} />;
+};
+
+const AnimatedSceneBackdrop = ({
+  asset,
+  mode,
+  palette,
+  scene,
+}: {
+  asset?: string | undefined;
+  mode: Exclude<SceneBackgroundMode, 'image'>;
+  palette: VideoPalette;
+  scene: Pick<TimedNarrationScene, 'id'>;
+}) => {
   if (mode === 'generated' && !asset) {
     throw new Error(`Generated background asset is missing for scene ${scene.id}.`);
   }

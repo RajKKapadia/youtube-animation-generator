@@ -61,6 +61,7 @@ import {
   type SupertonicVoiceChoice,
 } from './supertonic/protocol.js';
 import {selectSupertonicVoice} from './supertonic/voice-selection.js';
+import {validateImageBackground, type ImageBackground} from './image-background.js';
 
 const VERSION = '0.9.0';
 const FORMATS = new Set<OutputFormat>(['prores', 'webm', 'green', 'h264']);
@@ -86,12 +87,14 @@ Shared options:
   --plan-only                       Save or validate a plan without rendering
   --render-plan <path>              Render an existing plan without calling OpenAI
   --force                           Replace previously generated files
+  --background-image <path>         Static local PNG/JPEG/WebP for all scenes; selects image mode
+                                    Original appearance, contain fit with black margins; repeat for rerenders
 
 Subtitle overlay options:
   --format <prores|webm|green|h264> Output format (default: green, or h264 with a scene background)
   --max-suggestions <number>        Maximum animations (default: 6)
   --captions <on|off>               Cue captions (default: off)
-  --scene-background <mode>         off, ambient, or generated (default: off)
+  --scene-background <mode>         off, ambient, generated, or image (default: off)
   --generated-visuals <off|auto>    Grounded foreground generation (default: off)
   --regenerate-visuals              Explicitly refresh generated foreground images
   --regenerate-backgrounds          Replace matching cached scene images
@@ -104,7 +107,7 @@ Narrated video options:
   --tts-steps <number>              Inference steps, 1-20 (default: 8)
   --target-duration <seconds>       Planning target (default: 60)
   --captions <on|off>               Phrase captions (default: on)
-  --scene-background <mode>         ambient or generated (default: ambient)
+  --scene-background <mode>         ambient, generated, or image (default: ambient)
   --image-model <model>             Image model (default: OPENAI_IMAGE_MODEL or gpt-image-2)
   --image-quality <quality>         low, medium, or high (default: medium)
   --generated-visuals <off|auto>    Grounded foreground generation (default: off)
@@ -198,7 +201,7 @@ const parseCaptionMode = (
 const parseSceneBackground = (value: string | undefined): SceneBackgroundMode => {
   const parsed = sceneBackgroundModeSchema.safeParse(value ?? 'ambient');
   if (!parsed.success) {
-    throw new Error('--scene-background must be one of: ambient, generated.');
+    throw new Error('--scene-background must be one of: ambient, generated, image.');
   }
   return parsed.data;
 };
@@ -206,7 +209,7 @@ const parseSceneBackground = (value: string | undefined): SceneBackgroundMode =>
 const parseClipBackground = (value: string | undefined): ClipBackgroundMode => {
   const parsed = clipBackgroundModeSchema.safeParse(value ?? 'off');
   if (!parsed.success) {
-    throw new Error('--scene-background must be one of: off, ambient, generated.');
+    throw new Error('--scene-background must be one of: off, ambient, generated, image.');
   }
   return parsed.data;
 };
@@ -326,6 +329,7 @@ interface CommonRuntimeOptions {
 }
 
 interface NarratedVisualOptions {
+  imageBackground?: ImageBackground | undefined;
   captions: CaptionMode;
   generatedVisuals: GeneratedVisualMode;
   imageModel: string;
@@ -409,7 +413,7 @@ const resolveSceneBackgrounds = async ({
   stem: string;
   visual: NarratedVisualOptions;
 }): Promise<SceneBackgroundAssets | undefined> => {
-  if (visual.sceneBackground === 'ambient') return undefined;
+  if (visual.sceneBackground !== 'generated') return undefined;
   console.log(
     `Preparing ${plan.scenes.length} generated scene background${plan.scenes.length === 1 ? '' : 's'} for ${aspectRatio}...`,
   );
@@ -564,6 +568,7 @@ const runSubtitleWorkflow = async ({
   const renderedProfiles = await renderClips({
     aspectRatio: common.aspectRatio,
     backgroundAssets,
+    imageBackground: visual.imageBackground,
     captions: visual.captions,
     foregroundAssets,
     force: common.force,
@@ -647,6 +652,7 @@ const renderTimedNarration = async ({
   const outputs = await renderNarratedVideo({
     aspectRatio: common.aspectRatio,
     backgroundAssets: resolvedBackgroundAssets,
+    imageBackground: visual.imageBackground,
     foregroundAssets: resolvedForegroundAssets,
     captions: visual.captions,
     force: common.force,
@@ -880,6 +886,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     tokens: true,
     options: {
       'aspect-ratio': {type: 'string', default: '16:9'},
+      'background-image': {type: 'string'},
       captions: {type: 'string'},
       'cover-aspect': {type: 'string', default: 'both'},
       force: {type: 'boolean', default: false},
@@ -947,6 +954,9 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     ].includes(token.name),
   );
   if (publishCommand) {
+    if (values['background-image'] !== undefined || values['scene-background'] === 'image') {
+      throw new Error('Custom image backgrounds apply to videos, not publish covers.');
+    }
     if (usedResearchOption) {
       throw new Error('Research options can only be used with narrated-video creation.');
     }
@@ -974,7 +984,19 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   if (usedPublishOnlyOption) {
     throw new Error('Publish-kit options can only be used with the publish command.');
   }
+  const imagePath = values['background-image'];
+  const sceneBackground = values['scene-background'] ?? (imagePath !== undefined ? 'image' : undefined);
+  if (imagePath !== undefined && sceneBackground !== 'image') {
+    throw new Error('--background-image cannot be combined with a different --scene-background mode.');
+  }
+  if (sceneBackground === 'image' && imagePath === undefined) {
+    throw new Error('--scene-background image requires --background-image <path>.');
+  }
+  if (values['regenerate-backgrounds'] && sceneBackground === 'image') {
+    throw new Error('--regenerate-backgrounds requires --scene-background generated.');
+  }
   const commonVisualOptions = {
+    imageBackground: imagePath !== undefined ? await validateImageBackground(imagePath) : undefined,
     generatedVisuals: parseGeneratedVisuals(values['generated-visuals']),
     imageModel: values['image-model'] ?? process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2',
     imageQuality: parseImageQuality(values['image-quality']),
@@ -984,12 +1006,12 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   const narratedVisualOptions = (): NarratedVisualOptions => ({
     ...commonVisualOptions,
     captions: parseCaptionMode(values.captions, 'on'),
-    sceneBackground: parseSceneBackground(values['scene-background']),
+    sceneBackground: parseSceneBackground(sceneBackground),
   });
   const subtitleVisualOptions = (): SubtitleVisualOptions => ({
     ...commonVisualOptions,
     captions: parseCaptionMode(values.captions, 'off'),
-    sceneBackground: parseClipBackground(values['scene-background']),
+    sceneBackground: parseClipBackground(sceneBackground),
   });
   const validateVisualOptions = (
     visual: NarratedVisualOptions | SubtitleVisualOptions,
@@ -1005,11 +1027,11 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     const format = explicitFormat ?? (visual.sceneBackground === 'off' ? 'green' : 'h264');
     if (visual.sceneBackground !== 'off' && format !== 'h264') {
       throw new Error(
-        'Ambient and generated subtitle backgrounds require --format h264.',
+        'Ambient, generated, and image subtitle backgrounds require --format h264.',
       );
     }
     if (visual.sceneBackground === 'off' && format === 'h264') {
-      throw new Error('--format h264 requires --scene-background ambient or generated.');
+      throw new Error('--format h264 requires --scene-background ambient, generated, or image.');
     }
     return format;
   };

@@ -20,6 +20,7 @@ import {aspectSuffix, profilesForSelection} from './render-profile.js';
 import type {GeneratedVisualAssets} from './generated-visuals.js';
 import type {SceneBackgroundAssets} from './scene-backgrounds.js';
 import {stageVisualRenderAssets, type StagedVisualAssets} from './visual-render-assets.js';
+import {stageImageBackground, type ImageBackground} from './image-background.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -180,6 +181,7 @@ const renderOne = async ({
 export interface RenderClipsOptions {
   aspectRatio: AspectRatioSelection;
   backgroundAssets?: SceneBackgroundAssets | undefined;
+  imageBackground?: ImageBackground | undefined;
   captions: CaptionMode;
   foregroundAssets?: GeneratedVisualAssets | undefined;
   force: boolean;
@@ -225,6 +227,12 @@ export const renderClips = async (
   const publicDirectory = await mkdtemp(resolve(tmpdir(), 'youtube-animation-clips-public-'));
   try {
     const publicBackgroundAssets: SceneBackgroundAssets = {'16:9': {}, '9:16': {}};
+    if (options.sceneBackground === 'image') {
+      const publicName = await stageImageBackground(options.imageBackground, publicDirectory);
+      for (const {profile, clip} of outputs) {
+        publicBackgroundAssets[profile.aspectRatio][clip.id] = publicName;
+      }
+    }
     if (options.sceneBackground === 'generated') {
       for (const output of outputs) {
         const asset = options.backgroundAssets?.[output.profile.aspectRatio]?.[output.clip.id];

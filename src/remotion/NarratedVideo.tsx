@@ -43,7 +43,8 @@ export const NarratedVideo = ({
       >
       {plan.scenes[0] ? (
         <SceneBackdrop
-          mode="ambient"
+          asset={sceneBackground === 'image' ? backgroundAssets[plan.scenes[0].id] : undefined}
+          mode={sceneBackground === 'image' ? 'image' : 'ambient'}
           palette={plan.palette}
           scene={plan.scenes[0]}
         />
@@ -61,12 +62,12 @@ export const NarratedVideo = ({
           name={scene.title}
         >
           <AbsoluteFill>
-            <SceneBackdrop
+            {sceneBackground === 'image' ? null : <SceneBackdrop
               asset={backgroundAssets[scene.id]}
               mode={sceneBackground}
               palette={plan.palette}
               scene={scene}
-            />
+            />}
             <NarratedVisualLayer
               contentTopInset={captionTopInset(captions, profile)}
               fps={fps}
