@@ -9,6 +9,7 @@ import {
   readdir,
   rename,
   rm,
+  stat,
 } from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {basename, dirname, extname, resolve} from 'node:path';
@@ -59,6 +60,29 @@ const allowedExtensionMimes: Record<string, DiscoveredLocalImage['mimeType'][]> 
   '.webp': ['image/webp'],
 };
 
+/** Validate explicit local inputs using the same rules as discovered foreground images. */
+export const readLocalImage = async (filePath: string) => {
+  const extension = extname(filePath).toLowerCase();
+  if (!allowedExtensionMimes[extension]) {
+    throw new Error(`Local image must be a PNG, JPEG, or WebP file: ${filePath}`);
+  }
+  const details = await stat(filePath);
+  if (!details.isFile()) throw new Error(`Local image path is not a file: ${filePath}`);
+  if (details.size > MAX_LOCAL_IMAGE_BYTES) {
+    throw new Error(`Local image exceeds the 20 MB limit: ${filePath}`);
+  }
+  const bytes = await readFile(filePath);
+  if (bytes.length > MAX_LOCAL_IMAGE_BYTES) {
+    throw new Error(`Local image exceeds the 20 MB limit: ${filePath}`);
+  }
+  const mimeType = mimeFromBytes(bytes);
+  if (!mimeType || !allowedExtensionMimes[extension]?.includes(mimeType)) {
+    throw new Error(`Local image content does not match its PNG, JPEG, or WebP extension: ${filePath}`);
+  }
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  return {bytes, mimeType, sha256};
+};
+
 export interface DiscoveredLocalImage {
   id: string;
   originalName: string;
@@ -91,15 +115,7 @@ export const discoverLocalImages = async ({
     const extension = extname(entry.name).toLowerCase();
     if (!allowedExtensionMimes[extension]) continue;
     const sourceFile = resolve(imagesDirectory, entry.name);
-    const bytes = await readFile(sourceFile);
-    if (bytes.length > MAX_LOCAL_IMAGE_BYTES) {
-      throw new Error(`Local image exceeds the 20 MB limit: ${sourceFile}`);
-    }
-    const mimeType = mimeFromBytes(bytes);
-    if (!mimeType || !allowedExtensionMimes[extension]?.includes(mimeType)) {
-      throw new Error(`Local image content does not match its PNG, JPEG, or WebP extension: ${sourceFile}`);
-    }
-    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const {bytes, mimeType, sha256} = await readLocalImage(sourceFile);
     const name = safeFilenamePart(basename(entry.name, extension));
     const id = `local-${name}-${sha256.slice(0, 12)}`;
     const mediaFile = `${name}-${sha256.slice(0, 12)}${extensionForMime(mimeType)}`;

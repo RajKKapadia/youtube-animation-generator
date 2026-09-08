@@ -134,7 +134,7 @@ describe('narrated CLI plan-only path', () => {
     ).rejects.toThrow('--refresh-research requires --research auto or required');
     await expect(
       runCli(['missing.srt', '--scene-background', 'generated', '--format', 'green']),
-    ).rejects.toThrow('Ambient and generated subtitle backgrounds require --format h264');
+    ).rejects.toThrow('Ambient, generated, and image subtitle backgrounds require --format h264');
     await expect(
       runCli(['missing.srt', '--research', 'auto']),
     ).rejects.toThrow('Research options cannot be used with subtitle overlays');
@@ -167,7 +167,8 @@ describe('narrated CLI plan-only path', () => {
     const output = String(log.mock.calls[0]?.[0]);
     expect(output).toContain('youtube-animations 0.9.0');
     expect(output).toContain('--format <prores|webm|green|h264>');
-    expect(output).toContain('off, ambient, or generated');
+    expect(output).toContain('off, ambient, generated, or image');
+    expect(output).toContain('--background-image <path>');
     expect(output).toContain('--voice <auto|M1..M5|F1..F5>');
     expect(output).toContain('--captions <on|off>');
     expect(output).toContain('--scene-background <mode>');

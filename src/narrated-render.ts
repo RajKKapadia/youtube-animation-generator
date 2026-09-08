@@ -16,6 +16,7 @@ import type {
 import type {SceneBackgroundAssets} from './scene-backgrounds.js';
 import type {GeneratedVisualAssets} from './generated-visuals.js';
 import {stageVisualRenderAssets} from './visual-render-assets.js';
+import {stageImageBackground, type ImageBackground} from './image-background.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -48,6 +49,7 @@ export interface NarratedOutput {
 export interface RenderNarratedVideoOptions {
   aspectRatio: AspectRatioSelection;
   backgroundAssets?: SceneBackgroundAssets | undefined;
+  imageBackground?: ImageBackground | undefined;
   foregroundAssets?: GeneratedVisualAssets | undefined;
   captions: CaptionMode;
   force: boolean;
@@ -93,6 +95,14 @@ export const renderNarratedVideo = async (
     const publicAudioName = basename(voiceoverPath);
     await copyFile(voiceoverPath, resolve(publicDirectory, publicAudioName));
     const publicBackgroundAssets: SceneBackgroundAssets = {'16:9': {}, '9:16': {}};
+    if (options.sceneBackground === 'image') {
+      const publicName = await stageImageBackground(options.imageBackground, publicDirectory);
+      for (const {profile} of outputs) {
+        for (const scene of options.plan.scenes) {
+          publicBackgroundAssets[profile.aspectRatio][scene.id] = publicName;
+        }
+      }
+    }
     if (options.sceneBackground === 'generated') {
       for (const output of outputs) {
         for (const scene of options.plan.scenes) {

@@ -270,6 +270,18 @@ pnpm run animations create summary.md \
 
 Generated images use `gpt-image-2` at medium quality by default. Change the model or quality with `--image-model` and `--image-quality`. `--regenerate-backgrounds` refreshes matching cached images; `--force` replaces videos and plans without purchasing new images. All requested images are staged before the cache is promoted, and a failed image request stops before voice synthesis or rendering.
 
+Use your own background image in either video workflow, including saved-plan renders:
+
+```bash
+pnpm run animations create summary.md --background-image ./background.png --aspect-ratio both
+pnpm run animations episode.srt --background-image "./images/My background.jpg"
+pnpm run animations --render-plan summary-video/summary.narration-timed.json --background-image ./background.png
+```
+
+`--background-image <path>` selects `--scene-background image` automatically. One local PNG, JPEG, or WebP (up to 20 MB) is shared by all scenes or clips and both orientations. Paths are relative to the current working directory, or absolute. The image keeps its original brightness and colors, with no background motion, fading, dark overlay, grid, blur, or vignette. It is centered and scaled proportionally to show the whole image; mismatched aspect ratios produce black margins, and transparent areas show black. Narrated backgrounds remain visible between scenes. For an edge-to-edge result, supply an image with the same aspect ratio as the video.
+
+Custom image backgrounds use no image-generation API and are validated before planning or synthesis. Rendering copies the unchanged bytes once to temporary assets and checks that the image has not changed since validation. This is a render-time option: repeat it when rendering a saved plan; `--plan-only` validates the image without copying it or saving the selection. Explicit ambient/generated/off modes and `--regenerate-backgrounds` cannot be combined with `--background-image`. It applies to videos, not publish covers.
+
 Create only the script and draft storyboard—including editable subtitle phrases, chart evidence, generated foreground directions, and scene background prompts. Selected local images are copied for deterministic rerenders, but no voice or generated image assets are purchased in this step:
 
 ```bash
@@ -414,7 +426,7 @@ pnpm run animations episode.srt \
   --aspect-ratio both
 ```
 
-Both background modes imply `--format h264` when no format is supplied. Explicit `green`, `prores`, and `webm` remain background-off editor-overlay formats. Generated foreground illustrations are independently opt-in with `--generated-visuals auto`, limited to two clips, relevance-validated, and reusable from cache.
+Ambient, generated, and custom image backgrounds imply `--format h264` when no format is supplied. Explicit `green`, `prores`, and `webm` remain background-off editor-overlay formats. Subtitle clips remain separate and audio-free with every background mode. Generated foreground illustrations are independently opt-in with `--generated-visuals auto`, limited to two clips, relevance-validated, and reusable from cache.
 
 ## Native vertical layouts
 
@@ -437,6 +449,7 @@ Landscape remains 1920×1080 and preserves the original layouts.
 --plan-only                       Save or validate without synthesis/rendering
 --render-plan <path>              Load a saved plan without text planning
 --force                           Replace existing generated outputs
+--background-image <path>         Static PNG/JPEG/WebP; selects image mode; repeat for rerenders
 --help                            Show CLI help
 --version                         Show the CLI version
 
@@ -444,7 +457,7 @@ Subtitle overlays:
 --format <prores|webm|green|h264> Output format (green by default; h264 for scene backgrounds)
 --max-suggestions <number>        Maximum overlays (default: 6; max: 12)
 --captions <on|off>               Exact cue captions; default: off
---scene-background <mode>         off, ambient, or generated; default: off
+--scene-background <mode>         off, ambient, generated, or image; default: off
 --generated-visuals <off|auto>    Grounded foreground generation; default: off
 --regenerate-visuals              Refresh generated foreground assets; requires auto
 --regenerate-backgrounds          Refresh generated backdrops; requires generated mode
@@ -459,7 +472,7 @@ Narrated videos:
 --tts-steps <number>              1-20 (default: 8)
 --target-duration <seconds>       Default: 60
 --captions <on|off>               Default: on
---scene-background <mode>         ambient or generated; default: ambient
+--scene-background <mode>         ambient, generated, or image; default: ambient
 --image-model <model>             Default: OPENAI_IMAGE_MODEL or gpt-image-2
 --image-quality <quality>         low, medium, or high; default: medium
 --research <off|auto|required>    Web research before planning; default: off
