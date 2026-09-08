@@ -280,7 +280,7 @@ pnpm run animations --render-plan summary-video/summary.narration-timed.json --b
 
 `--background-image <path>` selects `--scene-background image` automatically. One local PNG, JPEG, or WebP (up to 20 MB) is shared by all scenes or clips and both orientations. Paths are relative to the current working directory, or absolute. The image keeps its original brightness and colors, with no background motion, fading, dark overlay, grid, blur, or vignette. It is centered and scaled proportionally to show the whole image; mismatched aspect ratios produce black margins, and transparent areas show black. Narrated backgrounds remain visible between scenes. For an edge-to-edge result, supply an image with the same aspect ratio as the video.
 
-Custom image backgrounds use no image-generation API and are validated before planning or synthesis. Rendering copies the unchanged bytes once to temporary assets and checks that the image has not changed since validation. This is a render-time option: repeat it when rendering a saved plan; `--plan-only` validates the image without copying it or saving the selection. Explicit ambient/generated/off modes and `--regenerate-backgrounds` cannot be combined with `--background-image`. It applies to videos, not publish covers.
+Custom image backgrounds use no image-generation API and are validated before planning or synthesis. Rendering copies the unchanged bytes once to temporary assets and checks that the image has not changed since validation. This is a render-time option: repeat it when rendering a saved plan; `--plan-only` validates the image without copying it or saving the selection. Explicit ambient/generated/off modes and `--regenerate-backgrounds` cannot be combined with `--background-image`. The same option also supports publish thumbnails and vertical covers, as described below.
 
 Create only the script and draft storyboard—including editable subtitle phrases, chart evidence, generated foreground directions, and scene background prompts. Selected local images are copied for deterministic rerenders, but no voice or generated image assets are purchased in this step:
 
@@ -348,6 +348,21 @@ pnpm run animations publish \
 ```
 
 Use `--cover-aspect 16:9` or `--cover-aspect 9:16` to render one orientation. The default is `both`. Existing metadata and images are protected unless `--force` is supplied. `--output-dir` moves the complete publish-kit output when generating new metadata and moves cover output when rerendering an edited publish plan.
+
+Supply one local background image for both the thumbnail and vertical summary cover:
+
+```bash
+pnpm run animations publish summary-video/summary.narration-timed.json \
+  --background-image "./images/My background.png" --cover-aspect both
+
+pnpm run animations publish summary-video/summary.narration-timed.json \
+  --render-publish summary-video/summary.publish.json \
+  --background-image "./images/My background.png" --cover-aspect both --force
+```
+
+Publish backgrounds follow the video image rules: PNG/JPEG/WebP up to 20 MB, relative to the current working directory or absolute. The image is centered and scaled proportionally to show the whole image in its original colors, with black margins or transparency backing. It replaces the palette backdrop without cropping, tinting, blurring, or adding a grid or vignette. Cover text and cards remain on top. Omit the option for the default palette backdrop; use an image matching the output aspect ratio for an edge-to-edge result.
+
+The image selection is not saved in `publish.json`; repeat `--background-image` when rerendering. `--metadata-only` validates a supplied image without staging it or starting Chrome. To use different images for each orientation, run the command separately with `--cover-aspect 16:9` and `--cover-aspect 9:16`.
 
 ### Automatic Supertonic voice selection
 
@@ -449,7 +464,7 @@ Landscape remains 1920×1080 and preserves the original layouts.
 --plan-only                       Save or validate without synthesis/rendering
 --render-plan <path>              Load a saved plan without text planning
 --force                           Replace existing generated outputs
---background-image <path>         Static PNG/JPEG/WebP; selects image mode; repeat for rerenders
+--background-image <path>         Static PNG/JPEG/WebP for videos or publish covers; repeat for rerenders
 --help                            Show CLI help
 --version                         Show the CLI version
 

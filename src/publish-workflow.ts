@@ -1,6 +1,7 @@
 import {access, mkdir, readFile, writeFile} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {basename, dirname, resolve} from 'node:path';
+import type {ImageBackground} from './image-background.js';
 import {
   generateNarratedPublishPlan,
   publishKitMarkdown,
@@ -80,6 +81,7 @@ const selectedScene = (
 
 export interface RunPublishWorkflowOptions {
   aspectRatio: AspectRatioSelection;
+  imageBackground?: ImageBackground;
   force: boolean;
   metadataOnly: boolean;
   model: string;
@@ -143,6 +145,7 @@ export const runPublishWorkflow = async (
     publish,
     scene,
     stem,
+    ...(options.imageBackground ? {imageBackground: options.imageBackground} : {}),
   });
   for (const output of outputs) {
     console.log(`Saved publish cover: ${output.outputPath}`);

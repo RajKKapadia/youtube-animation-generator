@@ -15,6 +15,7 @@ export interface FittedTextProps {
   maxWidth: number;
   style?: CSSProperties;
   text: string;
+  wrapTokens?: readonly string[] | undefined;
 }
 
 export const FittedText = ({
@@ -28,6 +29,7 @@ export const FittedText = ({
   maxWidth,
   style,
   text,
+  wrapTokens,
 }: FittedTextProps) => {
   const textTransform = style?.textTransform as
     | Parameters<typeof measureText>[0]['textTransform']
@@ -49,6 +51,7 @@ export const FittedText = ({
         validateFontIsLoaded: false,
       }).width,
     text,
+    wrapTokens,
   });
 
   return (

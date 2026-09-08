@@ -8,6 +8,8 @@ export interface FitTextToBoxOptions {
   maxWidth: number;
   measureWidth: TextWidthMeasurer;
   text: string;
+  /** Optional atomic groups, such as an amount and its unit. Default wrapping is unchanged. */
+  wrapTokens?: readonly string[] | undefined;
 }
 
 export interface FittedTextLayout {
@@ -45,8 +47,9 @@ const wrapText = (
   fontSize: number,
   maxWidth: number,
   measureWidth: TextWidthMeasurer,
+  wrapTokens?: readonly string[],
 ): string[] => {
-  const words = text.trim().split(/\s+/u).filter(Boolean);
+  const words = wrapTokens ?? text.trim().split(/\s+/u).filter(Boolean);
   if (words.length === 0) {
     return [];
   }
@@ -66,7 +69,7 @@ const wrapText = (
       currentLine = '';
     }
 
-    if (measureWidth(word, fontSize) <= maxWidth) {
+    if (wrapTokens || measureWidth(word, fontSize) <= maxWidth) {
       currentLine = word;
       continue;
     }
@@ -90,16 +93,18 @@ export const fitTextToBox = ({
   maxWidth,
   measureWidth,
   text,
+  wrapTokens,
 }: FitTextToBoxOptions): FittedTextLayout => {
   if (text.trim().length === 0) {
     return {fontSize: maxFontSize, lines: []};
   }
 
   const fits = (fontSize: number): {fits: boolean; lines: string[]} => {
-    const lines = wrapText(text, fontSize, maxWidth, measureWidth);
+    const lines = wrapText(text, fontSize, maxWidth, measureWidth, wrapTokens);
     return {
       fits:
         lines.length <= maxLines &&
+        (!wrapTokens || lines.every((line) => measureWidth(line, fontSize) <= maxWidth)) &&
         lines.length * fontSize * lineHeight <= maxHeight,
       lines,
     };
@@ -130,6 +135,6 @@ export const fitTextToBox = ({
   const fontSize = Math.floor(bestFontSize * 10) / 10;
   return {
     fontSize,
-    lines: wrapText(text, fontSize, maxWidth, measureWidth),
+    lines: wrapText(text, fontSize, maxWidth, measureWidth, wrapTokens),
   };
 };

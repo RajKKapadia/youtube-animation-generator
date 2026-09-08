@@ -21,6 +21,23 @@ vi.mock('@remotion/layout-utils', () => ({measureText: measureTextMock}));
 import {FittedText} from './FittedText.js';
 
 describe('FittedText', () => {
+  it('keeps a supplied amount and unit together while fitting the full group', () => {
+    const text = '+₹8,930.12 Cr';
+    const rendered = FittedText({
+      fontWeight: 800,
+      lineHeight: 1.16,
+      maxFontSize: 30,
+      maxHeight: 70,
+      maxLines: 2,
+      maxWidth: 140,
+      text,
+      wrapTokens: [text],
+    });
+    expect(rendered.props.children).toHaveLength(1);
+    expect(rendered.props.children[0]?.props.children).toBe(text);
+    expect(rendered.props.style.fontSize).toBeLessThan(30);
+  });
+
   it('measures text using the same text transform that it renders', () => {
     const rendered = FittedText({
       align: 'left',
