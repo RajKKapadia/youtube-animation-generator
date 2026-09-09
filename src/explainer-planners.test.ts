@@ -3,19 +3,19 @@ import {EXPLAINER_FIXTURES, FIXTURE_CODE, fixtureSubtitleSuggestion} from './exp
 import {planNarratedVideo} from './narration-planner.js';
 import {planAnimations} from './planner.js';
 
-const {parse} = vi.hoisted(() => ({parse: vi.fn()}));
-vi.mock('openai', () => ({default: class {responses = {parse};}}));
-afterEach(() => {vi.unstubAllEnvs(); parse.mockReset();});
+const {parse, create} = vi.hoisted(() => ({parse: vi.fn(), create: vi.fn()}));
+vi.mock('openai', () => ({default: class {responses = {parse, create};}}));
+afterEach(() => {vi.unstubAllEnvs(); parse.mockReset(); create.mockReset();});
 
 describe('planner request and materialization integration', () => {
   it('sends numbered source code to narrated planning and persists locally extracted code', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'fixture-key');
     const {scene, sourceText} = EXPLAINER_FIXTURES[2]!;
-    parse.mockResolvedValue({output_parsed: {title: scene.title, palette: 'cyan', scenes: [scene]}});
+    create.mockResolvedValue({status: 'completed', output: [], output_text: JSON.stringify({title: scene.title, palette: 'cyan', scenes: [scene]})});
     const plan = await planNarratedVideo({generatedVisuals: 'off', language: 'en', model: 'fixture-model', sourceText, targetDurationSeconds: 10, codeSources: [FIXTURE_CODE]});
     expect(plan.version).toBe(7);
     expect(plan.scenes[0]!.visual).toMatchObject({kind: 'code-walkthrough', excerpt: {text: FIXTURE_CODE.text}});
-    const request = parse.mock.calls[0]![0];
+    const request = create.mock.calls[0]![0];
     expect(request.store).toBe(false);
     expect(JSON.stringify(request.input)).toContain(`CODE_SOURCE_ID ${FIXTURE_CODE.id}`);
     expect(JSON.stringify(request.input)).toContain('3:     return message');
@@ -36,7 +36,7 @@ describe('planner request and materialization integration', () => {
   it('saves a warning and preserves narration when a model selects unavailable code', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'fixture-key');
     const {scene, sourceText} = EXPLAINER_FIXTURES[2]!;
-    parse.mockResolvedValue({output_parsed: {title: scene.title, palette: 'cyan', scenes: [scene]}});
+    create.mockResolvedValue({status: 'completed', output: [], output_text: JSON.stringify({title: scene.title, palette: 'cyan', scenes: [scene]})});
     const plan = await planNarratedVideo({generatedVisuals: 'off', language: 'en', model: 'fixture-model', sourceText, targetDurationSeconds: 10});
     expect(plan.scenes[0]!.visual.kind).toBe('diagram');
     expect(plan.scenes[0]!.beats).toEqual(scene.beats);

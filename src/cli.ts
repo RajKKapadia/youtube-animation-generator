@@ -782,6 +782,7 @@ const runNarratedWorkflow = async ({
     }
     const code = await discoverLocalCode({sourcePath, sourceText});
     draft = await planNarratedVideo({
+      onPlanningRetry: (message) => console.warn(message),
       codeSources: code.sources,
       generatedVisuals: visual.generatedVisuals,
       language,
