@@ -471,8 +471,11 @@ const legacyDataVisualizationSchema = z.object({
       context.addIssue({code: 'custom', message: 'Grouped bars require 1-3 series, 1-4 categories, and no metric cards.', path: []});
     }
     const seriesIds = new Set(chart.series.map(({id}) => id));
+    if (seriesIds.size !== chart.series.length) {
+      context.addIssue({code: 'custom', message: 'Grouped-bar series ids must be unique.', path: ['series']});
+    }
     for (const [categoryIndex, category] of chart.categories.entries()) {
-      if (category.values.length !== chart.series.length) {
+      if (category.values.length !== chart.series.length || new Set(category.values.map(({seriesId}) => seriesId)).size !== chart.series.length) {
         context.addIssue({code: 'custom', message: 'Every grouped-bar category must supply one value per series.', path: ['categories', categoryIndex, 'values']});
       }
       for (const [valueIndex, value] of category.values.entries()) {

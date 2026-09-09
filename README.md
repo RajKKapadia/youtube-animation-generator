@@ -288,6 +288,8 @@ Create only the script and draft storyboard—including editable subtitle phrase
 pnpm run animations create summary.md --plan-only
 ```
 
+Narrated planning automatically replaces malformed or unsupported optional visuals with a code-native diagram and saves a warning. An empty comparison becomes a callout without inventing another side. Other validation failures, such as missing or duplicate item anchors, get up to two corrective model requests with the validation details. The CLI reports these attempts and saves their warnings; the final plan must still pass strict timing, structure, and source-grounding checks. Saved-plan validation remains strict.
+
 After reviewing or editing the draft, synthesize and render without another OpenAI request:
 
 ```bash
