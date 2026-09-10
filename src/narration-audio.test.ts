@@ -23,6 +23,9 @@ const draft = draftNarratedPlanSchema.parse({
   mediaAssets: [],
   scenes: [{
     id: 'flow',
+    presentation: {composition: 'process', reveal: 'build'},
+    storyRole: 'explain',
+    icons: {focal: 'network', primary: ['network', null], secondary: []},
     backgroundPrompt: 'Abstract A to B flow.',
     template: 'process-flow',
     title: 'A to B',
@@ -142,6 +145,9 @@ describe('materializeTimedNarration', () => {
     expect(timed.voiceoverFile).toBe('flow.audio/voiceover.wav');
     expect(timed.voiceoverPlaybackRate).toBe(1);
     expect(timed.palette).toBe('amber');
+    expect(timed.scenes[0]!.presentation).toEqual(draft.scenes[0]!.presentation);
+    expect(timed.scenes[0]!.storyRole).toBe('explain');
+    expect(timed.scenes[0]!.icons).toEqual(draft.scenes[0]!.icons);
     expect(timed.scenes[0]!.visual).toEqual(draft.scenes[0]!.visual);
     expect(() =>
       timedNarratedPlanSchema.parse({
@@ -167,6 +173,7 @@ describe('materializeTimedNarration', () => {
       }],
       scenes: [{
         ...draft.scenes[0]!,
+        presentation: {composition: 'evidence', reveal: 'focus'},
         visual: {kind: 'image-focus', motion: 'push-in', motif: 'data', assetId: null, source: 'local', mediaId: 'local-flow-image', fit: 'contain', focalPosition: 'center'},
       }],
     });

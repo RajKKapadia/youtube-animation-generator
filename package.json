@@ -19,7 +19,8 @@
     "fixtures:narrated-v6-mixed": "node --import tsx src/render-narrated-v6-mixed-fixture.ts",
     "fixtures:publish": "node --import tsx src/render-publish-fixture.ts",
     "fixtures:voice-expressions": "node --import tsx src/render-voice-expression-fixture.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "fixtures:presentation": "node --import tsx src/render-presentation-fixtures.ts"
   },
   "engines": {
     "node": ">=22.13"

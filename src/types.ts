@@ -1,3 +1,4 @@
+import {compositionSchema, presentationIssue, presentationSchema, storyRoleSchema, type Presentation} from './presentation.js';
 import {explainerSuggestionSchema, explainerSceneSchema, explainerStructureIssue, explainerGroundingIssue, visualMotifSchema} from './explainer-visuals.js';
 import {z} from 'zod';
 import {
@@ -698,12 +699,15 @@ export const subtitleAnimationPlanResponseSchema = z.object({
 export const subtitleAnimationClipSchema = z.intersection(
   animationClipSchema,
   z.object({
+    presentation: presentationSchema.optional(),
     backgroundPrompt: z.string().min(1).max(600),
     visual: narratedSceneVisualSchema,
     icons: sceneIconSelectionSchema.default(EMPTY_SCENE_ICON_SELECTION),
     captionCues: z.array(subtitleCaptionCueSchema),
   }),
 ).superRefine((clip, context) => {
+  const layoutIssue = presentationIssue(clip);
+  if (layoutIssue) context.addIssue({code: 'custom', message: layoutIssue, path: ['presentation']});
   const issue = explainerGroundingIssue(clip, clip.transcript);
   if (issue) context.addIssue({code: 'custom', message: issue, path: ['visual']});
 });
@@ -919,6 +923,7 @@ export const savedPlanSchema = z.union([
 export type SavedPlan = z.infer<typeof savedPlanSchema>;
 
 export interface RenderableVisualScene extends VisualContent {
+  presentation?: Presentation | undefined;
   id: string;
   durationMs: number;
   visual: NarratedSceneVisual;
@@ -929,9 +934,11 @@ export interface RenderableVisualScene extends VisualContent {
 }
 
 const addNarrationSceneIssues = (
-  scene: VisualContent & {beats: NarrationBeat[]; icons?: SceneIconSelection; visual?: NarratedSceneVisual | NarratedVisualSuggestion},
+  scene: VisualContent & {presentation?: Presentation | undefined; beats: NarrationBeat[]; icons?: SceneIconSelection; visual?: NarratedSceneVisual | NarratedVisualSuggestion},
   context: z.core.$RefinementCtx,
 ): void => {
+  const layoutIssue = presentationIssue(scene);
+  if (layoutIssue) context.addIssue({code: 'custom', message: layoutIssue, path: ['presentation']});
   if (scene.visual) {
     const issue = explainerStructureIssue({...scene, visual: scene.visual});
     if (issue) context.addIssue({code: 'custom', message: issue, path: ['visual']});
@@ -1019,6 +1026,8 @@ const addSuggestedIconIssues = (
 };
 
 export const draftNarrationSceneSchema = visualContentSchema.extend({
+  presentation: presentationSchema.optional(),
+  storyRole: storyRoleSchema.optional(),
   id: z.string().min(1).max(80),
   backgroundPrompt: z.string().min(1).max(600),
   visual: narratedSceneVisualSchema,
@@ -1226,6 +1235,8 @@ export const anchoredItemTimingSchema = visualItemTimingSchema.extend({
 });
 
 export const timedNarrationSceneSchema = visualContentSchema.extend({
+  presentation: presentationSchema.optional(),
+  storyRole: storyRoleSchema.optional(),
   id: z.string().min(1).max(80),
   backgroundPrompt: z.string().min(1).max(600),
   visual: narratedSceneVisualSchema,
@@ -1832,6 +1843,10 @@ const youtubePublishMetadataSchema = z.object({
 });
 
 const publishThumbnailMetadataSchema = z.object({
+  composition: compositionSchema.optional(),
+  datumId: z.string().min(1).optional(),
+  primaryItemIndices: z.array(z.number().int().nonnegative()).max(6).optional(),
+  secondaryItemIndices: z.array(z.number().int().nonnegative()).max(6).optional(),
   headline: z.string().trim().min(1).max(56),
   eyebrow: z.string().trim().min(1).max(32),
   sceneId: z.string().trim().min(1).max(80),
@@ -1853,6 +1868,8 @@ export const narratedPublishPlanSchema = z.object({
 export type NarratedPublishPlan = z.infer<typeof narratedPublishPlanSchema>;
 
 export const publishSceneSchema = visualContentSchema.extend({
+  visual: narratedSceneVisualSchema.optional(),
+  presentation: presentationSchema.optional(),
   id: z.string().min(1).max(80),
   icons: sceneIconSelectionSchema.default(EMPTY_SCENE_ICON_SELECTION),
 });
@@ -1917,6 +1934,8 @@ export const selectedMotionAssetSchema = z.object({
 export type SelectedMotionAsset = z.infer<typeof selectedMotionAssetSchema>;
 
 export const publishCoverInputSchema = z.object({
+  foregroundAssets: z.record(z.string(), z.string()).optional(),
+  localBrandAssets: z.record(z.string(), localBrandAssetSchema).optional(),
   backgroundImageAsset: z.string().min(1).optional(),
   publish: narratedPublishPlanSchema,
   scene: publishSceneSchema,

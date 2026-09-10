@@ -1,3 +1,4 @@
+import {selectCoverDirection} from './cover-direction.js';
 import {basename} from 'node:path';
 import OpenAI from 'openai';
 import {zodTextFormat} from 'openai/helpers/zod';
@@ -39,7 +40,7 @@ Create:
 - Three to five unique hashtags without a leading #.
 - A thumbnail headline of three to six words when the language uses spaces. Keep it concrete, readable, and different from a sentence-length title.
 - A short thumbnail eyebrow that identifies the content category or topic.
-- One exact scene id from the supplied scene list whose visual items best support the headline.
+- One exact scene id from the supplied scene list whose visual items best support the headline and the video's one central takeaway. Prefer the scene with the clearest visual explanation or evidence, not a generic introduction.
 
 The thumbnail is rendered from typography, shapes, diagrams, and existing icons. Do not describe, request, or imply generated imagery.`;
 
@@ -205,7 +206,9 @@ export const generateNarratedPublishPlan = async (
     response: response.output_parsed,
     sourcePlan: options.sourcePlan,
   });
-  return normalizeGeneratedPublishScene(options.plan, plan);
+  const normalized = normalizeGeneratedPublishScene(options.plan, plan);
+  const scene = options.plan.scenes.find(({id}) => id === normalized.thumbnail.sceneId)!;
+  return {...normalized, thumbnail: {...normalized.thumbnail, ...selectCoverDirection(scene, normalized.thumbnail.headline)}};
 };
 
 export const publishKitMarkdown = (plan: NarratedPublishPlan): string => `# Narrated video publish kit

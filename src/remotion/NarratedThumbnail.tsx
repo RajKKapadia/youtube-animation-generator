@@ -1,3 +1,5 @@
+import {CompositionCover} from './CompositionCover.js';
+import {LocalBrandAssetsProvider} from './TechnologyBadge.js';
 import type {CSSProperties, ReactNode} from 'react';
 import {AbsoluteFill, Img, staticFile} from 'remotion';
 import type {
@@ -327,6 +329,8 @@ const StaticBackdrop = ({accent}: {accent: ReturnType<typeof accentFor>}) => (
 
 export const NarratedThumbnail = ({
   backgroundImageAsset,
+  foregroundAssets,
+  localBrandAssets,
   localIconAssets,
   profile,
   publish,
@@ -342,6 +346,7 @@ export const NarratedThumbnail = ({
     icons: scene.icons,
   });
   return (
+    <LocalBrandAssetsProvider assets={localBrandAssets ?? {}}>
     <LocalIconAssetsProvider assets={localIconAssets}>
       <TechnologyIconsProvider icons={technologyIcons}>
         <SemanticIconsProvider icons={semanticIcons}>
@@ -356,7 +361,7 @@ export const NarratedThumbnail = ({
                 />
               </AbsoluteFill>
             ) : <StaticBackdrop accent={accent} />}
-            <div
+            {publish.thumbnail.composition ? <CompositionCover publish={publish} scene={scene} profile={profile} technologyIcons={technologyIcons} localIconAssets={localIconAssets} {...(foregroundAssets ? {foregroundAssets} : {})} /> : <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: vertical ? 'minmax(0, 1fr)' : `${layout.titleWidth}px ${layout.panelWidth}px`,
@@ -439,10 +444,11 @@ export const NarratedThumbnail = ({
               >
                 <SceneMotif accent={accent} scene={scene} vertical={vertical} width={layout.panelWidth} />
               </div>
-            </div>
+            </div>}
           </AbsoluteFill>
         </SemanticIconsProvider>
       </TechnologyIconsProvider>
     </LocalIconAssetsProvider>
+    </LocalBrandAssetsProvider>
   );
 };

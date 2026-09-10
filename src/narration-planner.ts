@@ -1,3 +1,4 @@
+import {directScenes, PRESENTATION_PLANNING_PROMPT} from './presentation.js';
 import {EXPLAINER_PLANNING_PROMPT, explainerGroundingIssue, visualTreatmentKey} from './explainer-visuals.js';
 import {codeCatalogPrompt, codeSelectionIssue, materializeCodeVisual, type CodeSource} from './local-code.js';
 import OpenAI from 'openai';
@@ -39,9 +40,9 @@ import {narrationResponseSchema, planningValidationSummary, recoverNarrationResp
 
 export {joinNarrationPhrases} from './narration-text.js';
 
-const SYSTEM_PROMPT = EXPLAINER_PLANNING_PROMPT + '\n\n' + `You are a precise visual writer and director for short educational videos.
+const SYSTEM_PROMPT = PRESENTATION_PLANNING_PROMPT + '\n\n' + EXPLAINER_PLANNING_PROMPT + '\n\n' + `You are a precise visual writer and director for short educational videos.
 
-Turn the supplied source into a self-contained narration and storyboard. Stay faithful to the source: do not invent facts, examples, numbers, claims, or conclusions. Open with a concise hook, build a clear explanation, and finish with a useful conclusion. The narration must sound natural when read aloud and must not refer to the source document.
+Turn the supplied source into a self-contained narration and storyboard focused on ONE clear takeaway. Select the central idea rather than summarizing every section. Omit secondary details when needed, but retain qualifications, units, context, and caveats that make the selected claim accurate. The title names this central idea. Usually use three to five scenes: open immediately with a source-supported question or claim, explain the mechanism or evidence, and end with a useful answer to that opening. Do not introduce an unrelated topic or a generic recap at the end. Do not pad a short source to fill the duration. Stay faithful to the source: do not invent facts, examples, numbers, claims, or conclusions. Open with a concise hook, build a clear explanation, and finish with a useful conclusion. The narration must sound natural when read aloud and must not refer to the source document.
 
 Use at most six scenes and only these visual templates:
 - process-flow: primaryItems are ordered nodes and secondaryItems is empty.
@@ -656,7 +657,7 @@ export const planNarratedVideo = async (
         planningWarnings,
         assetAttributions: materialized.assetAttributions,
         mediaAssets: materialized.mediaAssets,
-        scenes: materialized.scenes,
+        scenes: directScenes(materialized.scenes, true),
       });
     } catch (error) {
       if (!(error instanceof z.ZodError) && !(error instanceof SyntaxError)) throw error;
