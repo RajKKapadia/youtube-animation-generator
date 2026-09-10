@@ -1,3 +1,4 @@
+import {directedTitleStyle} from './DirectedScene.js';
 import type {CSSProperties, ReactNode} from 'react';
 import {useCurrentFrame, useVideoConfig} from 'remotion';
 import type {RenderableVisualScene, RenderProfile, VideoPalette} from '../types.js';
@@ -27,8 +28,8 @@ const text = (value: string, width: number, size = 42, height = 110, align: 'lef
 const panel = (accent: string): CSSProperties => ({background: '#101b2d', border: `2px solid ${hexToRgba(accent, 0.48)}`, borderRadius: 24, boxShadow: keySafeShadow('0 16px 40px rgba(0,0,0,.25)'), boxSizing: 'border-box'});
 const Shell = ({scene, profile, children}: ExplainerProps & {children: ReactNode}) => (
   <div style={{display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, gap: 28}}>
-    <div style={{height: profile.aspectRatio === '9:16' ? 156 : 110, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-      {text(scene.title, profile.width - profile.safeArea.left - profile.safeArea.right - 32, 60, profile.aspectRatio === '9:16' ? 156 : 110, 'center')}
+    <div style={{height: profile.aspectRatio === '9:16' ? 156 : 110, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', ...(scene.presentation ? directedTitleStyle(profile.aspectRatio === '9:16') : {})}}>
+      {text(scene.title, profile.width - profile.safeArea.left - profile.safeArea.right - 32, scene.presentation ? 38 : 60, scene.presentation ? 90 : profile.aspectRatio === '9:16' ? 156 : 110, scene.presentation ? 'left' : 'center')}
     </div>
     {children}
   </div>

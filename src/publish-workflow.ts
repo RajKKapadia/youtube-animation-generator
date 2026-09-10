@@ -1,3 +1,4 @@
+import {validateCoverDirection} from './cover-direction.js';
 import {access, mkdir, readFile, writeFile} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {basename, dirname, resolve} from 'node:path';
@@ -76,7 +77,9 @@ const selectedScene = (
       `Publish metadata references missing narration scene: ${publish.thumbnail.sceneId}.`,
     );
   }
-  return publishSceneSchema.parse(scene);
+  const selected = publishSceneSchema.parse(scene);
+  validateCoverDirection(publish, selected);
+  return selected;
 };
 
 export interface RunPublishWorkflowOptions {
@@ -140,6 +143,9 @@ export const runPublishWorkflow = async (
   const scene = selectedScene(narration, publish);
   const outputs = await renderPublishCovers({
     aspectRatio: options.aspectRatio,
+    mediaAssets: narration.mediaAssets,
+    planDirectory: dirname(options.planPath),
+    sourceText: narration.sourceText,
     force: options.force,
     outputDirectory,
     publish,

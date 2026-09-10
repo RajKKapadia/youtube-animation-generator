@@ -1,3 +1,4 @@
+import {DirectedScene, hasDirectedLayout, PresentationLeadIn} from './DirectedScene.js';
 import {KineticText, BeforeAfter, CodeWalkthrough, SequenceDiagram, LayeredArchitecture, LineChart} from './ExplainerVisuals.js';
 import type {CSSProperties, ReactNode} from 'react';
 import {
@@ -69,14 +70,14 @@ const SceneCanvas = ({
   </AbsoluteFill>
 );
 
-const SceneTitle = ({profile, title}: {profile: RenderProfile; title: string}) => {
+const SceneTitle = ({profile, title, directed = false}: {profile: RenderProfile; title: string; directed?: boolean}) => {
   const vertical = profile.aspectRatio === '9:16';
   return (
     <div
       style={{
         alignItems: 'center',
         display: 'flex',
-        height: vertical ? 176 : 128,
+        height: directed ? (vertical ? 100 : 74) : vertical ? 176 : 128,
         justifyContent: 'center',
         margin: '0 auto',
         maxWidth: vertical ? 850 : 1460,
@@ -88,7 +89,7 @@ const SceneTitle = ({profile, title}: {profile: RenderProfile; title: string}) =
         fontWeight={820}
         letterSpacing={vertical ? -1 : -2}
         lineHeight={1.05}
-        maxFontSize={vertical ? 64 : 68}
+        maxFontSize={directed ? 38 : vertical ? 64 : 68}
         maxHeight={vertical ? 176 : 128}
         maxLines={vertical ? 3 : 2}
         maxWidth={vertical ? 850 : 1460}
@@ -198,17 +199,19 @@ const AgentWorkflow = ({
     clamp,
   );
   const coreScale = 1 + Math.sin(frame * 0.045) * 0.012;
-  const orbitHeight = vertical ? VERTICAL_AGENT_WORKFLOW_GEOMETRY.orbitHeight : 560;
-  const nodeRadius = vertical ? VERTICAL_AGENT_WORKFLOW_GEOMETRY.nodeRadius : 260;
-  const nodeBadgeSize = vertical ? 76 : 82;
-  const nodeLabelHeight = vertical ? 72 : 78;
-  const nodeHeight = vertical
+  const directed = Boolean(scene.presentation);
+  const orbitHeight = directed ? (vertical ? 1000 : 660) : vertical ? VERTICAL_AGENT_WORKFLOW_GEOMETRY.orbitHeight : 560;
+  const nodeRadius = directed ? (vertical ? 320 : 360) : vertical ? VERTICAL_AGENT_WORKFLOW_GEOMETRY.nodeRadius : 260;
+  const nodeRadiusY = directed && !vertical ? 230 : nodeRadius;
+  const nodeBadgeSize = directed ? (vertical ? 92 : 82) : vertical ? 76 : 82;
+  const nodeLabelHeight = directed ? (vertical ? 116 : 100) : vertical ? 72 : 78;
+  const nodeHeight = vertical && !directed
     ? VERTICAL_AGENT_WORKFLOW_GEOMETRY.nodeHeight
     : nodeBadgeSize + 8 + nodeLabelHeight;
 
   return (
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
-      <SceneTitle profile={profile} title={scene.title} />
+      <SceneTitle directed={Boolean(scene.presentation)} profile={profile} title={scene.title} />
       <div
         style={{
           alignItems: 'center',
@@ -224,21 +227,21 @@ const AgentWorkflow = ({
           style={{
             alignItems: 'center',
             display: 'grid',
-            flex: vertical ? '0 0 auto' : '0 0 46%',
+            flex: directed || vertical ? '0 0 auto' : '0 0 46%',
             height: orbitHeight,
             justifyItems: 'center',
             position: 'relative',
             transform: `scale(${coreScale})`,
-            width: vertical ? 780 : 660,
+            width: directed ? (vertical ? 936 : 1200) : vertical ? 780 : 660,
           }}
         >
           <div
             style={{
               ...panelStyle(theme.accents.primary),
               borderRadius: '50%',
-              height: vertical ? 330 : 360,
+              height: directed ? (vertical ? 300 : 240) : vertical ? 330 : 360,
               position: 'absolute',
-              width: vertical ? 330 : 360,
+              width: directed ? (vertical ? 300 : 240) : vertical ? 330 : 360,
             }}
           />
           {asset ? (
@@ -253,7 +256,7 @@ const AgentWorkflow = ({
               id={scene.icons.focal}
               motion={scene.visual.motion}
               secondaryColor={theme.accents.secondary}
-              size={vertical ? 210 : 230}
+              size={directed ? (vertical ? 190 : 165) : vertical ? 210 : 230}
             />
           ) : (
             <AnimatedVisualIcon
@@ -261,7 +264,7 @@ const AgentWorkflow = ({
               id="ai-agent"
               motion={scene.visual.motion}
               secondaryColor={theme.accents.secondary}
-              size={vertical ? 210 : 230}
+              size={directed ? (vertical ? 190 : 165) : vertical ? 210 : 230}
             />
           )}
           {tools.map((tool, index, visibleTools) => {
@@ -280,18 +283,18 @@ const AgentWorkflow = ({
                   opacity: entrance,
                   position: 'absolute',
                   top: '50%',
-                  transform: `translate(-50%, -50%) translate(${Math.cos(angle) * nodeRadius}px, ${Math.sin(angle) * nodeRadius}px) scale(${0.86 + entrance * 0.14})`,
-                  width: vertical ? 190 : 200,
+                  transform: `translate(-50%, -50%) translate(${Math.cos(angle) * nodeRadius}px, ${Math.sin(angle) * nodeRadiusY}px) scale(${0.86 + entrance * 0.14})`,
+                  width: directed ? 260 : vertical ? 190 : 200,
                 }}
               >
                 <TechnologyBadge label={tool} size={nodeBadgeSize} />
                 <FittedText
                   fontWeight={720}
                   lineHeight={1.08}
-                  maxFontSize={vertical ? 22 : 23}
+                  maxFontSize={directed ? 34 : vertical ? 22 : 23}
                   maxHeight={nodeLabelHeight}
                   maxLines={3}
-                  maxWidth={vertical ? 190 : 200}
+                  maxWidth={directed ? 260 : vertical ? 190 : 200}
                   text={tool}
                 />
               </div>
@@ -311,7 +314,7 @@ const AgentWorkflow = ({
             }}
           />
         </div>
-        <div
+        {!directed ? <div
           style={{
             display: 'flex',
             flex: vertical ? '0 0 auto' : '1 1 0',
@@ -373,7 +376,7 @@ const AgentWorkflow = ({
               text={tools.join(' · ')}
             />
           </div>
-        </div>
+        </div> : null}
       </div>
     </div>
   );
@@ -395,7 +398,7 @@ const BrandShowcase = ({
   const brands = [...scene.primaryItems, ...scene.secondaryItems].slice(0, 6);
   return (
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
-      <SceneTitle profile={profile} title={scene.title} />
+      <SceneTitle directed={Boolean(scene.presentation)} profile={profile} title={scene.title} />
       <div
         style={{
           alignContent: 'center',
@@ -471,7 +474,7 @@ const NetworkMap = ({
 
   return (
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
-      <SceneTitle profile={profile} title={scene.title} />
+      <SceneTitle directed={Boolean(scene.presentation)} profile={profile} title={scene.title} />
       <div style={{flex: 1, margin: '0 auto', position: 'relative', width: mapWidth}}>
         <svg
           aria-hidden="true"
@@ -602,7 +605,7 @@ const MetricFocus = ({
   const pulse = 1 + Math.sin(frame * 0.04) * 0.012;
   return (
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
-      <SceneTitle profile={profile} title={scene.title} />
+      <SceneTitle directed={Boolean(scene.presentation)} profile={profile} title={scene.title} />
       <div style={{alignItems: 'center', display: 'flex', flex: 1, flexDirection: 'column', gap: vertical ? 42 : 34, justifyContent: 'center'}}>
         <div
           style={{
@@ -674,7 +677,7 @@ const IconSpotlight = ({
   const orbitRadiusY = 178;
   return (
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
-      <SceneTitle profile={profile} title={scene.title} />
+      <SceneTitle directed={Boolean(scene.presentation)} profile={profile} title={scene.title} />
       <div
         style={{
           alignItems: 'center',
@@ -872,7 +875,7 @@ const ImageFocus = ({
 
   return (
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
-      <SceneTitle profile={profile} title={scene.title} />
+      <SceneTitle directed={Boolean(scene.presentation)} profile={profile} title={scene.title} />
       <div
         style={{
           ...panelStyle(theme.accents.primary),
@@ -1134,6 +1137,13 @@ export const NarratedVisualLayer = ({
   scene: RenderableVisualScene;
   technologyIcons: Record<string, TechnologyBrandIcon>;
 }) => {
+  if (hasDirectedLayout(scene)) {
+    return <CinematicSceneFrame scene={scene}><SceneCanvas contentTopInset={contentTopInset} profile={profile}>
+      <TechnologyIconsProvider icons={technologyIcons}><SemanticIconsProvider icons={iconRecordForItems(scene)}>
+        <PresentationLeadIn scene={scene} profile={profile}><DirectedScene scene={scene} profile={profile} palette={palette} contentTopInset={contentTopInset} /></PresentationLeadIn>
+      </SemanticIconsProvider></TechnologyIconsProvider>
+    </SceneCanvas></CinematicSceneFrame>;
+  }
   if (scene.visual.kind === 'diagram') {
     const clip: VisualClip = {
       id: scene.id,
@@ -1199,7 +1209,7 @@ export const NarratedVisualLayer = ({
       <SceneCanvas contentTopInset={contentTopInset} profile={profile}>
         <TechnologyIconsProvider icons={technologyIcons}>
           <SemanticIconsProvider icons={semanticIcons}>
-            {content}
+            <PresentationLeadIn scene={scene} profile={profile}>{content}</PresentationLeadIn>
           </SemanticIconsProvider>
         </TechnologyIconsProvider>
       </SceneCanvas>

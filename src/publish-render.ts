@@ -1,5 +1,7 @@
+import {stageVisualRenderAssets} from './visual-render-assets.js';
+import {validateCoverDirection} from './cover-direction.js';
 import {existsSync} from 'node:fs';
-import {copyFile, mkdir, mkdtemp, rm} from 'node:fs/promises';
+import {mkdir, mkdtemp, rm} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -10,13 +12,12 @@ import {
   publishCoverSuffix,
 } from './publish-profile.js';
 import {resolveTechnologyBrandIcons} from './technology-catalog.js';
-import {assetFilePath, iconAssetForId, loadAssetRegistry} from './asset-registry.js';
-import {semanticIconDefinitionFor} from './icon-catalog.js';
 import {stageImageBackground, type ImageBackground} from './image-background.js';
 import type {
   AspectRatioSelection,
   NarratedPublishPlan,
   PublishScene,
+  NarratedMediaAsset,
   RenderProfile,
 } from './types.js';
 
@@ -50,6 +51,9 @@ export interface PublishCoverOutput {
 
 export interface RenderPublishCoversOptions {
   aspectRatio: AspectRatioSelection;
+  mediaAssets?: NarratedMediaAsset[];
+  planDirectory?: string;
+  sourceText?: string;
   imageBackground?: ImageBackground;
   force: boolean;
   outputDirectory: string;
@@ -72,6 +76,7 @@ export const publishCoverOutputPaths = (
 export const renderPublishCovers = async (
   options: RenderPublishCoversOptions,
 ): Promise<PublishCoverOutput[]> => {
+  validateCoverDirection(options.publish, options.scene);
   await mkdir(options.outputDirectory, {recursive: true});
   const outputs = publishCoverOutputPaths(options);
   if (!options.force) {
@@ -88,30 +93,21 @@ export const renderPublishCovers = async (
     const backgroundImageAsset = options.imageBackground
       ? await stageImageBackground(options.imageBackground, publicDirectory)
       : undefined;
-    const registry = await loadAssetRegistry();
-    const localIconAssets: Record<string, {
-      id: string;
-      file: string;
-      colorPolicy: 'original' | 'monochrome-allowed';
-    }> = {};
-    const selectedIconIds = new Set([
-      ...(options.scene.icons.focal ? [options.scene.icons.focal] : []),
-      ...options.scene.icons.primary.flatMap((id) => id ? [id] : []),
-      ...options.scene.icons.secondary.flatMap((id) => id ? [id] : []),
-    ]);
-    for (const iconId of selectedIconIds) {
-      if (semanticIconDefinitionFor(iconId)) continue;
-      const asset = iconAssetForId(registry, iconId);
-      if (!asset) throw new Error(`Publish scene references unregistered icon "${iconId}".`);
-      const publicName = `icon-${asset.id}.svg`;
-      await copyFile(assetFilePath(registry, asset.file), resolve(publicDirectory, publicName));
-      localIconAssets[asset.id] = {
-        id: asset.id,
-        file: publicName,
-        colorPolicy: asset.colorPolicy,
-      };
-    }
-
+    const coverScene = options.scene;
+    const visual = options.publish.thumbnail.composition && coverScene.visual?.kind !== 'image-focus'
+      ? coverScene.visual
+      : options.publish.thumbnail.composition === 'evidence' ? coverScene.visual : undefined;
+    const staged = await stageVisualRenderAssets({
+      mediaAssets: options.mediaAssets ?? [],
+      planDirectory: options.planDirectory ?? options.outputDirectory,
+      profiles: outputs.map(({profile}) => profile),
+      publicDirectory,
+      scenes: [{...coverScene, visual: visual ?? {kind: 'diagram', motion: 'reveal', motif: 'none', assetId: null},
+        durationMs: 1000, primaryItemTimings: coverScene.primaryItems.map(() => ({startMs: 0})),
+        secondaryItemTimings: coverScene.secondaryItems.map(() => ({startMs: 0})), activityCues: []}],
+      sourceTextForScene: () => options.sourceText ?? '',
+    });
+    const localIconAssets = staged.localIconAssets;
     console.log('Bundling code-native publish-cover templates...');
     const serveUrl = await bundle({
       entryPoint: findEntryPoint(),
@@ -138,8 +134,10 @@ export const renderPublishCovers = async (
         publish: options.publish,
         scene: options.scene,
         profile: output.profile,
-        technologyIcons,
+        technologyIcons: options.publish.thumbnail.composition ? staged.technologyIcons : technologyIcons,
         localIconAssets,
+        localBrandAssets: options.publish.thumbnail.composition ? staged.localBrandAssets : {},
+        foregroundAssets: staged.foregroundAssets[output.profile.aspectRatio],
         ...(backgroundImageAsset ? {backgroundImageAsset} : {}),
       };
       const composition = await selectComposition({

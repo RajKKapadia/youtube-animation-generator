@@ -53,6 +53,7 @@ export const SubtitleClip = ({
     rightLabel: clip.rightLabel,
     reason: clip.reason,
     visual: clip.visual,
+    presentation: clip.presentation,
     icons: clip.icons,
     primaryItemTimings,
     secondaryItemTimings,
@@ -61,6 +62,7 @@ export const SubtitleClip = ({
       : [{startMs: 0, text: clip.transcript}],
   };
   const useLegacyDiagramRenderer =
+    !clip.presentation &&
     captions === 'off' &&
     sceneBackground === 'off' &&
     clip.captionCues.length === 0 &&

@@ -85,7 +85,7 @@ Planning-only and saved-plan workflows skip the dependencies they do not use. Fo
 
 Saved-plan rendering never downloads a logo or animation. It validates checked-in asset manifests and hashes for selected local images, copies only referenced files into Remotion's temporary public directory, and removes that staging directory after the render. A timed plan also reuses cached generated foreground images without OpenAI; if one is missing, the CLI names the scene and asks for `--generated-visuals auto` instead of silently substituting unrelated art.
 
-Publish metadata needs OpenAI only when creating a new publish plan. Rendering an edited publish plan needs Chrome but makes no OpenAI request. Publish covers use only Remotion typography, shapes, diagrams, Lucide icons, and the installed Simple Icons catalog; the publish workflow never calls the Image API.
+Publish metadata needs OpenAI only when creating a new publish plan. Rendering an edited publish plan needs Chrome but makes no OpenAI request. Publish covers use Remotion typography, shapes, diagrams, validated data/code, supplied local images, Lucide icons, and the installed Simple Icons catalog; the publish workflow never calls the Image API.
 
 Remotion has separate license terms. Confirm that your use qualifies for its free license or obtain the appropriate license: [Remotion license](https://www.remotion.dev/license).
 
@@ -315,6 +315,32 @@ The first command uses the default deterministic ambient background and makes no
 
 Narrated output is H.264 video with AAC voiceover audio. Planning and TTS happen once; `both` performs two independent Remotion render passes.
 
+## Content-directed presentation
+
+New narrated plans focus on one central takeaway: an immediate question or claim, a clear explanation, and a useful answer. Secondary details may be omitted; necessary qualifications and exact values stay intact. Three to five scenes are preferred within the requested duration. Subtitle planning keeps the supplied transcript and timing and chooses layouts for each selected passage.
+
+Both workflows save scene `presentation` metadata separately from the visual treatment:
+
+```json
+{"composition": "process", "reveal": "build"}
+```
+
+The five compositions are `statement` (large phrases), `focal` (one dominant concept), `comparison` (two source-backed sides), `process` (a building structure), and `evidence` (validated data, code, or an image). Selection follows the verified content; equally suitable alternatives vary deterministically. `focus` replaces an earlier group when the next speech cue starts; all items sharing a cue remain visible together. `build` retains earlier context. Narrated scenes also save `storyRole`: `hook`, `explain`, `evidence`, or `takeaway`.
+
+Saved plans without presentation metadata retain the legacy layout. New metadata is an additive extension of the current plan formats; there is no new CLI flag. Existing subtitle exports remain separate and audio-free. Caption clearance, exact source grounding, static custom backgrounds, and native 16:9/9:16 rendering still apply.
+
+New publish kits save `thumbnail.composition`, `primaryItemIndices`, and `secondaryItemIndices` for their selected scene; chart covers also save a validated `datumId`. Covers use a short headline and a dominant visual instead of a reduced copy of every information card. You can edit these fields and use `--render-publish` without a new AI call. References, before/after pairings, and layout compatibility are validated. Directed covers show one focal item, one item per comparison side, or up to three process steps. Existing publish files without a composition retain the old cover. Local image covers verify the original saved image hash; generated foreground images are not requested by publishing, and those scenes receive a typography cover.
+
+Render the comparison gallery (both orientations, speech-aligned states, old/new covers, and audio-free subtitle samples):
+
+```bash
+pnpm fixtures:presentation -- --output=/tmp/youtube-presentation-preview
+# Skip video encoding when inspecting layouts only:
+node --import tsx src/render-presentation-fixtures.ts --stills-only --output=/tmp/youtube-presentation-preview
+```
+
+The fixture narration uses a silent timing track. Use the regular `create` command for a real narrated sample.
+
 ## Create a narrated-video publish kit
 
 Create copy-ready YouTube metadata and both cover orientations from a draft or timed narration plan:
@@ -331,7 +357,7 @@ The command makes one source-grounded Structured Outputs request, then saves:
 - `summary.thumbnail.png` — 1280×720 YouTube thumbnail
 - `summary.cover-9x16.png` — 1080×1920 vertical cover
 
-The metadata contains one recommended title, two alternatives, 15–20 tags, a concise description, separate hashtags, a short cover headline, and the narration scene used for the supporting diagram. Newly generated covers inherit the narration plan's palette, while an existing edited publish JSON can still override its saved `thumbnail.accent`. The prompt receives the original source and final narration, rejects invented links or claims, and treats source text as content rather than instructions.
+The metadata contains one recommended title, two alternatives, 15–20 tags, a concise description, separate hashtags, a short cover headline, and the narration scene and composition used for the cover. Newly generated covers inherit the narration plan's palette, while an existing edited publish JSON can still override its saved `thumbnail.accent`. The prompt receives the original source and final narration, rejects invented links or claims, and treats source text as content rather than instructions.
 
 Generate only the editable sidecars without starting Chrome:
 
