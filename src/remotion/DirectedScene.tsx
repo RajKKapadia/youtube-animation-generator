@@ -1,3 +1,4 @@
+import {keySafeOpacity} from './chroma-key.js';
 import type {ReactNode} from 'react';
 import {interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
 import type {RenderableVisualScene, RenderProfile, VideoPalette} from '../types.js';
@@ -14,7 +15,7 @@ export const directedTitleStyle = (vertical: boolean) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'flex-start',
-  opacity: 0.8,
+  opacity: keySafeOpacity(0.8),
 } as const);
 
 export const hasDirectedLayout = (scene: RenderableVisualScene): boolean => Boolean(scene.presentation) && (
@@ -87,7 +88,7 @@ export const DirectedScene = ({scene, profile, palette, contentTopInset}: {
         <div key={sideIndex} style={{borderTop: `8px solid ${side.color}`, paddingTop: 28, minWidth: 0}}>
           {label(side.heading, sideWidth, vertical ? 42 : 46, 116, 2, side.color)}
           <div style={{display: 'flex', flexDirection: 'column', gap: 28, marginTop: 44}}>
-            {side.items.map((i) => <div key={i} style={{opacity: entry(side.starts[i]!)}}>
+            {side.items.map((i) => <div key={i} style={{opacity: keySafeOpacity(entry(side.starts[i]!))}}>
               {label(side.labels[i]!, sideWidth, side.items.length > 2 ? 38 : vertical ? 64 : 78, Math.min(400, Math.max(40, (bodyHeight - 160 - Math.max(0, side.items.length - 1) * 28) / Math.max(1, side.items.length))), 5)}
             </div>)}
           </div>
@@ -100,7 +101,7 @@ export const DirectedScene = ({scene, profile, palette, contentTopInset}: {
     content = <div style={{display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, alignContent: 'center', gap: vertical ? 26 : 52, flex: 1}}>
       {scene.primaryItems.map((item, i) => {
         const p = shown.includes(i) ? entry(primaryStarts[i]!) : 0;
-        return <div key={i} style={{display: 'flex', alignItems: 'center', gap: 28, opacity: p, transform: `translateY(${(1 - p) * 14}px)`, minHeight: vertical ? 134 : 180, borderLeft: `4px solid ${theme.accents.primary}`, paddingLeft: 24}}>
+        return <div key={i} style={{display: 'flex', alignItems: 'center', gap: 28, opacity: keySafeOpacity(p), transform: `translateY(${(1 - p) * 14}px)`, minHeight: vertical ? 134 : 180, borderLeft: `4px solid ${theme.accents.primary}`, paddingLeft: 24}}>
           <span style={{fontSize: vertical ? 42 : 38, fontWeight: 850, color: theme.accents.secondary, flexShrink: 0}}>{String(i + 1).padStart(2, '0')}</span>
           {label(item, cellWidth - 126, vertical ? 54 : 50, vertical ? 134 : 180, 3)}
         </div>;
@@ -120,7 +121,7 @@ export const DirectedScene = ({scene, profile, palette, contentTopInset}: {
         const p = entry(primaryStarts[i]!);
         const inline = focal && !vertical && !multiple;
         const icon = scene.icons.focal;
-        return <div key={i} style={{display: 'flex', flexDirection: inline ? 'row' : 'column', alignItems: 'flex-start', gap: multiple ? 24 : 48, opacity: p, transform: `translateY(${(1 - p) * 16}px)`, minWidth: 0}}>
+        return <div key={i} style={{display: 'flex', flexDirection: inline ? 'row' : 'column', alignItems: 'flex-start', gap: multiple ? 24 : 48, opacity: keySafeOpacity(p), transform: `translateY(${(1 - p) * 16}px)`, minWidth: 0}}>
           {focal && !multiple ? <div style={{flexShrink: 0, color: theme.accents.primary}}>
             {icon ? <VisualIcon id={icon} color={theme.accents.primary} size={iconSize} /> : <TechnologyBadge label={scene.primaryItems[i]!} size={iconSize} />}
           </div> : null}

@@ -13,6 +13,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "fixtures:explainers": "node --import tsx src/render-explainer-fixtures.ts",
     "fixtures:layouts": "node --import tsx src/render-layout-fixtures.ts",
+    "fixtures:chroma-text": "node --import tsx src/render-chroma-text-fixtures.ts",
     "fixtures:subtitle-visuals": "node --import tsx src/render-subtitle-visual-fixtures.ts",
     "fixtures:narrated": "node --import tsx src/render-narrated-fixture.ts",
     "fixtures:narrated-layouts": "node --import tsx src/render-narrated-layout-fixtures.ts",

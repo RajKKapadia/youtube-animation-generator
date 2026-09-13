@@ -18,7 +18,7 @@ import type {
 import {isVerticalDimensions} from '../render-profile.js';
 import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
-import {keySafeShadow} from './chroma-key.js';
+import {keySafeShadow, keySafeSurface, keySafeOpacity} from './chroma-key.js';
 
 const clamp = {
   extrapolateLeft: 'clamp' as const,
@@ -288,7 +288,7 @@ export const TimedCaptionLayer = ({
         display: 'flex',
         justifyContent: 'center',
         left: profile.safeArea.left,
-        opacity,
+        opacity: keySafeOpacity(opacity),
         position: 'absolute',
         right: profile.safeArea.right,
         top: profile.safeArea.top,
@@ -299,7 +299,7 @@ export const TimedCaptionLayer = ({
       <div
         style={{
           alignItems: 'center',
-          background: 'rgba(2, 6, 23, 0.86)',
+          background: keySafeSurface('rgba(2, 6, 23, 0.86)'),
           border: '2px solid rgba(255,255,255,0.24)',
           borderRadius: vertical ? 24 : 22,
           boxShadow: keySafeShadow('0 18px 48px rgba(0,0,0,0.5)'),
