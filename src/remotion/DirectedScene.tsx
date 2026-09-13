@@ -6,6 +6,7 @@ import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 import {FittedText} from './FittedText.js';
 import {TechnologyBadge} from './TechnologyBadge.js';
 import {VisualIcon} from './SemanticIcon.js';
+import {CINEMATIC_MOTION} from './cinematic-motion.js';
 
 export const directedTitleStyle = (vertical: boolean) => ({
   height: vertical ? 100 : 74,
@@ -22,15 +23,29 @@ export const hasDirectedLayout = (scene: RenderableVisualScene): boolean => Bool
   scene.visual.kind === 'metric-focus' || scene.visual.kind === 'before-after'
 );
 
-/** A question can precede the first item cue. Keep an immediate visual hook
+/** Use the existing gap only when the title has time to fade in and be read.
+ * Short gaps use the regular scene heading without moving any speech cues. */
+export const presentationLeadInDurationMs = (scene: Pick<RenderableVisualScene,
+  'presentation' | 'title' | 'durationMs' | 'primaryItemTimings' | 'secondaryItemTimings'
+>): number => {
+  if (!scene.presentation) return 0;
+  const starts = [...scene.primaryItemTimings, ...scene.secondaryItemTimings].map(({startMs}) => startMs);
+  const availableMs = Math.min(...starts, scene.durationMs);
+  const wordCount = scene.title.trim().split(/\s+/u).filter(Boolean).length;
+  const readingMs = Math.max(1200, wordCount * 250);
+  const fadeMs = CINEMATIC_MOTION.sceneEntranceSeconds * 1000 +
+    (availableMs === scene.durationMs ? CINEMATIC_MOTION.sceneExitSeconds * 1000 : 0);
+  return availableMs >= fadeMs + readingMs ? availableMs : 0;
+};
+
+/** A question can precede the first item cue. Keep a readable visual hook
  * without revealing data before its speech anchor. */
 export const PresentationLeadIn = ({scene, profile, children}: {
   scene: RenderableVisualScene; profile: RenderProfile; children: ReactNode;
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
-  const starts = [...scene.primaryItemTimings, ...scene.secondaryItemTimings].map(({startMs}) => startMs);
-  if (!scene.presentation || frame * 1000 / fps >= Math.min(...starts, scene.durationMs)) return <>{children}</>;
+  if (frame * 1000 / fps >= presentationLeadInDurationMs(scene)) return <>{children}</>;
   const vertical = profile.aspectRatio === '9:16';
   return <div style={{height: '100%', display: 'flex', alignItems: 'center'}}>
     <FittedText align="left" fontWeight={850} lineHeight={1.08} maxFontSize={vertical ? 108 : 128} maxHeight={vertical ? 850 : 530} maxLines={5} maxWidth={profile.width - profile.safeArea.left - profile.safeArea.right} text={scene.title} />

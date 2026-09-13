@@ -319,6 +319,8 @@ Narrated output is H.264 video with AAC voiceover audio. Planning and TTS happen
 
 New narrated plans focus on one central takeaway: an immediate question or claim, a clear explanation, and a useful answer. Secondary details may be omitted; necessary qualifications and exact values stay intact. Three to five scenes are preferred within the requested duration. Subtitle planning keeps the supplied transcript and timing and chooses layouts for each selected passage.
 
+Directed scenes show a standalone opening title only when the gap before the first item cue allows time for its fade-in and reading. Short gaps show the regular scene heading immediately, preventing a title flash while preserving speech and item timing. This also applies when rerendering saved plans with directed layouts.
+
 Both workflows save scene `presentation` metadata separately from the visual treatment:
 
 ```json

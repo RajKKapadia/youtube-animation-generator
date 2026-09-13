@@ -4,6 +4,7 @@ import {compositionChoices, directScenes, presentationIssue, selectPresentation,
 import {selectCoverDirection, validateCoverDirection} from './cover-direction.js';
 import {EXPLAINER_FIXTURES, makeExplainerDraft, makeExplainerTimedPlan} from './explainer-fixtures.js';
 import {narratedPlanSchema, narratedPublishPlanSchema, publishSceneSchema, subtitleAnimationClipSchema} from './types.js';
+import {presentationLeadInDurationMs} from './remotion/DirectedScene.js';
 
 describe('content-directed presentation', () => {
   it('selects structurally appropriate compositions without manufacturing evidence', () => {
@@ -48,6 +49,44 @@ describe('content-directed presentation', () => {
     const draft = await makeExplainerDraft();
     draft.scenes[1]!.presentation = {composition: 'statement', reveal: 'focus'};
     expect(narratedPlanSchema.safeParse(draft).success).toBe(false);
+  });
+});
+
+describe('presentation title lead-in', () => {
+  const scene = {
+    title: 'Granules India was the clearest example',
+    durationMs: 15749,
+    presentation: {composition: 'comparison', reveal: 'focus'} as const,
+    primaryItemTimings: [{startMs: 300}, {startMs: 300}],
+    secondaryItemTimings: [{startMs: 10337}, {startMs: 10337}],
+  };
+
+  it('skips the reported 300 ms title flash without changing item timings', () => {
+    const before = structuredClone(scene);
+    expect(presentationLeadInDurationMs(scene)).toBe(0);
+    expect(scene).toEqual(before);
+    expect(visibleItemIndices(scene.primaryItemTimings.map(({startMs}) => startMs), 299, 'focus')).toEqual([]);
+    expect(visibleItemIndices(scene.primaryItemTimings.map(({startMs}) => startMs), 300, 'focus')).toEqual([0, 1]);
+  });
+
+  it('preserves a readable opening question until its original first cue', () => {
+    expect(presentationLeadInDurationMs({...scene, title: 'The market-level imbalance', primaryItemTimings: [{startMs: 2947}, {startMs: 8985}], secondaryItemTimings: []})).toBe(2947);
+  });
+
+  it('allows for entrance time and title length, including secondary cues', () => {
+    const delayed = {...scene, primaryItemTimings: [{startMs: 1949}], secondaryItemTimings: []};
+    expect(presentationLeadInDurationMs(delayed)).toBe(0);
+    expect(presentationLeadInDurationMs({...delayed, primaryItemTimings: [{startMs: 1950}]})).toBe(1950);
+    expect(presentationLeadInDurationMs({...delayed, title: 'Granules India'})).toBe(1949);
+    expect(presentationLeadInDurationMs({...delayed, primaryItemTimings: [{startMs: 3000}], secondaryItemTimings: [{startMs: 300}]})).toBe(0);
+  });
+
+  it('handles immediate cues, title-only scenes, and legacy layouts', () => {
+    expect(presentationLeadInDurationMs({...scene, primaryItemTimings: [{startMs: 0}]})).toBe(0);
+    expect(presentationLeadInDurationMs({...scene, presentation: undefined})).toBe(0);
+    const titleOnly = {...scene, primaryItemTimings: [], secondaryItemTimings: []};
+    expect(presentationLeadInDurationMs(titleOnly)).toBe(scene.durationMs);
+    expect(presentationLeadInDurationMs({...titleOnly, durationMs: 2249})).toBe(0);
   });
 });
 
