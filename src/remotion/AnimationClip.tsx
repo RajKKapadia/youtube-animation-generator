@@ -23,13 +23,13 @@ import {
   getBeatTransitionFrames,
 } from './timing.js';
 import {videoPaletteFor} from '../visual-palettes.js';
-import {chromaKeySafeEffects, keySafeShadow} from './chroma-key.js';
+import {chromaKeySafeEffects, keySafeShadow, keySafeSurface, keySafeOpacity, keySafePalette} from './chroma-key.js';
 
 const COLORS = {
   ink: '#F8FAFC',
   muted: '#CBD5E1',
-  panel: 'rgba(15, 23, 42, 0.94)',
-  panelLight: 'rgba(30, 41, 59, 0.94)',
+  panel: keySafeSurface('rgba(15, 23, 42, 0.94)'),
+  panelLight: keySafeSurface('rgba(30, 41, 59, 0.94)'),
   primary: 'var(--video-primary)',
   secondary: 'var(--video-secondary)',
   border: 'rgba(148, 163, 184, 0.32)',
@@ -92,7 +92,7 @@ const titleStyle: CSSProperties = {
 };
 
 const floatingTitleStyle: CSSProperties = {
-  background: 'rgba(2, 6, 23, 0.78)',
+  background: keySafeSurface('rgba(2, 6, 23, 0.78)'),
   border: '2px solid rgba(255, 255, 255, 0.24)',
   borderRadius: 26,
   boxShadow: keySafeShadow('0 18px 50px rgba(2, 6, 23, 0.4)'),
@@ -112,7 +112,7 @@ const ClipCanvas = ({children}: {children: ReactNode}) => {
         display: 'flex',
         fontFamily: RENDER_FONT_FAMILY,
         justifyContent: 'center',
-        opacity,
+        opacity: keySafeOpacity(opacity),
         boxSizing: 'border-box',
         padding: vertical
           ? `${profile.safeArea.top + contentTopInset}px ${profile.safeArea.right}px ${profile.safeArea.bottom}px ${profile.safeArea.left}px`
@@ -139,7 +139,7 @@ const Header = ({
       style={{
         ...titleStyle,
         ...(floating ? floatingTitleStyle : {}),
-        opacity: entrance,
+        opacity: keySafeOpacity(entrance),
         transform: `translateY(${(1 - entrance) * 28}px)`,
       }}
     >
@@ -179,7 +179,7 @@ const NodeCard = ({
         display: 'flex',
         height: vertical ? 150 : 216,
         justifyContent: 'center',
-        opacity: entrance,
+        opacity: keySafeOpacity(entrance),
         padding: vertical ? '24px 32px 16px 116px' : '42px 18px 14px',
         position: 'relative',
         textAlign: vertical ? 'left' : 'center',
@@ -245,7 +245,7 @@ const VerticalFlowArrow = ({
           borderTop: `18px solid ${COLORS.secondary}`,
           bottom: 0,
           left: 9,
-          opacity: progress,
+          opacity: keySafeOpacity(progress),
           position: 'absolute',
           transform: `translateY(${(1 - progress) * -12}px)`,
         }}
@@ -280,7 +280,7 @@ const FlowArrow = ({endFrame, startFrame}: {endFrame: number; startFrame: number
           borderBottom: '13px solid transparent',
           borderLeft: `18px solid ${COLORS.secondary}`,
           borderTop: '13px solid transparent',
-          opacity: progress,
+          opacity: keySafeOpacity(progress),
           position: 'absolute',
           right: 0,
           top: 9,
@@ -386,7 +386,7 @@ const ComparisonColumn = ({
         borderRadius: 30,
         boxShadow: keySafeShadow('0 28px 70px rgba(0,0,0,0.38)'),
         minHeight: vertical ? 420 : 500,
-        opacity: entrance,
+        opacity: keySafeOpacity(entrance),
         overflow: 'hidden',
         transform: vertical
           ? `translateY(${(1 - entrance) * 36}px)`
@@ -462,7 +462,7 @@ const ComparisonItem = ({
         color: COLORS.ink,
         display: 'flex',
         gap: vertical ? 14 : 20,
-        opacity: entrance,
+        opacity: keySafeOpacity(entrance),
         minHeight: vertical ? 80 : undefined,
         paddingLeft: vertical ? 14 : 18,
         transform: `translateY(${(1 - entrance) * 18}px)`,
@@ -695,7 +695,7 @@ const TimelineItem = ({
           display: 'flex',
           height: 188,
           justifyContent: onLeft ? 'flex-start' : 'flex-end',
-          opacity: entrance,
+          opacity: keySafeOpacity(entrance),
           position: 'relative',
           transform: `translateY(${(1 - entrance) * 20}px)`,
           width: 936,
@@ -760,7 +760,7 @@ const TimelineItem = ({
         display: 'flex',
         flexDirection: 'column',
         gap: 28,
-        opacity: entrance,
+        opacity: keySafeOpacity(entrance),
         transform: `translateY(${(1 - entrance) * 24}px)`,
         width: 260,
       }}
@@ -845,7 +845,7 @@ const Callout = ({clip}: {clip: AnimationClipSpec}) => {
           boxShadow: keySafeShadow('0 30px 90px rgba(0,0,0,0.42)'),
           maxWidth: vertical ? 936 : 1380,
           width: vertical ? 936 : undefined,
-          opacity: entrance,
+          opacity: keySafeOpacity(entrance),
           overflow: 'hidden',
           transform: `scale(${0.82 + entrance * 0.18})`,
         }}
@@ -904,7 +904,7 @@ const CalloutItem = ({
         display: 'flex',
         gap: vertical ? 22 : 18,
         justifyContent: 'center',
-        opacity: entrance,
+        opacity: keySafeOpacity(entrance),
         transform: `translateY(${(1 - entrance) * 20}px)`,
       }}
     >
@@ -932,7 +932,7 @@ export const AnimationClip = ({
   profile,
   technologyIcons,
 }: RenderInput) => {
-  const theme = videoPaletteFor(palette);
+  const theme = videoPaletteFor(keySafePalette(palette, background === 'green'));
   const semanticIcons = iconRecordForItems({
     primaryItems: clip.primaryItems,
     secondaryItems: clip.secondaryItems,

@@ -437,6 +437,8 @@ pnpm run animations episode.srt --aspect-ratio 9:16
 pnpm run animations episode.srt --aspect-ratio both
 ```
 
+Green-screen exports use solid white lettering with a dark outline and opaque label panels. Cyan/emerald foreground accents switch to violet/pink to keep them away from the green key. Text retains its reveal timing and movement, but appears at full opacity instead of fading through green. Other backgrounds and transparent exports keep their existing styling. Rerender saved plans to apply this to existing clips; already exported videos do not change.
+
 Transparent ProRes 4444 and WebM remain available in either orientation:
 
 ```bash
@@ -607,6 +609,12 @@ pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixture
 ```
 
 Together, these commands cover the four diagram templates and the original eight visual kinds with early, middle, and completed states in both orientations. The subtitle fixture also covers caption-off green output for legacy and modern visual paths, caption-on ambient output, and a mock generated background without an API call. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping, logo distortion, chroma-key spill, Lottie flicker, chart readability, and unsafe positioning.
+
+Render green-screen text regression samples (legacy labels, directed text, and code) in both orientations, with matching dark-background controls and optional H.264 videos:
+
+```bash
+pnpm fixtures:chroma-text -- --output=/tmp/chroma-text-fixtures --video
+```
 
 Render the six new treatments as a complete offline gallery:
 

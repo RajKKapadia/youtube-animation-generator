@@ -5,7 +5,7 @@ import type {RenderableVisualScene, RenderProfile, VideoPalette} from '../types.
 import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 import {formatChartDatum} from '../data-visualization.js';
 import {FittedText} from './FittedText.js';
-import {keySafeShadow} from './chroma-key.js';
+import {keySafeShadow, keySafeOpacity} from './chroma-key.js';
 import {activeItemIndex, chartDomain, itemAnimationWindow, windowProgress} from './explainer-timing.js';
 
 export interface ExplainerProps {scene: RenderableVisualScene; profile: RenderProfile; palette: VideoPalette}
@@ -42,7 +42,7 @@ export const KineticText = (props: ExplainerProps) => {
     {scene.primaryItems.map((item, index) => {
       const p = progress(index);
       const pulse = scene.visual.motion === 'pulse' && active === index ? 1 + Math.sin(p * Math.PI) * 0.015 : 1;
-      return <div key={index} style={{display: 'flex', gap: 26, alignItems: 'center', opacity: p, transform: `translateY(${(1 - p) * 18}px) scale(${pulse})`, padding: '10px 24px', borderLeft: `6px solid ${active === index ? theme.accents.primary : '#53657e'}`}}>
+      return <div key={index} style={{display: 'flex', gap: 26, alignItems: 'center', opacity: keySafeOpacity(p), transform: `translateY(${(1 - p) * 18}px) scale(${pulse})`, padding: '10px 24px', borderLeft: `6px solid ${active === index ? theme.accents.primary : '#53657e'}`}}>
         <span style={{color: theme.accents.secondary, fontSize: vertical ? 34 : 30, fontWeight: 800, width: 50, flexShrink: 0}}>{String(index + 1).padStart(2, '0')}</span>
         {text(item, width - 180, vertical ? 64 : 76, vertical ? 220 : 116)}
       </div>;
@@ -57,11 +57,11 @@ export const BeforeAfter = (props: ExplainerProps) => {
   const cardWidth = vertical ? width : (width - 60) / 2;
   return <Shell {...props}><div style={{display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center', gap: 24}}>
     {scene.visual.pairs.map((pair, index) => <div key={index} style={{display: 'grid', gridTemplateColumns: vertical ? '1fr' : '1fr 36px 1fr', gap: 12}}>
-      <div style={{...panel('#718198'), padding: vertical ? '18px 26px' : '24px 30px', opacity: progress(pair.primaryItemIndex)}}>
+      <div style={{...panel('#718198'), padding: vertical ? '18px 26px' : '24px 30px', opacity: keySafeOpacity(progress(pair.primaryItemIndex))}}>
         <div style={{color: '#b5c4d8', fontSize: 22, fontWeight: 700, marginBottom: 10}}>{scene.leftLabel}</div>
         {text(scene.primaryItems[pair.primaryItemIndex]!, cardWidth - 76, vertical ? 40 : 44, vertical ? 100 : 110)}
       </div>
-      {!vertical ? <div style={{alignSelf: 'center', color: theme.accents.primary, fontSize: 32, opacity: progress(pair.secondaryItemIndex, true)}}>→</div> : null}
+      {!vertical ? <div style={{alignSelf: 'center', color: theme.accents.primary, fontSize: 32, opacity: keySafeOpacity(progress(pair.secondaryItemIndex, true))}}>→</div> : null}
       <div style={{...panel(theme.accents.primary), padding: vertical ? '18px 26px' : '24px 30px', clipPath: `inset(0 ${(1 - progress(pair.secondaryItemIndex, true)) * 100}% 0 0 round 24px)`}}>
         <div style={{color: theme.accents.primary, fontSize: 22, fontWeight: 700, marginBottom: 10}}>{scene.rightLabel}</div>
         {text(scene.secondaryItems[pair.secondaryItemIndex]!, cardWidth - 76, vertical ? 40 : 44, vertical ? 100 : 110)}
@@ -84,7 +84,7 @@ export const CodeWalkthrough = (props: ExplainerProps & {contentTopInset: number
   const codeTextHeight = bodyHeight - 142 - (vertical ? 308 : 0);
   const codeSize = Math.min(36, Math.floor((codeWidth - 122) / (longestLine * 0.61)), Math.floor(codeTextHeight / (lines.length * 1.6)));
   return <Shell {...props}><div style={{display: 'flex', flexDirection: vertical ? 'column' : 'row', flex: 1, gap: 28, alignItems: 'center', justifyContent: 'center', minHeight: 0}}>
-    <div style={{...panel(theme.accents.primary), width: codeWidth, flexShrink: 0, overflow: 'hidden', opacity: progress(0)}}>
+    <div style={{...panel(theme.accents.primary), width: codeWidth, flexShrink: 0, overflow: 'hidden', opacity: keySafeOpacity(progress(0))}}>
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', background: '#18283f', gap: 20}}>
         {text(visual.excerpt.originalName, codeWidth - 210, 24, 58)}<span style={{color: theme.accents.secondary, fontSize: 20}}>{visual.excerpt.language}</span>
       </div>
@@ -117,7 +117,7 @@ export const SequenceDiagram = (props: ExplainerProps) => {
     {visual.participants.map((participant, index) => {
       const firstMessage = visual.messages.find((message) => message.from === participant.id || message.to === participant.id)!;
       const x = participantX(participant.id);
-      return <g key={participant.id} opacity={progress(firstMessage.primaryItemIndex)}>
+      return <g key={participant.id} opacity={keySafeOpacity(progress(firstMessage.primaryItemIndex))}>
         <line x1={x} x2={x} y1={92} y2={height - 18} stroke="#60728b" strokeWidth={2} strokeDasharray="7 10" />
         <rect x={index * lane + 8} y={0} width={lane - 16} height={84} rx={16} fill="#101b2d" stroke={theme.accents.primary} strokeWidth={2} />
         <foreignObject x={index * lane + 16} y={8} width={lane - 32} height={68}><div style={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>{text(participant.label, lane - 36, vertical ? 32 : 36, 64, 'center')}</div></foreignObject>
@@ -134,7 +134,7 @@ export const SequenceDiagram = (props: ExplainerProps) => {
       return <g key={index} opacity={p > 0 ? 1 : 0}>
         <line x1={from} y1={y} x2={end} y2={y} stroke={index % 2 ? theme.accents.secondary : theme.accents.primary} strokeWidth={4} />
         <path d={`M${end - direction * 14} ${y - 9} L${end} ${y} L${end - direction * 14} ${y + 9}`} fill="none" stroke={theme.accents.primary} strokeWidth={4} />
-        <foreignObject x={labelCenter - labelWidth / 2} y={y - 70} width={labelWidth} height={64}><div style={{background: '#101b2d', borderRadius: 8, padding: '4px 8px', opacity: p}}>{text(scene.primaryItems[message.primaryItemIndex]!, labelWidth - 16, vertical ? 28 : 30, 56, 'center')}</div></foreignObject>
+        <foreignObject x={labelCenter - labelWidth / 2} y={y - 70} width={labelWidth} height={64}><div style={{background: '#101b2d', borderRadius: 8, padding: '4px 8px', opacity: keySafeOpacity(p)}}>{text(scene.primaryItems[message.primaryItemIndex]!, labelWidth - 16, vertical ? 28 : 30, 56, 'center')}</div></foreignObject>
       </g>;
     })}
   </svg></Shell>;
@@ -148,7 +148,7 @@ export const LayeredArchitecture = (props: ExplainerProps) => {
     {scene.visual.layerOrder.map((itemIndex, depth) => {
       const p = progress(itemIndex);
       const inset = (scene.primaryItems.length - depth - 1) * (vertical ? 10 : 28);
-      return <div key={itemIndex} style={{...panel(active === itemIndex ? theme.accents.secondary : theme.accents.primary), margin: `0 ${inset}px`, padding: vertical ? '30px 28px' : '16px 28px', display: 'flex', alignItems: 'center', gap: 24, opacity: p, transform: `translateY(${(1 - p) * 16}px)`, borderLeftWidth: 8}}>
+      return <div key={itemIndex} style={{...panel(active === itemIndex ? theme.accents.secondary : theme.accents.primary), margin: `0 ${inset}px`, padding: vertical ? '30px 28px' : '16px 28px', display: 'flex', alignItems: 'center', gap: 24, opacity: keySafeOpacity(p), transform: `translateY(${(1 - p) * 16}px)`, borderLeftWidth: 8}}>
         <span style={{fontSize: 28, fontWeight: 800, color: theme.accents.primary, width: 50, flexShrink: 0}}>{String(depth + 1).padStart(2, '0')}</span>
         {text(scene.primaryItems[itemIndex]!, width - inset * 2 - 150, vertical ? 46 : 42, vertical ? 106 : 60)}
       </div>;

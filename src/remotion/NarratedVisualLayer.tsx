@@ -38,7 +38,7 @@ import {
   sceneEntranceExit,
   timedProgress,
 } from './cinematic-motion.js';
-import {keySafeShadow} from './chroma-key.js';
+import {keySafeShadow, keySafeSurface, keySafeOpacity} from './chroma-key.js';
 
 const clamp = {
   extrapolateLeft: 'clamp' as const,
@@ -100,7 +100,7 @@ const SceneTitle = ({profile, title, directed = false}: {profile: RenderProfile;
 };
 
 const panelStyle = (accent: string): CSSProperties => ({
-  background: 'linear-gradient(145deg, rgba(15,23,42,0.94), rgba(30,41,59,0.88))',
+  background: keySafeSurface('linear-gradient(145deg, rgba(15,23,42,0.94), rgba(30,41,59,0.88))'),
   border: `2px solid ${hexToRgba(accent, 0.42)}`,
   boxShadow: keySafeShadow('0 28px 64px rgba(2,6,23,0.44)'),
 });
@@ -132,7 +132,7 @@ const ItemChip = ({
   <div
     style={{
       alignItems: 'center',
-      background: 'rgba(15,23,42,0.92)',
+      background: keySafeSurface('rgba(15,23,42,0.92)'),
       border: '2px solid rgba(148,163,184,0.28)',
       borderRadius: 22,
       boxShadow: keySafeShadow('0 18px 40px rgba(2,6,23,0.36)'),
@@ -141,7 +141,7 @@ const ItemChip = ({
       gap: fill ? 16 : 18,
       height: fill ? size : undefined,
       minHeight: fill ? undefined : size,
-      opacity: entrance,
+      opacity: keySafeOpacity(entrance),
       padding: fill ? '10px 18px' : '14px 22px',
       transform: `translateY(${(1 - entrance) * 20}px) scale(${0.96 + entrance * 0.04})`,
       width: fill ? '100%' : undefined,
@@ -280,7 +280,7 @@ const AgentWorkflow = ({
                   gap: 8,
                   height: nodeHeight,
                   left: '50%',
-                  opacity: entrance,
+                  opacity: keySafeOpacity(entrance),
                   position: 'absolute',
                   top: '50%',
                   transform: `translate(-50%, -50%) translate(${Math.cos(angle) * nodeRadius}px, ${Math.sin(angle) * nodeRadiusY}px) scale(${0.86 + entrance * 0.14})`,
@@ -428,7 +428,7 @@ const BrandShowcase = ({
                 gap: vertical ? 28 : 24,
                 justifyContent: 'center',
                 minHeight: vertical ? 250 : 255,
-                opacity: entrance,
+                opacity: keySafeOpacity(entrance),
                 padding: vertical ? 28 : 32,
                 transform: `translateY(${(1 - entrance) * 26 + drift}px) scale(${0.95 + entrance * 0.05})`,
               }}
@@ -549,7 +549,7 @@ const NetworkMap = ({
               key={`${node}-${index}`}
               style={{
                 left: `${x}%`,
-                opacity: entrance,
+                opacity: keySafeOpacity(entrance),
                 position: 'absolute',
                 top: `${y}%`,
                 transform: `translate(-50%, -50%) scale(${0.86 + entrance * 0.14})`,
@@ -730,7 +730,7 @@ const IconSpotlight = ({
                     key={`constellation-${item}-${index}`}
                     style={{
                       left: `calc(50% + ${Math.cos(angle) * orbitRadiusX}px)`,
-                      opacity: entrance,
+                      opacity: keySafeOpacity(entrance),
                       position: 'absolute',
                       top: `calc(50% + ${Math.sin(angle) * orbitRadiusY}px)`,
                       transform: `translate(-50%, -50%) scale(${0.82 + entrance * 0.18})`,
@@ -895,7 +895,7 @@ const ImageFocus = ({
               height: '112%',
               left: '-6%',
               objectFit: 'cover',
-              opacity: 0.84,
+              opacity: keySafeOpacity(0.84),
               position: 'absolute',
               top: '-6%',
               width: '112%',
@@ -970,7 +970,7 @@ const DataVisualizationView = ({
                   flexDirection: 'column',
                   justifyContent: 'center',
                   minHeight: vertical ? 300 : 350,
-                  opacity: entrance,
+                  opacity: keySafeOpacity(entrance),
                   padding: vertical ? 34 : 32,
                   transform: `translateY(${(1 - entrance) * (22 + index * 3)}px) scale(${0.96 + entrance * 0.04})`,
                 }}
@@ -982,14 +982,14 @@ const DataVisualizationView = ({
                 {annotation ? (
                   <div
                     style={{
-                      background: hexToRgba(theme.accents.secondary, 0.2),
+                      background: keySafeSurface(hexToRgba(theme.accents.secondary, 0.2)),
                       border: `1px solid ${hexToRgba(theme.accents.secondary, 0.64)}`,
                       borderRadius: 999,
                       color: theme.accents.secondary,
                       fontSize: vertical ? 27 : 24,
                       fontWeight: 820,
                       marginTop: 24,
-                      opacity: badgeProgress,
+                      opacity: keySafeOpacity(badgeProgress),
                       padding: '9px 18px',
                       transform: `scale(${0.88 + badgeProgress * 0.12})`,
                     }}
@@ -1015,7 +1015,7 @@ const DataVisualizationView = ({
     <div style={{display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0}}>
       <SceneTitle profile={profile} title={chart.title} />
       <div style={{display: 'flex', flex: 1, flexDirection: 'column', gap: 18, minHeight: 0}}>
-        <div style={{display: 'flex', gap: 22, justifyContent: 'center', opacity: axisProgress}}>
+        <div style={{display: 'flex', gap: 22, justifyContent: 'center', opacity: keySafeOpacity(axisProgress)}}>
           {chart.series.map((series, index) => (
             <div key={series.id} style={{alignItems: 'center', display: 'flex', fontSize: vertical ? 23 : 21, fontWeight: 720, gap: 9}}>
               <span style={{background: seriesColors[index], borderRadius: 99, height: 13, width: 13}} />
@@ -1032,7 +1032,7 @@ const DataVisualizationView = ({
             flexDirection: vertical ? 'column' : 'row',
             gap: vertical ? 22 : 26,
             minHeight: 0,
-            opacity: axisProgress,
+            opacity: keySafeOpacity(axisProgress),
             padding: vertical ? '30px 34px' : '36px 46px 28px',
           }}
         >
@@ -1086,7 +1086,7 @@ const DataVisualizationView = ({
         </div>
         <div style={{display: 'flex', gap: 12, justifyContent: 'center', minHeight: 52}}>
           {chart.derivedAnnotations.map((annotation) => (
-            <div key={annotation.id} style={{background: hexToRgba(theme.accents.secondary, 0.2), border: `1px solid ${hexToRgba(theme.accents.secondary, 0.7)}`, borderRadius: 999, color: theme.accents.secondary, fontSize: vertical ? 25 : 22, fontWeight: 820, opacity: badgeProgress, padding: '9px 18px', transform: `translateY(${(1 - badgeProgress) * 12}px)`}}>
+            <div key={annotation.id} style={{background: keySafeSurface(hexToRgba(theme.accents.secondary, 0.2)), border: `1px solid ${hexToRgba(theme.accents.secondary, 0.7)}`, borderRadius: 999, color: theme.accents.secondary, fontSize: vertical ? 25 : 22, fontWeight: 820, opacity: keySafeOpacity(badgeProgress), padding: '9px 18px', transform: `translateY(${(1 - badgeProgress) * 12}px)`}}>
               {annotation.label} {calculateChartAnnotation(chart, annotation).display}
             </div>
           ))}
@@ -1109,7 +1109,7 @@ const CinematicSceneFrame = ({
   return (
     <AbsoluteFill
       style={{
-        opacity: visibility,
+        opacity: keySafeOpacity(visibility),
         transform: `translateY(${(1 - visibility) * 10}px) scale(${0.992 + visibility * 0.008})`,
       }}
     >

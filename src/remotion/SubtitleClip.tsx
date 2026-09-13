@@ -10,7 +10,7 @@ import {
 } from './NarratedSceneLayer.js';
 import {LocalIconAssetsProvider} from './SemanticIcon.js';
 import {LocalBrandAssetsProvider} from './TechnologyBadge.js';
-import {chromaKeySafeEffects} from './chroma-key.js';
+import {chromaKeySafeEffects, keySafePalette} from './chroma-key.js';
 
 const fallbackTimings = (
   total: number,
@@ -37,6 +37,8 @@ export const SubtitleClip = ({
   sceneBackground,
   technologyIcons,
 }: SubtitleRenderInput) => {
+  const greenScreen = background === 'green' && sceneBackground === 'off';
+  const foregroundPalette = keySafePalette(palette, greenScreen);
   const theme = videoPaletteFor(palette);
   const primaryItemTimings = clip.primaryItemTimings?.map(({startMs}) => ({startMs})) ??
     fallbackTimings(clip.primaryItems.length, clip.durationMs);
@@ -76,7 +78,7 @@ export const SubtitleClip = ({
       <LocalIconAssetsProvider assets={localIconAssets}>
         <AbsoluteFill
           style={{
-            ...chromaKeySafeEffects(background === 'green'),
+            ...chromaKeySafeEffects(greenScreen),
             backgroundColor: sceneBackground === 'off'
               ? background === 'green'
                 ? '#00FF00'
@@ -100,7 +102,7 @@ export const SubtitleClip = ({
               clip={clip}
               contentTopInset={0}
               fps={fps}
-              palette={palette}
+              palette={foregroundPalette}
               profile={profile}
               technologyIcons={technologyIcons}
             />
@@ -110,7 +112,7 @@ export const SubtitleClip = ({
               fps={fps}
               foregroundAssets={foregroundAssets}
               motionAssets={motionAssets}
-              palette={palette}
+              palette={foregroundPalette}
               profile={profile}
               scene={scene}
               technologyIcons={technologyIcons}
