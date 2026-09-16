@@ -8,9 +8,11 @@ import {z} from 'zod';
 import {
   draftNarratedPlanSchema,
   maxNarrationExpressionsForDuration,
+  timedNarratedPlanSchema,
   type DraftNarrationSceneSuggestion,
   type DraftNarratedPlan,
   type NarratedMediaAsset,
+  type TimedNarratedPlan,
   type WebResearchBundle,
 } from './types.js';
 import {joinNarrationPhrases} from './narration-text.js';
@@ -766,3 +768,85 @@ export const narrationScriptMarkdown = (plan: DraftNarratedPlan): string => {
     : '';
   return `# ${plan.title}\n\n${sections.join('\n\n')}\n${researchSources}`;
 };
+
+export const estimateDraftNarrationTiming = (draft: DraftNarratedPlan): TimedNarratedPlan => {
+  const sampleRate = 44100;
+  let currentSceneStartMs = 0;
+  const timedScenes = draft.scenes.map((scene) => {
+    const wordsInScene = scene.beats.reduce(
+      (acc, b) => acc + b.phrases.reduce((pAcc, p) => pAcc + p.text.split(/\s+/).filter(Boolean).length, 0),
+      0,
+    );
+    const minRequiredMs = 300 + scene.beats.length * 400 + 300;
+    const sceneDurationMs = Math.max(3000, wordsInScene * 350, minRequiredMs);
+    const step = Math.max(400, Math.floor((sceneDurationMs - 600) / Math.max(1, scene.beats.length)));
+
+    const timedBeats = scene.beats.map((beat, bIndex) => {
+      const beatStartMs = 300 + bIndex * step;
+      const beatDurationMs = step;
+      const phraseStep = Math.max(150, Math.floor(beatDurationMs / Math.max(1, beat.phrases.length)));
+
+      const timedPhrases = beat.phrases.map((phrase, pIndex) => ({
+        ...phrase,
+        startMs: beatStartMs + pIndex * phraseStep,
+        durationMs: phraseStep,
+        sampleCount: Math.floor((phraseStep / 1000) * sampleRate),
+      }));
+
+      return {
+        ...beat,
+        startMs: beatStartMs,
+        durationMs: beatDurationMs,
+        sampleCount: Math.floor((beatDurationMs / 1000) * sampleRate),
+        audioFile: 'preview-silent.wav',
+        phrases: timedPhrases,
+      };
+    });
+
+    const fallbackBeat = timedBeats[0]!;
+    const primaryItemTimings = scene.primaryItems.map((_, index) => {
+      const beat = scene.beats.find((b) => b.primaryItemIndices.includes(index));
+      const timedBeat = (beat ? timedBeats.find((tb) => tb.id === beat.id) : undefined) ?? fallbackBeat;
+      return {
+        beatId: timedBeat.id,
+        startMs: timedBeat.startMs,
+      };
+    });
+
+    const secondaryItemTimings = scene.secondaryItems.map((_, index) => {
+      const beat = scene.beats.find((b) => b.secondaryItemIndices.includes(index));
+      const timedBeat = (beat ? timedBeats.find((tb) => tb.id === beat.id) : undefined) ?? fallbackBeat;
+      return {
+        beatId: timedBeat.id,
+        startMs: timedBeat.startMs,
+      };
+    });
+
+    const resultScene = {
+      ...scene,
+      startMs: currentSceneStartMs,
+      durationMs: sceneDurationMs,
+      beats: timedBeats,
+      primaryItemTimings,
+      secondaryItemTimings,
+    };
+    currentSceneStartMs += sceneDurationMs;
+    return resultScene;
+  });
+
+  const totalDurationMs = currentSceneStartMs;
+  return timedNarratedPlanSchema.parse({
+    ...draft,
+    stage: 'timed',
+    sampleRate,
+    totalSamples: Math.floor((totalDurationMs / 1000) * sampleRate),
+    durationMs: totalDurationMs,
+    voice: 'M1',
+    ttsSpeed: 1.05,
+    ttsSteps: 8,
+    voiceoverPlaybackRate: 1,
+    voiceoverFile: 'preview-silent.wav',
+    scenes: timedScenes,
+  });
+};
+

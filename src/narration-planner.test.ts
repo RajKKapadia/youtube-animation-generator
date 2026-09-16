@@ -1,12 +1,19 @@
 import {describe, expect, it} from 'vitest';
 import {
   assertSourceBackedNarratedVisuals,
+  estimateDraftNarrationTiming,
   materializeNarratedVisuals,
   narrationScriptMarkdown,
   narratedVisualPlanningWarnings,
   recoverUnsupportedNarratedVisuals,
 } from './narration-planner.js';
-import {draftNarratedPlanSchema, narratedPlanSchema} from './types.js';
+import {
+  draftNarratedPlanSchema,
+  narratedPlanSchema,
+  type AnimationTemplate,
+  type NarratedSceneVisual,
+  type NarrationExpression,
+} from './types.js';
 import type {AssetRegistry} from './asset-registry.js';
 
 const validPlan = {
@@ -20,28 +27,34 @@ const validPlan = {
   language: 'en',
   title: 'Why queues help',
   palette: 'emerald' as const,
+  assetAttributions: [] as any[],
   mediaAssets: [],
   scenes: [
     {
       id: 'queue-flow',
       backgroundPrompt: 'Abstract producer and consumer connected by a glowing queue.',
-      template: 'process-flow' as const,
+      template: 'process-flow' as AnimationTemplate,
       title: 'A queue decouples work',
       primaryItems: ['Producer', 'Queue', 'Consumer'],
-      secondaryItems: [],
+      secondaryItems: [] as string[],
       leftLabel: '',
       rightLabel: '',
       reason: 'Shows the source flow.',
+      icons: {
+        focal: null as string | null,
+        primary: [] as string[],
+        secondary: [] as string[],
+      },
       visual: {
         kind: 'diagram' as const,
         motion: 'reveal' as const,
         motif: 'none' as const,
         assetId: null,
-      },
+      } as NarratedSceneVisual,
       beats: [
         {
           id: 'producer',
-          expression: 'none' as const,
+          expression: 'none' as NarrationExpression,
           phrases: [
             {id: 'producer-submits', text: 'The producer submits work.'},
           ],
@@ -50,7 +63,7 @@ const validPlan = {
         },
         {
           id: 'queue-consumer',
-          expression: 'none' as const,
+          expression: 'none' as NarrationExpression,
           phrases: [
             {id: 'queue-holds', text: 'The queue lets the consumer'},
             {id: 'consumer-independent', text: 'process it independently.'},
@@ -73,13 +86,11 @@ describe('draftNarratedPlanSchema', () => {
 
   it('persists explicit icon selections and validates their item alignment', () => {
     const explicit = structuredClone(validPlan);
-    Object.assign(explicit.scenes[0]!, {
-      icons: {
-        focal: 'queue',
-        primary: ['user', 'queue', 'worker'],
-        secondary: [],
-      },
-    });
+    explicit.scenes[0]!.icons = {
+      focal: 'queue',
+      primary: ['user', 'queue', 'worker'],
+      secondary: [],
+    };
     expect(draftNarratedPlanSchema.parse(explicit).scenes[0]!.icons.primary)
       .toEqual(['user', 'queue', 'worker']);
     explicit.scenes[0]!.icons.primary.pop();
@@ -580,6 +591,7 @@ describe('narrated visual planning warnings', () => {
           license: 'Fixture',
           licenseUrl: null,
           attribution: 'Fixture',
+          attributionRequired: false,
           loop: 'loop',
           playbackRate: 1,
           priority: 100,
@@ -721,3 +733,49 @@ describe('narrationScriptMarkdown', () => {
     );
   });
 });
+
+describe('estimateDraftNarrationTiming', () => {
+  it('converts a draft plan to a valid timed plan at 44100 Hz', () => {
+    const draft = draftNarratedPlanSchema.parse(validPlan);
+    const timed = estimateDraftNarrationTiming(draft);
+    expect(timed.stage).toBe('timed');
+    expect(timed.sampleRate).toBe(44100);
+    expect(timed.voiceoverFile).toBe('preview-silent.wav');
+    expect(timed.scenes.length).toBe(draft.scenes.length);
+    for (const scene of timed.scenes) {
+      for (const beat of scene.beats) {
+        expect(beat.startMs + beat.durationMs).toBeLessThanOrEqual(scene.durationMs);
+      }
+      for (const timing of scene.primaryItemTimings) {
+        expect(timing.startMs).toBeLessThan(scene.durationMs);
+      }
+    }
+  });
+
+  it('handles scenes with many beats and short words without overflowing scene duration', () => {
+    for (const beatCount of [8, 10, 12]) {
+      const beats = Array.from({length: beatCount}, (_, i) => ({
+        id: `beat-${i + 1}`,
+        expression: 'none' as const,
+        phrases: [{id: `p-${i + 1}`, text: 'Word'}],
+        primaryItemIndices: i === 0 ? [0] : [],
+        secondaryItemIndices: [],
+      }));
+      const plan = draftNarratedPlanSchema.parse({
+        ...validPlan,
+        scenes: [{
+          ...validPlan.scenes[0]!,
+          primaryItems: ['Single item'],
+          beats,
+        }],
+      });
+      const timed = estimateDraftNarrationTiming(plan);
+      const scene = timed.scenes[0]!;
+      expect(scene.beats.length).toBe(beatCount);
+      const lastBeat = scene.beats[scene.beats.length - 1]!;
+      expect(lastBeat.startMs + lastBeat.durationMs).toBeLessThanOrEqual(scene.durationMs);
+      expect(scene.primaryItemTimings[0]!.startMs).toBeLessThan(scene.durationMs);
+    }
+  });
+});
+

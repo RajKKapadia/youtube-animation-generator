@@ -122,7 +122,108 @@ You do not need Python, `supertonic serve`, an HTTP endpoint, or a separately ma
 
 ## Create narrated videos
 
-From the repository:
+### Step-by-Step: Generate a Video for Any Topic
+
+To create a video on any topic, follow these simple steps:
+
+#### 1. Create a short topic file in `samples/` (`samples/<topic>.md`):
+Create a file containing your topic title and a few key bullet points or summary paragraphs:
+
+```bash
+mkdir -p samples
+cat << 'EOF' > samples/topic.md
+# self sovereign identity
+
+Self-sovereign identity (SSI) is a form of digital identity that the user has complete control over. This means that the user decides who sees what information and when. 
+
+Digital identity is a user’s online identification, similar to a physical identification card such as a passport or driver’s license. A digital identity contains characteristics or attributes of the user. With self-sovereign identity, this sensitive identification information is kept secure and private. It is in control of the user at all times.
+
+Self-sovereign identity uses blockchain technology. SSI systems are decentralized using a digital and secure peer-to-peer channel that relies on the triangle of trust. There are three entities in the trust triangle with SSI: the issuer of the digital ID, the owner of the ID, and the verifier of the ID. 
+
+Unlike with other forms of digital identity, with SSI, not all of the information on the ID needs to be shared each time. This can help to guarantee privacy and security by only sharing pertinent information with the ID requestor.
+EOF
+```
+
+#### 2. Run the generator command:
+
+- **Standard 16:9 Video (Code-native clean visuals)**:
+  ```bash
+  pnpm run animations create samples/topic.md
+  ```
+
+- **With AI-Generated Background Images (Cloudflare FLUX.1)**:
+  ```bash
+  pnpm run animations create samples/topic.md --scene-background generated
+  ```
+
+- **For YouTube Shorts / TikTok / Reels (9:16 Vertical Video)**:
+  ```bash
+  pnpm run animations create samples/topic.md --aspect-ratio 9:16 --scene-background generated
+  ```
+
+- **Fast Script/Storyboard Preview Only (No video render)**:
+  ```bash
+  pnpm run animations create samples/topic.md --plan-only
+  ```
+
+#### 3. Output files:
+The CLI outputs a complete package in `samples/<topic>-video/` (e.g. `samples/topic-video/`):
+- `samples/topic-video/topic.mp4`: Final 1080p narrated video (with voiceover, animated typography & visual cards).
+- `samples/topic-video/topic.narration-script.md`: The spoken script for review.
+- `samples/topic-video/topic.audio/voiceover.wav`: Local high-fidelity neural voiceover.
+- `samples/topic-video/topic.backgrounds/`: AI-generated scene background images (when `--scene-background generated` is used).
+
+#### 4. Sequential Review Workflow (Script → Screenshots → Audio → Final Video):
+
+To inspect and approve each stage before the next stage runs:
+
+##### Option A: Interactive Guided Workflow (`--review`)
+Run one command with `--review`. The CLI pauses after each stage, prints the path to inspect or edit, and waits for you to press **[Enter]** to approve before continuing:
+
+```bash
+pnpm run animations create samples/topic.md --review
+```
+*(Tip: Add `--scene-background generated` to include AI-generated image backgrounds).*
+
+At each pause:
+1. **Stage 1 (Script & Storyboard)**: Review `samples/topic-video/topic.narration-script.md` and `topic.narration-plan.json`. You can edit either file directly before pressing Enter!
+2. **Stage 2 (Screenshots / Visuals)**: Review 1080p scene stills in `samples/topic-video/topic.stills/*.png`.
+3. **Stage 3 (Voiceover Audio)**: Listen to `samples/topic-video/topic.audio/voiceover.wav`.
+4. **Stage 4 (Final Merged Video)**: Remotion merges the reviewed script, screenshots, and audio into `samples/topic-video/topic.mp4`.
+
+---
+
+##### Option B: Step-by-Step Individual Commands
+If you prefer running each step manually one by one:
+
+```bash
+# Stage 1: Generate script & storyboard
+pnpm run animations create samples/topic.md --plan-only
+# 👉 Review/edit: samples/topic-video/topic.narration-script.md
+# 👉 Review/edit: samples/topic-video/topic.narration-plan.json
+
+# Stage 2: Render full-resolution scene screenshots without audio
+pnpm run animations create --render-plan samples/topic-video/topic.narration-plan.json --stills-only --force
+# 👉 Review screenshots: samples/topic-video/topic.stills/*.png
+
+# Stage 3: Synthesize voiceover audio
+pnpm run animations create --render-plan samples/topic-video/topic.narration-plan.json --audio-only --force
+# 👉 Review audio: samples/topic-video/topic.audio/voiceover.wav
+
+# Stage 4: Assemble final merged video
+pnpm run animations create --render-plan samples/topic-video/topic.narration-timed.json --force
+# 🎬 Final video ready: samples/topic-video/topic.mp4
+```
+
+#### 5. (Optional) Generate YouTube Publish Kit:
+To generate optimized YouTube titles, description, tags, and thumbnail covers:
+```bash
+pnpm run animations publish samples/topic-video/topic.narration-timed.json
+```
+
+---
+
+### Command Options Reference
 
 ```bash
 pnpm run animations create summary.md
