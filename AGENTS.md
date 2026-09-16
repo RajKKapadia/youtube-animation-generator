@@ -57,6 +57,10 @@ Prove the render path works offline, then look at the output:
 pnpm fixtures:explainers -- /tmp/gallery --stills-only && open /tmp/gallery/index.html
 ```
 
+To eyeball a real plan without a key, the TTS model, or a full render, use the staged flags —
+`--plan-only`, `--stills-only`, `--audio-only`, or `--review` to walk all four stages
+interactively. → [`docs/commands.md`](docs/commands.md#staged-workflow)
+
 ## Guardrails
 
 These apply before you read anything else.

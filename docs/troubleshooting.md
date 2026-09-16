@@ -23,6 +23,11 @@
 | `comparison` template validation failure | `secondaryItems` is empty | Populate it, or use another template (`types.ts:946`) |
 | Video longer than `targetDurationSeconds` | Duration is derived from measured speech | Expected. Shorten `phrases[].text` to shorten the video. |
 | Garbled or truncated worker IPC | Something wrote to stdout in worker code | Route all worker logging to stderr (`worker.ts:16`) |
+| `Choose either --stills-only or --audio-only, not both.` | Conflicting stage flags | Pick one; they gate different stages |
+| A still is missing items the plan defines | You opened the `-mid-` frame | Use the `-final-` frame — the midpoint predates later beats |
+| Preview pacing differs from the final video | `--stills-only` estimates timings from word counts | Expected; real renders use measured speech |
+| `--review` never pauses | stdin is not a TTY (CI, piped output) | By design. Run it in an interactive terminal |
+| Stills regenerate without `--force` | Stills deliberately bypass the overwrite preflight | Expected, so the preview loop stays fast |
 | Missing generated image on a timed plan | Cache miss | CLI names the scene and requires explicit `--generated-visuals auto` (**billed**) rather than substituting art |
 
 ---

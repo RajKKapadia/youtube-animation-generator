@@ -10,6 +10,8 @@ Nothing needs everything. Check what your task actually requires:
 |---|:--:|:--:|:--:|:--:|
 | `pnpm check` / `pnpm test` | — | — | — | — |
 | `--plan-only` validation | — | — | — | — |
+| `--stills-only` preview | — | ✅ | — | — |
+| `--audio-only` synthesis | — | — | ✅ | ✅ (once) |
 | Authoring a new plan | ✅ any of OpenAI / Gemini / Groq | — | — | — |
 | `--research auto\|required` | ✅ **OpenAI specifically** | — | — | — |
 | `--scene-background generated` | ✅ Cloudflare or OpenAI | — | — | — |

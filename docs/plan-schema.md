@@ -12,7 +12,9 @@ Read this before writing or editing any plan JSON or fixture.
 | Timed | `"timed"` | `narration-audio.ts` after synthesis | Adds `startMs`, `durationMs`, `sampleCount` per phrase |
 
 **Timing is derived, never declared.** Phrase duration is *measured from synthesized speech*, so
-a longer sentence mechanically holds its shot longer. `targetDurationSeconds` is a planning
+a longer sentence mechanically holds its shot longer. (`--stills-only` is the one exception: it
+*estimates* timings from word counts so it can preview without running TTS — see
+[commands.md](commands.md#how---stills-only-avoids-the-tts-model).) `targetDurationSeconds` is a planning
 hint only and is routinely overshot — a 15 s target legitimately produced 16.12 s of audio in
 verification.
 
@@ -47,6 +49,7 @@ place.
 | Plan `title` | ≤ 100 chars |
 | Scene `title` | ≤ 80 chars |
 | Item labels | ≤ 80 chars |
+| Phrase `text` | **≤ 120 chars** |
 | `reason` | ≤ 180 chars |
 | `backgroundPrompt` | ≤ 600 chars |
 | `leftLabel` / `rightLabel` | ≤ 40 chars |
@@ -57,6 +60,12 @@ place.
   (`types.ts:946`).
 - A beat's `primaryItemIndices` are **zero-based indices into the scene's `primaryItems`**,
   selecting which labels are lit while that beat is spoken.
+- **Every primary item must be anchored exactly once, in visual order.** Each index must appear
+  in exactly one beat, and the beats must introduce them in ascending order. Skipping an item,
+  anchoring one twice, or anchoring out of order all fail validation. This is the constraint
+  hand-written plans trip over most often.
+- Phrase `text` must not contain `<laugh>`, `<breath>` or `<sigh>` — expressions belong in the
+  beat's `expression` field.
 - Research-enriched plans must carry **both** `originalSourceText` and `research`, or neither
   (`types.ts:1184`).
 

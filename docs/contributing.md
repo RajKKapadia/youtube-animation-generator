@@ -11,14 +11,21 @@ pnpm check     # tsc -p tsconfig.json --noEmit
 pnpm test      # vitest run
 ```
 
-Baseline after the multi-provider change: `check` exit 0; `test` 334 passed / 334, 39 files,
-≈ 1.6 s.
+Baseline after the staged-workflow change: `check` exit 0; `test` 337 passed / 337, 39 files,
+≈ 1.9 s.
 
 `pnpm build` (`tsc -p tsconfig.json`) emits `dist/` and is the packaging step for the
 `youtube-animations` bin entry.
 
 **Test discipline.** No test touches the network, a browser, or the TTS model. Preserve this —
 put rendering coverage in fixture scripts, not the unit suite.
+
+A fast way to eyeball a real plan without TTS or a key:
+
+```bash
+export REMOTION_BROWSER_EXECUTABLE="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+pnpm run animations create --render-plan <plan.json> --stills-only --force
+```
 
 If you changed rendering, also render the gallery and **visually inspect it**:
 

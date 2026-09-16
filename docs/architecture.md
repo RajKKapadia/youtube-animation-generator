@@ -94,10 +94,12 @@ src/
 
   narration-audio.ts      Orchestrates TTS: draft plan -> timed plan + voiceover.wav
   narration-speech.ts     Phrase and beat timing arithmetic
+                          (narration-planner.ts also exports estimateDraftNarrationTiming,
+                           which fakes timings from word counts for --stills-only previews)
   subtitles.ts            SRT/VTT parsing
 
   render.ts               Subtitle-overlay render entry
-  narrated-render.ts      Narrated-video render entry
+  narrated-render.ts      Narrated-video render entry (also renders stills + silent WAV)
   publish-render.ts       Publish-cover render entry
 
   asset-registry.ts       Manifest + hash validation for local assets
@@ -134,6 +136,22 @@ Ignored (`.gitignore`): `node_modules/`, `.env`, `dist/`, `.remotion/`, `models/
 `samples/`.
 Tests are colocated: `src/foo.ts` ↔ `src/foo.test.ts`. `tsconfig.json` excludes tests from the
 build.
+
+## Staged rendering
+
+The pipeline can be halted and inspected at four points — script, screenshots, audio, video —
+via `--plan-only`, `--stills-only`, `--audio-only`, and `--review`.
+
+The interesting part is that **`--stills-only` needs neither the TTS model nor a provider key**.
+Rendering normally requires a *timed* plan, so `estimateDraftNarrationTiming`
+(`narration-planner.ts`) manufactures one: ~350 ms per word, floored at 3 s per scene, with
+scene duration forced to at least `300 + beats×400 + 300` ms so beats can never overflow their
+scene. `narrated-render.ts` then writes a silent WAV where the voiceover would go.
+
+Two frames are captured per scene — 50% for the mid-animation state and 88% for the full
+reveal — because a midpoint frame omits any item a later beat introduces.
+
+See [commands.md](commands.md#staged-workflow) for the flags and output layout.
 
 ## Speech synthesis subsystem
 
@@ -175,4 +193,4 @@ in components.
 
 ## Scale
 
-~23,000 lines across 77 source modules and 39 test files, 334 tests, full suite ≈ 1.6 s.
+~23,300 lines across 77 source modules and 39 test files, 337 tests, full suite ≈ 1.9 s.
