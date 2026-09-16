@@ -6,8 +6,9 @@ Read this before shipping output externally or changing dependencies.
 
 ## Credential handling
 
-- `OPENAI_API_KEY` is read from the environment only. `.env` is gitignored; `.env.example`
-  carries empty placeholders.
+- All provider keys (`OPENAI_API_KEY`, `GOOGLE_GEMINI_API_KEY`, `GROQ_API_KEY`,
+  `CLOUDFLARE_AI_KEY`) are read from the environment only. `.env` is gitignored;
+  `.env.example` carries empty placeholders.
 - **Never commit a key, echo one into logs, or embed one in a plan file.**
 - Plans, timed plans, and scripts are plain JSON/Markdown and may be committed. They contain
   source text — apply normal data-classification judgement before committing customer content.
@@ -39,14 +40,30 @@ External icons and animations are **never fetched at runtime**. Saved-plan rende
 checked-in manifests and hashes, copies only referenced files into a temporary staging
 directory, and removes it afterwards.
 
+## Data residency and processing
+
+Source text is sent to whichever **script provider** is active — OpenAI, Google, or Groq — and
+image prompts to whichever **image provider** is active — Cloudflare or OpenAI. These are
+different companies under different terms and jurisdictions.
+
+> Confirm the active provider is approved for the data classification of the source text
+> *before* running an authoring command. Switching `AI_PROVIDER` changes who processes customer
+> content. Auto-detection means adding a key can silently change the processor — see
+> [providers.md](providers.md#provider-resolution).
+
+Each provider's terms apply independently; review them for training-on-input and retention
+before sending anything non-public.
+
 ## Cost controls
 
-Three flags bill the account. All default to off/free:
+Three flags bill whichever provider is active. All default to off/free:
 
 | Flag | Default | Cost |
 |---|---|---|
-| `--scene-background generated` | `ambient` (free, drawn in code) | **Image API**, per scene per aspect ratio |
-| `--generated-visuals auto` | `off` | **Image API**, per visual |
-| `--research auto\|required` | `off` | Tokens + billed web-search tool calls |
+| `--scene-background generated` | `ambient` (free, drawn in code) | Image generation, per scene per aspect ratio |
+| `--generated-visuals auto` | `off` | Image generation **+ vision validation** per visual |
+| `--research auto\|required` | `off` | Tokens + billed web-search calls (**OpenAI only**) |
 
-Require explicit human authorisation before enabling any of them.
+Require explicit human authorisation before enabling any of them. Cloudflare Workers AI
+(FLUX.1) is materially cheaper than the OpenAI Image API for the same output, but is billed
+regardless.

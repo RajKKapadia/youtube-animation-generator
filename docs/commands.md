@@ -6,9 +6,11 @@ behaviour · Verified at commit `d1e65f3`
 `pnpm run animations <args>` runs the CLI in development (`node --import tsx src/cli.ts`).
 Full usage text lives at `src/cli.ts:70-140`.
 
+Provider selection is environment-driven, not flag-driven — see [providers.md](providers.md).
+
 ## Invocations
 
-| Invocation | Purpose | Key? |
+| Invocation | Purpose | Provider key? |
 |---|---|:--:|
 | `<subtitle.srt\|.vtt>` | Author + render overlay | ✅ |
 | `--render-plan <plan.json>` | Render an existing overlay plan | — |
@@ -33,9 +35,11 @@ Full usage text lives at `src/cli.ts:70-140`.
 | `--target-duration <s>` | `60` | Planning hint only |
 | `--captions <on\|off>` | `on` (narrated) / `off` (subtitle) | |
 | `--supertonic-assets-dir <path>` | `models/supertonic-3` | |
-| `--scene-background <ambient\|generated\|image>` | `ambient` (narrated), `off` (subtitle) | `generated` **bills the Image API** |
-| `--generated-visuals <off\|auto>` | `off` | `auto` **bills the Image API** |
-| `--research <off\|auto\|required>` | `off` | Non-`off` **bills tokens + web search** |
+| `--model <model>` | per provider (`gpt-5.6` / `gemini-3.5-flash` / `llama-3.3-70b-versatile`) | Script model |
+| `--image-model <model>` | `@cf/…flux-1-schnell` when Cloudflare keys exist, else `gpt-image-2` | `cli.ts:1002` |
+| `--scene-background <ambient\|generated\|image>` | `ambient` (narrated), `off` (subtitle) | `generated` **bills the image provider** |
+| `--generated-visuals <off\|auto>` | `off` | `auto` **bills image + vision** |
+| `--research <off\|auto\|required>` | `off` | Non-`off` **bills tokens + web search; OpenAI only** |
 | `--format <prores\|webm\|green\|h264>` | `green` (subtitle) | Overlay output format |
 
 ## Output conventions

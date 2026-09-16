@@ -4,7 +4,7 @@ Operating guide for agents in this repo. Keep this file small — it loads into 
 Detailed references live in [`docs/`](docs/) and are read **on demand**; the routing table
 below says which one to open.
 
-**Verified:** 2026-09-16 · commit `d1e65f3` · darwin-arm64, Node 26.5.0, pnpm 11.22.0
+**Verified:** 2026-09-16 · `c47ea13` + multi-provider changes · darwin-arm64, Node 26.5.0, pnpm 11.22.0
 **Owner:** _Unassigned — populate before using this for onboarding._
 
 ---
@@ -22,15 +22,21 @@ writes sibling files. There is **no CI in-repo** — quality gates are manual.
 > **A plan JSON is the contract between the AI half and the deterministic half.**
 
 ```
-source.md ──(OpenAI, billed)──► plan.json ──(Supertonic + Remotion, offline)──► .mp4
-                                    ▲
-                         hand-writable and editable
+source.md ──(AI provider, billed)──► plan.json ──(Supertonic + Remotion, offline)──► .mp4
+                                        ▲
+                             hand-writable and editable
 ```
 
-Authoring a plan needs an API key. **Everything downstream of a plan is free, offline, and
+Authoring a plan needs a provider key. **Everything downstream of a plan is free, offline, and
 reproducible.** So `--render-plan` is the primary development affordance — it skips authoring
 entirely. Timing is *derived from measured speech*, never declared: a longer sentence
 mechanically holds its shot longer.
+
+**Providers are pluggable.** Script generation runs on OpenAI, Gemini, or Groq; image
+generation on Cloudflare Workers AI or OpenAI. Both auto-detect from whichever keys are
+present, and `AI_PROVIDER` / `IMAGE_PROVIDER` override. One exception: `--research` requires
+`OPENAI_API_KEY` specifically — it uses OpenAI-hosted web search, which the other providers do
+not expose. → [`docs/providers.md`](docs/providers.md)
 
 ## Quickstart
 
@@ -58,9 +64,9 @@ These apply before you read anything else.
 **Never, without explicit human authorisation**
 
 1. Enable `--scene-background generated`, `--generated-visuals auto`, or
-   `--research auto|required`. Each bills the account; the first two hit the **Image API** and
-   are the most expensive thing in the repo. Narrated video defaults to `ambient`, drawn in
-   code and free — keep it.
+   `--research auto|required`. Each bills whichever provider is active; the first two generate
+   images and are the most expensive thing in the repo. Narrated video defaults to `ambient`,
+   drawn in code and free — keep it.
 2. Commit `models/supertonic-3/`, `.env`, `dist/`, or `.remotion/`.
 3. Broaden `allowBuilds` in `pnpm-workspace.yaml` (a deliberate supply-chain control).
 4. Assume Remotion's licence is free for commercial output — it is **eligibility-based**. Same
@@ -78,8 +84,9 @@ These apply before you read anything else.
 3. Ground claims in `file:line`. Code moves; re-verify rather than trusting these docs blindly.
 4. Prefer `--render-plan` / `--plan-only` over anything that authors a new plan.
 
-**Useful invariant.** `new OpenAI({apiKey: process.env.OPENAI_API_KEY})` throws when the key is
-unset. So if a command exits 0 with no key in the environment, it provably made no OpenAI call.
+**Useful invariant.** Every provider client throws when its key is unset (`ai-client.ts:44-77`),
+and no other module reaches the network. So if a command exits 0 with no provider keys in the
+environment, it provably made no billed API call.
 
 ## Where to find things
 
@@ -90,6 +97,7 @@ unset. So if a command exits 0 with no key in the environment, it provably made 
 | Write or edit a plan JSON — schemas, enums, limits, versioning | [`docs/plan-schema.md`](docs/plan-schema.md) |
 | Look up a CLI command, flag, fixture script, or output path | [`docs/commands.md`](docs/commands.md) |
 | Diagnose an error, or check if it's a known defect | [`docs/troubleshooting.md`](docs/troubleshooting.md) |
+| Configure or debug an AI / image provider | [`docs/providers.md`](docs/providers.md) |
 | Ship output externally, or touch dependencies | [`docs/compliance.md`](docs/compliance.md) |
 | Run the gates, branch, commit, or re-verify these docs | [`docs/contributing.md`](docs/contributing.md) |
 

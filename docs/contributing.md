@@ -11,7 +11,8 @@ pnpm check     # tsc -p tsconfig.json --noEmit
 pnpm test      # vitest run
 ```
 
-Baseline at `d1e65f3`: `check` exit 0; `test` 314 passed / 314, 37 files, ≈ 1.4 s.
+Baseline after the multi-provider change: `check` exit 0; `test` 334 passed / 334, 39 files,
+≈ 1.6 s.
 
 `pnpm build` (`tsc -p tsconfig.json`) emits `dist/` and is the packaging step for the
 `youtube-animations` bin entry.
@@ -45,10 +46,18 @@ Every claim in `docs/` is mechanically re-derivable. Run these after code change
 whatever drifted:
 
 ```bash
-# architecture.md — egress inventory (expect 6)
-grep -rn "new OpenAI(" src/ --include='*.ts' | grep -v test
+# architecture.md — egress inventory (all billed network calls)
+grep -rn "new OpenAI(\|createAIClient(\|fetch(" src/ --include='*.ts' | grep -v test
 
-# architecture.md — scale (expect 75 / 37)
+# providers.md — resolution order
+sed -n '11,35p' src/ai-client.ts                 # script provider + model defaults
+grep -n "createDefaultImageGenerator" -A 12 src/scene-backgrounds.ts | head -16
+grep -n "createDefaultVisualValidator" -A 8 src/generated-visuals.ts | head -10
+
+# providers.md — every planner must branch on provider (Responses API vs chat.completions)
+grep -rn "aiInfo.provider === 'openai'" src/ --include='*.ts'
+
+# architecture.md — scale (expect 77 / 39)
 find src -name '*.ts*' -not -name '*.test.*' | wc -l
 find src -name '*.test.ts*' | wc -l
 
@@ -70,8 +79,8 @@ sed -n '5,12p' src/supertonic/assets.ts
 # contributing.md — gates
 pnpm check && pnpm test
 
-# architecture.md — prove offline operation (must exit 0 with no key)
-env -u OPENAI_API_KEY pnpm test
+# architecture.md — prove offline operation (must exit 0 with no provider keys)
+env -u OPENAI_API_KEY -u GOOGLE_GEMINI_API_KEY -u GROQ_API_KEY -u CLOUDFLARE_AI_KEY pnpm test
 ```
 
 ## Documentation structure
@@ -83,6 +92,12 @@ here and is read on demand.
 **When adding docs:** put it in `docs/`, add one row to the AGENTS.md routing table, and keep
 AGENTS.md itself under ~120 lines. Resist moving detail up into it — context budget is the
 scarce resource.
+
+**When adding a provider:** implement it in `src/ai-client.ts` (or `src/providers/` for a
+non-chat API), branch every planner on `aiInfo.provider` if it lacks the Responses API, wrap
+calls in `withTransientRetries`, add resolution tests to `src/ai-client.test.ts`, and update
+[providers.md](providers.md) plus the egress inventory in
+[architecture.md](architecture.md#egress-inventory).
 
 ## Glossary
 

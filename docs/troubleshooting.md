@@ -7,6 +7,13 @@
 | Symptom | Root cause | Resolution |
 |---|---|---|
 | `OpenAIError: Missing credentials` | A key-requiring path was reached | Usually intended. Use `--render-plan` / `--render-publish`. Only set a key if authoring is genuinely required. |
+| `GOOGLE_GEMINI_API_KEY is required…` / `GROQ_API_KEY is required…` | `AI_PROVIDER` names a provider whose key is unset | Set that key, or change/unset `AI_PROVIDER` |
+| `OPENAI_API_KEY is required for web research…` | `--research` is OpenAI-only | Set `OPENAI_API_KEY`, or use `--research off` |
+| `CLOUDFLARE_AI_KEY … and CLOUDFLARE_ACCOUNT_ID are required` | Only one Cloudflare var set | Both are needed; routing requires the pair |
+| Wrong provider used unexpectedly | Auto-detection picked a key you forgot was set | OpenAI wins script ties, **Cloudflare wins image ties**. Set `AI_PROVIDER` / `IMAGE_PROVIDER` explicitly |
+| `Cloudflare image generation failed (…)` | Workers AI rejected the request | Check account ID, token scope, and that the model starts with `@cf/` |
+| Repeated plan validation failures on Gemini/Groq | JSON mode is not schema-enforced | Expected; the repair loop retries 3×. Prefer OpenAI for strict schema enforcement |
+| `Rate limit reached; waiting …` | Provider quota (common on Gemini free tier) | Automatic — `withTransientRetries` backs off up to 4 times |
 | `Supertonic assets are incomplete … (looks like a Git LFS pointer)` | Cloned without Git LFS | `git lfs install`, then re-clone `models/supertonic-3` |
 | `Supertonic assets are incomplete … Missing: onnx/…` | Files placed at top level | Layout is nested under `onnx/` — see [setup.md](setup.md#tts-model-acquisition) |
 | `spawn ENOENT` on `/usr/bin/google-chrome-stable` | Linux-only path on a macOS host | Export `REMOTION_BROWSER_EXECUTABLE`; if the script ignores it, see below |

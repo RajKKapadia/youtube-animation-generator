@@ -6,11 +6,14 @@
 
 Nothing needs everything. Check what your task actually requires:
 
-| Task | API key | Chrome | TTS model | Git LFS |
+| Task | Provider key | Chrome | TTS model | Git LFS |
 |---|:--:|:--:|:--:|:--:|
 | `pnpm check` / `pnpm test` | — | — | — | — |
 | `--plan-only` validation | — | — | — | — |
-| Authoring a new plan | ✅ | — | — | — |
+| Authoring a new plan | ✅ any of OpenAI / Gemini / Groq | — | — | — |
+| `--research auto\|required` | ✅ **OpenAI specifically** | — | — | — |
+| `--scene-background generated` | ✅ Cloudflare or OpenAI | — | — | — |
+| `--generated-visuals auto` | ✅ Cloudflare/OpenAI + a vision key | — | — | — |
 | Narrated render from a plan | — | ✅ | ✅ | ✅ (once) |
 | Subtitle overlay from a plan | — | ✅ | — | — |
 | Publish covers from metadata | — | ✅ | — | — |
@@ -89,8 +92,25 @@ console.log(await validateSupertonicAssets('models/supertonic-3', 'F1'));
 
 ## Credentials
 
-`OPENAI_API_KEY` is read from the environment only. `.env` is gitignored; `.env.example` holds
-empty placeholders for `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-5.6`), and
-`OPENAI_IMAGE_MODEL` (default `gpt-image-2`).
+Keys are read from the environment only. `.env` is gitignored; copy `.env.example` and fill in
+whichever providers you use — you do **not** need all of them.
+
+```bash
+cp .env.example .env
+```
+
+Minimum viable combinations:
+
+| Goal | Set |
+|---|---|
+| Cheapest working setup | `GOOGLE_GEMINI_API_KEY` + `CLOUDFLARE_AI_KEY` + `CLOUDFLARE_ACCOUNT_ID` |
+| Simplest | `OPENAI_API_KEY` alone |
+| Render existing plans only | nothing |
+
+Both providers auto-detect from the keys present; `AI_PROVIDER` and `IMAGE_PROVIDER` override.
+Full resolution order and every variable: [providers.md](providers.md).
+
+> `--research auto|required` needs `OPENAI_API_KEY` specifically, whatever `AI_PROVIDER` says —
+> it uses OpenAI-hosted web search.
 
 Most work needs no key at all — see the matrix above.

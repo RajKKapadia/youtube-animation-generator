@@ -8,16 +8,17 @@ Three capabilities are deliberately decoupled so each runs independently:
 
 | Capability | Implementation | External dependency |
 |---|---|---|
-| **Authoring** — what the video says and shows | OpenAI structured outputs | API key, network, billed |
+| **Authoring** — what the video says and shows | OpenAI, Gemini, or Groq | Provider key, network, billed |
 | **Speech** — script into audio | Supertonic 3, ONNX, on-CPU | Local model files only |
 | **Rendering** — plan into frames | Remotion → React → headless Chrome | Local Chrome only |
 
-Speech and rendering are fully offline. Only authoring needs a key.
+Speech and rendering are fully offline. Only authoring needs a key, and *which* provider
+supplies it is configurable — see [providers.md](providers.md).
 
 ## Pipeline topology
 
 ```
-                    ┌──────────────── requires OPENAI_API_KEY ──────────────┐
+                    ┌───────────── requires an AI provider key ─────────────┐
                     │                                                        │
   source.md ────────┼──► narration-planner.ts ──► draft plan (JSON) ◄────────┼─── hand-authored
   subtitle.srt ─────┼──► planner.ts          ──► draft plan (JSON)           │    or edited
@@ -43,24 +44,35 @@ Speech and rendering are fully offline. Only authoring needs a key.
 
 ## Egress inventory
 
-The OpenAI SDK is instantiated at **exactly six sites**. No other code path reaches the
-network. Authoritative check:
+Every billed network call originates from one of these. Authoritative check:
 
 ```bash
-grep -rn "new OpenAI(" src/ --include='*.ts' | grep -v test
+grep -rn "new OpenAI(\|createAIClient(\|fetch(" src/ --include='*.ts' | grep -v test
 ```
 
-| Site | Triggered by | Cost class |
-|---|---|---|
-| `src/narration-planner.ts:576` | `create <source.md>` | Tokens |
-| `src/planner.ts:513` | `<subtitle.srt>` without `--render-plan` | Tokens |
-| `src/publish.ts:165` | `publish <plan.json>` | Tokens |
-| `src/source-research.ts:217` | `--research auto\|required` | Tokens + web search calls |
-| `src/scene-backgrounds.ts:132` | `--scene-background generated` | **Image API — highest** |
-| `src/generated-visuals.ts:180` | `--generated-visuals auto` | **Image API — highest** |
+**Script generation** goes through the `createAIClient` abstraction (`src/ai-client.ts`), which
+returns an `openai` SDK client pointed at OpenAI, Gemini, or Groq:
 
-`new OpenAI({apiKey: process.env.OPENAI_API_KEY})` **throws** `OpenAIError: Missing
-credentials` when unset. If a command exits 0 with no key set, it provably made no request.
+| Call site | Triggered by | Cost class |
+|---|---|---|
+| `src/narration-planner.ts:545` | `create <source.md>` | Tokens |
+| `src/planner.ts:509` | `<subtitle.srt>` without `--render-plan` | Tokens |
+| `src/publish.ts:160` | `publish <plan.json>` | Tokens |
+
+**Direct clients** bypass the abstraction, deliberately:
+
+| Call site | Triggered by | Provider | Why direct |
+|---|---|---|---|
+| `src/scene-backgrounds.ts:147` | `--scene-background generated` | OpenAI Images | Image API, not chat |
+| `src/providers/cloudflare-image.ts:19` | `--scene-background generated` | Cloudflare (`fetch`) | Workers AI REST |
+| `src/generated-visuals.ts:182` | `--generated-visuals auto` | OpenAI vision | Validator |
+| `src/generated-visuals.ts:219` | `--generated-visuals auto` | Gemini vision | Validator |
+| `src/source-research.ts:217` | `--research auto\|required` | **OpenAI only** | Hosted `web_search` tool has no compat equivalent |
+
+Provider clients throw when their key is unset (`ai-client.ts:44-77`). If a command exits 0
+with no provider keys in the environment, it provably made no billed call.
+
+Resolution order, API-surface differences, and env vars: [providers.md](providers.md).
 
 ## Repository layout
 
@@ -69,12 +81,16 @@ src/
   cli.ts                  Arg parsing and dispatch. Usage text at :70-140. Entry point.
   types.ts                ~2,000 lines of Zod schemas. Source of truth for all file formats.
 
-  planner.ts              Subtitle-overlay authoring (OpenAI)
-  narration-planner.ts    Narrated-video authoring (OpenAI)
-  source-research.ts      Optional grounded web research (OpenAI)
-  publish.ts              Publish-kit metadata authoring (OpenAI)
-  scene-backgrounds.ts    Background image generation (OpenAI Image API)
-  generated-visuals.ts    Foreground image generation (OpenAI Image API)
+  ai-client.ts            Provider abstraction + transient-retry helper
+  providers/
+    cloudflare-image.ts   Cloudflare Workers AI (FLUX.1) image generation
+
+  planner.ts              Subtitle-overlay authoring (AI provider)
+  narration-planner.ts    Narrated-video authoring (AI provider)
+  source-research.ts      Optional grounded web research (OpenAI only)
+  publish.ts              Publish-kit metadata authoring (AI provider)
+  scene-backgrounds.ts    Background image generation + image-provider routing
+  generated-visuals.ts    Foreground image generation + vision validation
 
   narration-audio.ts      Orchestrates TTS: draft plan -> timed plan + voiceover.wav
   narration-speech.ts     Phrase and beat timing arithmetic
@@ -114,7 +130,8 @@ assets/                   brands/ icons/ motion/ — local catalogs with manifes
 models/supertonic-3/      TTS model (gitignored, ~822 MB, Git LFS)
 ```
 
-Ignored (`.gitignore`): `node_modules/`, `.env`, `dist/`, `.remotion/`, `models/supertonic-3/`.
+Ignored (`.gitignore`): `node_modules/`, `.env`, `dist/`, `.remotion/`, `models/supertonic-3/`,
+`samples/`.
 Tests are colocated: `src/foo.ts` ↔ `src/foo.test.ts`. `tsconfig.json` excludes tests from the
 build.
 
@@ -158,5 +175,4 @@ in components.
 
 ## Scale
 
-~22,300 lines across 75 source modules and 37 test files (36 `.test.ts` + 1 `.test.tsx`),
-314 tests, full suite ≈ 1.4 s.
+~23,000 lines across 77 source modules and 39 test files, 334 tests, full suite ≈ 1.6 s.
