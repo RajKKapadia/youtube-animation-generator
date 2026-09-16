@@ -1,6 +1,7 @@
 import {selectCoverDirection} from './cover-direction.js';
 import {basename} from 'node:path';
 import OpenAI from 'openai';
+import {createAIClient, withTransientRetries} from './ai-client.js';
 import {zodTextFormat} from 'openai/helpers/zod';
 import {z} from 'zod';
 import {joinNarrationPhrases} from './narration-planner.js';
@@ -156,45 +157,60 @@ export const normalizeGeneratedPublishScene = (
 export const generateNarratedPublishPlan = async (
   options: GenerateNarratedPublishPlanOptions,
 ): Promise<NarratedPublishPlan> => {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error(
-      'OPENAI_API_KEY is required to create publish metadata. Set it in your shell or local .env file.',
-    );
+  const aiInfo = createAIClient({model: options.model});
+  const client = aiInfo.client;
+
+  let outputParsed: YoutubePublishResponse | null = null;
+  const userContent = JSON.stringify({
+    language: options.plan.language,
+    existingWorkingTitle: options.plan.title,
+    source: options.plan.sourceText,
+    narration: narratedTranscript(options.plan),
+    scenes: options.plan.scenes.map((scene) => ({
+      id: scene.id,
+      title: scene.title,
+      template: scene.template,
+      primaryItems: scene.primaryItems,
+      secondaryItems: scene.secondaryItems,
+    })),
+  }, null, 2);
+
+  if (aiInfo.provider === 'openai') {
+    const response = await withTransientRetries(async () => client.responses.parse({
+      model: aiInfo.model,
+      store: false,
+      input: [
+        {role: 'system', content: PUBLISH_SYSTEM_PROMPT},
+        {
+          role: 'user',
+          content: userContent,
+        },
+      ],
+      text: {
+        format: zodTextFormat(
+          youtubePublishResponseSchema,
+          'narrated_video_publish_kit',
+        ),
+      },
+    }));
+    outputParsed = response.output_parsed;
+  } else {
+    const chatResponse = await withTransientRetries(async () => client.chat.completions.create({
+      model: aiInfo.model,
+      messages: [
+        {role: 'system', content: `${PUBLISH_SYSTEM_PROMPT}\n\nReturn strictly valid JSON for { youtube: { title, alternateTitles, description, tags, hashtags }, thumbnail: { headline, eyebrow, sceneId } } matching the rules.`},
+        {role: 'user', content: userContent},
+      ],
+      response_format: {type: 'json_object'},
+    }));
+    const text = chatResponse.choices[0]?.message?.content;
+    if (text) {
+      outputParsed = youtubePublishResponseSchema.parse(JSON.parse(text));
+    }
   }
 
-  const client = new OpenAI({apiKey: process.env.OPENAI_API_KEY});
-  const response = await client.responses.parse({
-    model: options.model,
-    store: false,
-    input: [
-      {role: 'system', content: PUBLISH_SYSTEM_PROMPT},
-      {
-        role: 'user',
-        content: JSON.stringify({
-          language: options.plan.language,
-          existingWorkingTitle: options.plan.title,
-          source: options.plan.sourceText,
-          narration: narratedTranscript(options.plan),
-          scenes: options.plan.scenes.map((scene) => ({
-            id: scene.id,
-            title: scene.title,
-            template: scene.template,
-            primaryItems: scene.primaryItems,
-            secondaryItems: scene.secondaryItems,
-          })),
-        }, null, 2),
-      },
-    ],
-    text: {
-      format: zodTextFormat(
-        youtubePublishResponseSchema,
-        'narrated_video_publish_kit',
-      ),
-    },
-  });
-
-  if (!response.output_parsed) {
-    throw new Error('OpenAI did not return usable narrated-video publish metadata.');
+  if (!outputParsed) {
+    throw new Error(`${aiInfo.provider} did not return usable narrated-video publish metadata.`);
   }
 
   const plan = materializePublishPlan({
@@ -203,7 +219,7 @@ export const generateNarratedPublishPlan = async (
     language: options.plan.language,
     model: options.model,
     palette: options.plan.palette,
-    response: response.output_parsed,
+    response: outputParsed,
     sourcePlan: options.sourcePlan,
   });
   const normalized = normalizeGeneratedPublishScene(options.plan, plan);

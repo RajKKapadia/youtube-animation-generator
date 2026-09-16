@@ -211,7 +211,7 @@ export type WebResearcher = (
 export const createOpenAIWebResearcher = (): WebResearcher => {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error(
-      'OPENAI_API_KEY is required for web research. Set it in your shell or in a local .env file.',
+      'OPENAI_API_KEY is required for web research (--research relies on OpenAI-hosted web search, which is unsupported by Gemini or Groq). Set OPENAI_API_KEY in your .env file or use --research off.',
     );
   }
   const client = new OpenAI({apiKey: process.env.OPENAI_API_KEY});

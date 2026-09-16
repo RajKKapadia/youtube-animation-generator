@@ -23,6 +23,7 @@ import {
   type SceneBackgroundAssets,
 } from './scene-backgrounds.js';
 import {planAnimations} from './planner.js';
+import {defaultModelForProvider, resolveAIProvider} from './ai-client.js';
 import {runPublishWorkflow} from './publish-workflow.js';
 import {aspectSuffix, profilesForSelection} from './render-profile.js';
 import {filenameForClip, renderClips} from './render.js';
@@ -936,7 +937,8 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   if (maxSuggestions > 12) throw new Error('--max-suggestions cannot exceed 12.');
   const aspectRatio = parseAspectRatio(values['aspect-ratio']);
   const fps = parsePositiveInteger(values.fps, 30, '--fps');
-  const model = values.model ?? process.env.OPENAI_MODEL ?? 'gpt-5.6';
+  const aiProvider = resolveAIProvider();
+  const model = values.model ?? defaultModelForProvider(aiProvider);
   const publishCommand = positionals[0] === 'publish';
   const usedResearchOption = tokens.some(
     (token) => token.kind === 'option' && [
@@ -997,7 +999,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   const commonVisualOptions = {
     imageBackground: imagePath !== undefined ? await validateImageBackground(imagePath) : undefined,
     generatedVisuals: parseGeneratedVisuals(values['generated-visuals']),
-    imageModel: values['image-model'] ?? process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2',
+    imageModel: values['image-model'] ?? (process.env.CLOUDFLARE_AI_KEY ? (process.env.CLOUDFLARE_IMAGE_MODEL ?? '@cf/black-forest-labs/flux-1-schnell') : (process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2')),
     imageQuality: parseImageQuality(values['image-quality']),
     regenerateBackgrounds: values['regenerate-backgrounds'],
     regenerateVisuals: values['regenerate-visuals'],
