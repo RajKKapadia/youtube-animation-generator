@@ -255,4 +255,10 @@ describe('narrated CLI plan-only path', () => {
       runCli(['missing.srt', '--metadata-only']),
     ).rejects.toThrow('Publish-kit options can only be used with the publish command');
   });
+
+  it('rejects --stills-only and --audio-only together', async () => {
+    await expect(
+      runCli(['create', '--render-plan', 'plan.json', '--stills-only', '--audio-only']),
+    ).rejects.toThrow('Choose either --stills-only or --audio-only, not both.');
+  });
 });

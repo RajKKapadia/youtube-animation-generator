@@ -3,3 +3,4 @@ node_modules/
 dist/
 .remotion/
 models/supertonic-3/
+samples/
