@@ -3,6 +3,7 @@ import {access, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile} from 'node:
 import {constants} from 'node:fs';
 import {resolve} from 'node:path';
 import OpenAI from 'openai';
+import {createCloudflareImageGenerator} from './providers/cloudflare-image.js';
 import {z} from 'zod';
 import {profilesForSelection} from './render-profile.js';
 import {
@@ -123,6 +124,20 @@ export const withTransientImageRetries = async <T>(
   throw new Error('Image generation retry loop ended unexpectedly.');
 };
 
+export const createDefaultImageGenerator = (): GenerateSceneImage => {
+  const provider = process.env.IMAGE_PROVIDER?.trim().toLowerCase();
+  if (provider === 'cloudflare') {
+    return createCloudflareImageGenerator();
+  }
+  if (provider === 'openai') {
+    return createOpenAIImageGenerator();
+  }
+  if (process.env.CLOUDFLARE_AI_KEY && process.env.CLOUDFLARE_ACCOUNT_ID) {
+    return createCloudflareImageGenerator();
+  }
+  return createOpenAIImageGenerator();
+};
+
 export const createOpenAIImageGenerator = (): GenerateSceneImage => {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error(
@@ -239,7 +254,7 @@ export const materializeSceneBackgrounds = async (
     return assetsFromEntries(finalDirectory, requested);
   }
 
-  const generateImage = options.generateImage ?? createOpenAIImageGenerator();
+  const generateImage = options.generateImage ?? createDefaultImageGenerator();
   await mkdir(options.outputDirectory, {recursive: true});
   const stagingDirectory = await mkdtemp(
     resolve(options.outputDirectory, `.${options.stem}.backgrounds-staging-`),

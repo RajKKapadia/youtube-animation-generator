@@ -2,7 +2,9 @@ import {directScenes, PRESENTATION_PLANNING_PROMPT} from './presentation.js';
 import {EXPLAINER_PLANNING_PROMPT, visualTreatmentKey} from './explainer-visuals.js';
 import {codeCatalogPrompt, type CodeSource} from './local-code.js';
 import OpenAI from 'openai';
+import {createAIClient, withTransientRetries} from './ai-client.js';
 import {zodTextFormat} from 'openai/helpers/zod';
+import {z} from 'zod';
 import {
   subtitleAnimationPlanResponseSchema,
   subtitleSavedPlanV3Schema,
@@ -483,12 +485,6 @@ export const planAnimations = async (
   cues: SubtitleCue[],
   options: PlanOptions,
 ): Promise<SavedPlan> => {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error(
-      'OPENAI_API_KEY is required. Set it in your shell or in a local .env file.',
-    );
-  }
-
   const generatedVisuals = options.generatedVisuals ?? 'off';
   const localImages = options.localImages ?? [];
   const codeSources = options.codeSources ?? [];
@@ -510,30 +506,58 @@ export const planAnimations = async (
     `SUBTITLE CUES:\n${serializeCues(cues)}`,
   ].join('\n\n');
 
-  const client = new OpenAI({apiKey: process.env.OPENAI_API_KEY});
-  const response = await client.responses.parse({
-    model: options.model,
-    store: false,
-    input: [
-      {role: 'system', content: SYSTEM_PROMPT},
-      {
-        role: 'user',
-        content: [
-          {type: 'input_text' as const, text: userText},
-          ...localImagePlanningInputParts(localImages),
-        ],
-      },
-    ],
-    text: {
-      format: zodTextFormat(subtitleAnimationPlanResponseSchema, 'subtitle_animation_plan'),
-    },
-  });
+  const aiInfo = createAIClient({model: options.model});
+  const client = aiInfo.client;
 
-  if (!response.output_parsed) {
-    throw new Error('OpenAI did not return a usable animation plan.');
+  let outputParsed: z.infer<typeof subtitleAnimationPlanResponseSchema> | null = null;
+  if (aiInfo.provider === 'openai') {
+    const response = await withTransientRetries(async () => client.responses.parse({
+      model: aiInfo.model,
+      store: false,
+      input: [
+        {role: 'system', content: SYSTEM_PROMPT},
+        {
+          role: 'user',
+          content: [
+            {type: 'input_text' as const, text: userText},
+            ...localImagePlanningInputParts(localImages),
+          ],
+        },
+      ],
+      text: {
+        format: zodTextFormat(subtitleAnimationPlanResponseSchema, 'subtitle_animation_plan'),
+      },
+    }));
+    outputParsed = response.output_parsed;
+  } else {
+    const chatResponse = await withTransientRetries(async () => client.chat.completions.create({
+      model: aiInfo.model,
+      messages: [
+        {role: 'system', content: `${SYSTEM_PROMPT}\n\nRespond strictly with JSON for { palette: "cyan"|"violet"|"emerald"|"amber"|"rose", animations: [...] } matching the requested schema.`},
+        {
+          role: 'user',
+          content: [
+            {type: 'text', text: userText},
+            ...localImages.flatMap((image) => [
+              {type: 'text' as const, text: `LOCAL_IMAGE_ID ${image.id} (${image.originalName})`},
+              {type: 'image_url' as const, image_url: {url: image.dataUrl}},
+            ]),
+          ],
+        },
+      ],
+      response_format: {type: 'json_object'},
+    }));
+    const text = chatResponse.choices[0]?.message?.content;
+    if (text) {
+      outputParsed = subtitleAnimationPlanResponseSchema.parse(JSON.parse(text));
+    }
   }
 
-  const candidates = response.output_parsed.animations.slice(
+  if (!outputParsed) {
+    throw new Error(`${aiInfo.provider} did not return a usable animation plan.`);
+  }
+
+  const candidates = outputParsed.animations.slice(
     0,
     options.maxSuggestions,
   );
@@ -544,7 +568,7 @@ export const planAnimations = async (
     generatedVisuals,
     localImages,
     model: options.model,
-    palette: response.output_parsed.palette,
+    palette: outputParsed.palette,
     sourceSubtitle: options.sourceSubtitle,
     suggestions: resolution.suggestions,
     warnings: resolution.warnings,

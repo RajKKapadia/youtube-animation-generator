@@ -3,10 +3,16 @@ import {discoverLocalCode, validateSavedCode} from './local-code.js';
 
 import {access, mkdir, readFile, stat, writeFile} from 'node:fs/promises';
 import {constants} from 'node:fs';
+import {createInterface} from 'node:readline/promises';
+import {stdin, stdout} from 'node:process';
 import {basename, dirname, extname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
-import {narrationScriptMarkdown, planNarratedVideo} from './narration-planner.js';
+import {
+  estimateDraftNarrationTiming,
+  narrationScriptMarkdown,
+  planNarratedVideo,
+} from './narration-planner.js';
 import {synthesizeNarration} from './narration-audio.js';
 import {narratedOutputPaths, renderNarratedVideo} from './narrated-render.js';
 import {
@@ -23,6 +29,7 @@ import {
   type SceneBackgroundAssets,
 } from './scene-backgrounds.js';
 import {planAnimations} from './planner.js';
+import {defaultModelForProvider, resolveAIProvider} from './ai-client.js';
 import {runPublishWorkflow} from './publish-workflow.js';
 import {aspectSuffix, profilesForSelection} from './render-profile.js';
 import {filenameForClip, renderClips} from './render.js';
@@ -85,6 +92,9 @@ Shared options:
   --model <model>                   OpenAI model (default: OPENAI_MODEL or gpt-5.6)
   --fps <number>                    Frames per second (default: 30)
   --plan-only                       Save or validate a plan without rendering
+  --audio-only                      Synthesize voiceover audio without rendering video
+  --stills-only                     Render scene screenshot stills without rendering full video
+  --review                          Pause for user review between Script, Screenshots, Audio, and Video assembly
   --render-plan <path>              Render an existing plan without calling OpenAI
   --force                           Replace previously generated files
   --background-image <path>         Static local PNG/JPEG/WebP for videos or both publish covers
@@ -326,7 +336,25 @@ interface CommonRuntimeOptions {
   fps: number;
   outputDirectory?: string;
   planOnly: boolean;
+  audioOnly?: boolean;
+  stillsOnly?: boolean;
+  review?: boolean;
 }
+
+const promptReview = async (stepMessage: string): Promise<void> => {
+  console.log(`\n${'═'.repeat(65)}`);
+  console.log(stepMessage);
+  console.log('═'.repeat(65));
+  if (!stdin.isTTY) {
+    return;
+  }
+  const rl = createInterface({input: stdin, output: stdout});
+  try {
+    await rl.question('\nPress [Enter] to continue to next stage (or Ctrl+C to abort)... ');
+  } finally {
+    rl.close();
+  }
+};
 
 interface NarratedVisualOptions {
   imageBackground?: ImageBackground | undefined;
@@ -627,14 +655,16 @@ const renderTimedNarration = async ({
     return;
   }
   const outputDirectory = common.outputDirectory ?? planDirectory;
-  await preflightOutputs(
-    narratedOutputPaths({
-      aspectRatio: common.aspectRatio,
-      outputDirectory,
-      stem,
-    }).map(({outputPath}) => outputPath),
-    common.force,
-  );
+  if (!common.stillsOnly) {
+    await preflightOutputs(
+      narratedOutputPaths({
+        aspectRatio: common.aspectRatio,
+        outputDirectory,
+        stem,
+      }).map(({outputPath}) => outputPath),
+      common.force,
+    );
+  }
   const resolvedForegroundAssets = foregroundAssets ?? await resolveForegroundVisuals({
     aspectRatio: common.aspectRatio,
     plan,
@@ -662,8 +692,11 @@ const renderTimedNarration = async ({
     sceneBackground: visual.sceneBackground,
     stem,
     voiceoverBaseDirectory: planDirectory,
+    stillsOnly: common.stillsOnly,
   });
-  for (const output of outputs) console.log(`Saved video: ${output.outputPath}`);
+  if (!common.stillsOnly) {
+    for (const output of outputs) console.log(`Saved video: ${output.outputPath}`);
+  }
 };
 
 const runNarratedWorkflow = async ({
@@ -707,6 +740,10 @@ const runNarratedWorkflow = async ({
     stem = narratedPlanStem(planPath);
     outputDirectory = common.outputDirectory ?? dirname(planPath);
     if (loaded.plan.stage === 'timed') {
+      if (common.audioOnly) {
+        console.log('Audio is already synthesized for this timed plan; --audio-only skipped rendering.');
+        return;
+      }
       await renderTimedNarration({
         common: {...common, outputDirectory},
         plan: loaded.plan,
@@ -727,6 +764,35 @@ const runNarratedWorkflow = async ({
       stem,
       targetDirectory: outputDirectory,
     });
+    if (common.stillsOnly) {
+      const foregroundAssets = await resolveForegroundVisuals({
+        aspectRatio: common.aspectRatio,
+        plan: draft,
+        planDirectory: outputDirectory,
+        stem,
+        visual,
+      });
+      const backgroundAssets = await resolveSceneBackgrounds({
+        aspectRatio: common.aspectRatio,
+        outputDirectory,
+        plan: draft,
+        stem,
+        visual,
+      });
+      const estimatedPlan = estimateDraftNarrationTiming(draft);
+      await renderTimedNarration({
+        common: {...common, outputDirectory, stillsOnly: true},
+        plan: estimatedPlan,
+        planDirectory: outputDirectory,
+        stem,
+        visual,
+        backgroundAssets,
+        foregroundAssets,
+      });
+      const stillsDirectory = resolve(outputDirectory, `${stem}.stills`);
+      console.log(`Saved scene screenshots: ${stillsDirectory}`);
+      return;
+    }
   } else {
     if (!sourcePath) throw new Error('Provide exactly one .txt or .md source path after create.');
     const extension = extname(sourcePath).toLowerCase();
@@ -742,19 +808,26 @@ const runNarratedWorkflow = async ({
     await mkdir(outputDirectory, {recursive: true});
     const draftPath = resolve(outputDirectory, `${stem}.narration-plan.json`);
     const scriptPath = resolve(outputDirectory, `${stem}.narration-script.md`);
-    const futurePaths = common.planOnly
+    const futurePaths = common.planOnly || common.stillsOnly
       ? [draftPath, scriptPath]
-      : [
-          draftPath,
-          scriptPath,
-          resolve(outputDirectory, `${stem}.narration-timed.json`),
-          resolve(outputDirectory, `${stem}.audio`),
-          ...narratedOutputPaths({
-            aspectRatio: common.aspectRatio,
-            outputDirectory,
-            stem,
-          }).map(({outputPath}) => outputPath),
-        ];
+      : common.audioOnly
+        ? [
+            draftPath,
+            scriptPath,
+            resolve(outputDirectory, `${stem}.narration-timed.json`),
+            resolve(outputDirectory, `${stem}.audio`),
+          ]
+        : [
+            draftPath,
+            scriptPath,
+            resolve(outputDirectory, `${stem}.narration-timed.json`),
+            resolve(outputDirectory, `${stem}.audio`),
+            ...narratedOutputPaths({
+              aspectRatio: common.aspectRatio,
+              outputDirectory,
+              stem,
+            }).map(({outputPath}) => outputPath),
+          ];
     await preflightOutputs(futurePaths, common.force);
     console.log(`Planning a roughly ${targetDurationSeconds}-second narrated video with ${model}...`);
     const localImages = await discoverLocalImages({sourcePath, stem});
@@ -804,7 +877,26 @@ const runNarratedWorkflow = async ({
     await writeFile(scriptPath, narrationScriptMarkdown(draft), 'utf8');
     console.log(`Saved narration script: ${scriptPath}`);
     console.log(`Saved draft plan: ${draftPath}`);
+
+    if (common.review || common.planOnly) {
+      console.log(`\n${'═'.repeat(65)}`);
+      console.log(`[Stage 1/4: Script & Storyboard Ready]`);
+      console.log(`  - Script file:     ${scriptPath}`);
+      console.log(`  - Storyboard plan: ${draftPath}`);
+      console.log(`  - Scene structure: ${draft.scenes.length} scene(s), ${draft.scenes.reduce((acc, s) => acc + s.beats.length, 0)} beat(s)`);
+      console.log(`👉 You can review or edit the narration script and plan now.`);
+      console.log('═'.repeat(65));
+    }
+
     if (common.planOnly) return;
+
+    if (common.review) {
+      await promptReview('Stage 1 Approved. Proceed to generate scene screenshots?');
+      const reloaded = await loadPlan(draftPath);
+      if (reloaded.kind === 'narrated' && reloaded.plan.stage === 'draft') {
+        draft = reloaded.plan;
+      }
+    }
   }
 
   await mkdir(outputDirectory, {recursive: true});
@@ -818,9 +910,8 @@ const runNarratedWorkflow = async ({
   }).map(({outputPath}) => outputPath);
   await preflightOutputs(
     [
-      timedPath,
-      resolve(outputDirectory, audioDirectoryName),
-      ...requestedVideoPaths,
+      ...(!common.stillsOnly ? [timedPath, resolve(outputDirectory, audioDirectoryName)] : []),
+      ...(!common.audioOnly && !common.stillsOnly ? requestedVideoPaths : []),
       ...(planPath ? [regeneratedScriptPath] : []),
     ],
     common.force,
@@ -849,6 +940,33 @@ const runNarratedWorkflow = async ({
     stem,
     visual,
   });
+
+  if (common.review || common.stillsOnly) {
+    const estimatedPlan = estimateDraftNarrationTiming(draft);
+    await renderTimedNarration({
+      common: {...common, outputDirectory, stillsOnly: true},
+      plan: estimatedPlan,
+      planDirectory: outputDirectory,
+      stem,
+      visual,
+      backgroundAssets,
+      foregroundAssets,
+    });
+    const stillsDirectory = resolve(outputDirectory, `${stem}.stills`);
+    console.log(`\n${'═'.repeat(65)}`);
+    console.log(`[Stage 2/4: Scene Screenshots Ready]`);
+    console.log(`  - Screenshots dir: ${stillsDirectory}`);
+    console.log(`👉 Inspect the visual composition in ${stillsDirectory}`);
+    console.log('═'.repeat(65));
+    if (common.stillsOnly) return;
+    await promptReview('Stage 2 Approved. Proceed to synthesize voiceover audio?');
+    const planFileToReload = planPath ?? resolve(outputDirectory, `${stem}.narration-plan.json`);
+    const reloaded = await loadPlan(planFileToReload);
+    if (reloaded.kind === 'narrated' && reloaded.plan.stage === 'draft') {
+      draft = reloaded.plan;
+    }
+  }
+
   console.log(`Synthesizing ${draft.scenes.reduce((count, scene) => count + scene.beats.length, 0)} narration beats with Supertonic ${selectedVoice.voice}...`);
   const timed = await synthesizeNarration({
     assetsDirectory,
@@ -867,8 +985,25 @@ const runNarratedWorkflow = async ({
   }
   console.log(`Saved timed plan: ${timedPath}`);
   console.log(`Saved voiceover: ${resolve(outputDirectory, timed.voiceoverFile)}`);
+
+  if (common.review || common.audioOnly) {
+    console.log(`\n${'═'.repeat(65)}`);
+    console.log(`[Stage 3/4: Voiceover Audio Ready]`);
+    console.log(`  - Voiceover file:  ${resolve(outputDirectory, timed.voiceoverFile)}`);
+    console.log(`  - Timed plan:      ${timedPath}`);
+    console.log(`👉 Listen to voiceover audio to verify speech and pacing.`);
+    console.log('═'.repeat(65));
+  }
+  if (common.audioOnly) {
+    console.log('Voiceover audio synthesis complete; --audio-only skipped video rendering.');
+    return;
+  }
+  if (common.review) {
+    await promptReview('Stage 3 Approved. Proceed to assemble the final video?');
+  }
+
   await renderTimedNarration({
-    common: {...common, outputDirectory},
+    common: {...common, outputDirectory, stillsOnly: false},
     plan: timed,
     planDirectory: outputDirectory,
     stem,
@@ -876,6 +1011,15 @@ const runNarratedWorkflow = async ({
     backgroundAssets,
     foregroundAssets,
   });
+
+  if (common.review) {
+    console.log(`\n${'═'.repeat(65)}`);
+    console.log(`[Stage 4/4: Final Merged Video Assembly Complete!]`);
+    for (const outputPath of requestedVideoPaths) {
+      console.log(`  - Video file:      ${outputPath}`);
+    }
+    console.log('═'.repeat(65));
+  }
 };
 
 export const runCli = async (args: string[] = process.argv.slice(2)) => {
@@ -893,6 +1037,8 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       force: {type: 'boolean', default: false},
       format: {type: 'string'},
       fps: {type: 'string'},
+      'audio-only': {type: 'boolean', default: false},
+      'stills-only': {type: 'boolean', default: false},
       help: {type: 'boolean', default: false},
       'image-model': {type: 'string'},
       'image-quality': {type: 'string', default: 'medium'},
@@ -903,6 +1049,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       model: {type: 'string'},
       'output-dir': {type: 'string'},
       'plan-only': {type: 'boolean', default: false},
+      review: {type: 'boolean', default: false},
       'render-plan': {type: 'string'},
       'render-publish': {type: 'string'},
       'regenerate-backgrounds': {type: 'boolean', default: false},
@@ -932,11 +1079,15 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   if (explicitFormat && !FORMATS.has(explicitFormat)) {
     throw new Error('--format must be one of: prores, webm, green, h264.');
   }
+  if (values['stills-only'] && values['audio-only']) {
+    throw new Error('Choose either --stills-only or --audio-only, not both.');
+  }
   const maxSuggestions = parsePositiveInteger(values['max-suggestions'], 6, '--max-suggestions');
   if (maxSuggestions > 12) throw new Error('--max-suggestions cannot exceed 12.');
   const aspectRatio = parseAspectRatio(values['aspect-ratio']);
   const fps = parsePositiveInteger(values.fps, 30, '--fps');
-  const model = values.model ?? process.env.OPENAI_MODEL ?? 'gpt-5.6';
+  const aiProvider = resolveAIProvider();
+  const model = values.model ?? defaultModelForProvider(aiProvider);
   const publishCommand = positionals[0] === 'publish';
   const usedResearchOption = tokens.some(
     (token) => token.kind === 'option' && [
@@ -997,7 +1148,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   const commonVisualOptions = {
     imageBackground: imagePath !== undefined ? await validateImageBackground(imagePath) : undefined,
     generatedVisuals: parseGeneratedVisuals(values['generated-visuals']),
-    imageModel: values['image-model'] ?? process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2',
+    imageModel: values['image-model'] ?? (process.env.CLOUDFLARE_AI_KEY ? (process.env.CLOUDFLARE_IMAGE_MODEL ?? '@cf/black-forest-labs/flux-1-schnell') : (process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2')),
     imageQuality: parseImageQuality(values['image-quality']),
     regenerateBackgrounds: values['regenerate-backgrounds'],
     regenerateVisuals: values['regenerate-visuals'],
@@ -1047,6 +1198,9 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     fps,
     ...(values['output-dir'] ? {outputDirectory: resolve(values['output-dir'])} : {}),
     planOnly: values['plan-only'],
+    audioOnly: values['audio-only'],
+    stillsOnly: values['stills-only'],
+    review: values.review as boolean,
   };
   const createCommand = positionals[0] === 'create';
   const renderPlanPath = values['render-plan'] ? resolve(values['render-plan']) : undefined;
