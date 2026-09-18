@@ -37,7 +37,7 @@ describe('ai-client provider resolution', () => {
     vi.stubEnv('GROQ_API_KEY', 'gsk_test');
 
     expect(resolveAIProvider()).toBe('groq');
-    expect(defaultModelForProvider('groq')).toBe('llama-3.3-70b-versatile');
+    expect(defaultModelForProvider('groq')).toBe('qwen/qwen3.8-27b');
   });
 
   it('respects AI_PROVIDER override from environment even when multiple keys exist', () => {
@@ -62,7 +62,7 @@ describe('ai-client provider resolution', () => {
     const info = createAIClient({provider: 'groq'});
 
     expect(info.provider).toBe('groq');
-    expect(info.model).toBe('llama-3.3-70b-versatile');
+    expect(info.model).toBe('qwen/qwen3.8-27b');
     expect(info.client.baseURL).toBe('https://api.groq.com/openai/v1');
   });
 });
@@ -122,5 +122,122 @@ describe('withTransientRetries', () => {
     await expect(withTransientRetries(operation, 3, mockWait)).rejects.toThrow('Service Unavailable');
     expect(operation).toHaveBeenCalledTimes(3);
     expect(mockWait).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('rate-limit handling for per-minute token budgets', () => {
+  const groqTpm413 = Object.assign(
+    new Error('413 Request too large for model `openai/gpt-oss-120b` in organization `org_x` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Requested 8169, please reduce your message size and try again.'),
+    {status: 413},
+  );
+
+  it('retries a per-minute token overrun reported as 413', async () => {
+    // Groq reports a window overrun as 413 rather than 429; treating it as
+    // fatal killed the repair loop that exists to recover from bad output.
+    const waits: number[] = [];
+    let calls = 0;
+    const result = await withTransientRetries(
+      async () => {
+        calls += 1;
+        if (calls === 1) throw groqTpm413;
+        return 'ok';
+      },
+      4,
+      async (ms) => {
+        waits.push(ms);
+      },
+    );
+    expect(result).toBe('ok');
+    expect(calls).toBe(2);
+    // A per-minute budget only frees up when the window rolls over.
+    expect(waits[0]).toBeGreaterThanOrEqual(60_000);
+  });
+
+  it('still fails fast on a genuinely oversized payload', async () => {
+    const entityTooLarge = Object.assign(
+      new Error('413 Request Entity Too Large'),
+      {status: 413},
+    );
+    let calls = 0;
+    await expect(withTransientRetries(
+      async () => {
+        calls += 1;
+        throw entityTooLarge;
+      },
+      4,
+      async () => {},
+    )).rejects.toThrow('Request Entity Too Large');
+    // Waiting cannot shrink a payload, so it must not be retried.
+    expect(calls).toBe(1);
+  });
+
+  it('honours an explicit "try again in Ns" hint', async () => {
+    const waits: number[] = [];
+    let calls = 0;
+    await withTransientRetries(
+      async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw Object.assign(new Error('Rate limit reached. Please try again in 22.5675s.'), {status: 429});
+        }
+        return 'ok';
+      },
+      4,
+      async (ms) => {
+        waits.push(ms);
+      },
+    );
+    expect(waits[0]).toBeGreaterThanOrEqual(22_500);
+    expect(waits[0]).toBeLessThan(30_000);
+  });
+});
+
+describe('JSON-mode generation misses', () => {
+  const miss = Object.assign(
+    new Error("400 Failed to generate JSON. Please adjust your prompt. See 'failed_generation' for more details."),
+    {status: 400},
+  );
+
+  it('retries an unparseable JSON-mode generation', async () => {
+    // The same request succeeds on a later attempt; treating it as fatal ended
+    // the run before the repair loop could act.
+    let calls = 0;
+    const result = await withTransientRetries(
+      async () => {
+        calls += 1;
+        if (calls < 3) throw miss;
+        return 'ok';
+      },
+      4,
+      async () => {},
+    );
+    expect(result).toBe('ok');
+    expect(calls).toBe(3);
+  });
+
+  it('gives up after exhausting retries rather than looping', async () => {
+    let calls = 0;
+    await expect(withTransientRetries(
+      async () => {
+        calls += 1;
+        throw miss;
+      },
+      3,
+      async () => {},
+    )).rejects.toThrow('Failed to generate JSON');
+    expect(calls).toBe(3);
+  });
+
+  it('leaves other 400s fatal', async () => {
+    let calls = 0;
+    await expect(withTransientRetries(
+      async () => {
+        calls += 1;
+        throw Object.assign(new Error('400 Invalid value for model'), {status: 400});
+      },
+      4,
+      async () => {},
+    )).rejects.toThrow('Invalid value for model');
+    expect(calls).toBe(1);
   });
 });

@@ -93,11 +93,14 @@ export const SceneBackdrop = ({
   mode,
   palette,
   scene,
+  staged = false,
 }: {
   asset?: string | undefined;
   mode: SceneBackgroundMode;
   palette: VideoPalette;
   scene: Pick<TimedNarrationScene, 'id'>;
+  /** A character scene: the plate is a room the cast stands in, not a metaphor. */
+  staged?: boolean;
 }) => {
   if (mode === 'image') {
     if (!asset) throw new Error(`Image background asset is missing for scene ${scene.id}.`);
@@ -110,7 +113,7 @@ export const SceneBackdrop = ({
       </AbsoluteFill>
     );
   }
-  return <AnimatedSceneBackdrop asset={asset} mode={mode} palette={palette} scene={scene} />;
+  return <AnimatedSceneBackdrop asset={asset} mode={mode} palette={palette} scene={scene} staged={staged} />;
 };
 
 const AnimatedSceneBackdrop = ({
@@ -118,11 +121,13 @@ const AnimatedSceneBackdrop = ({
   mode,
   palette,
   scene,
+  staged = false,
 }: {
   asset?: string | undefined;
   mode: Exclude<SceneBackgroundMode, 'image'>;
   palette: VideoPalette;
   scene: Pick<TimedNarrationScene, 'id'>;
+  staged?: boolean;
 }) => {
   if (mode === 'generated' && !asset) {
     throw new Error(`Generated background asset is missing for scene ${scene.id}.`);
@@ -133,8 +138,10 @@ const AnimatedSceneBackdrop = ({
   const opacity = useSceneOpacity();
   const progress = frame / Math.max(1, durationInFrames - 1);
   const theme = videoPaletteFor(palette);
-  const generatedScale = interpolate(progress, [0, 1], [1.055, 1.115], clamp);
-  const generatedX = interpolate(
+  const generatedScale = staged
+    ? interpolate(progress, [0, 1], [1.0, 1.02], clamp)
+    : interpolate(progress, [0, 1], [1.055, 1.115], clamp);
+  const generatedX = staged ? 0 : interpolate(
     progress,
     [0, 1],
     [seed % 2 === 0 ? -16 : 16, seed % 2 === 0 ? 16 : -16],
@@ -189,19 +196,23 @@ const AnimatedSceneBackdrop = ({
           />
         </>
       )}
-      <AbsoluteFill
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(148,163,184,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.045) 1px, transparent 1px)',
-          backgroundSize: isVerticalDimensions(width, height) ? '72px 72px' : '84px 84px',
-          maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent 92%)',
-        }}
-      />
+      {staged ? null : (
+        <AbsoluteFill
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(148,163,184,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.045) 1px, transparent 1px)',
+            backgroundSize: isVerticalDimensions(width, height) ? '72px 72px' : '84px 84px',
+            maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent 92%)',
+          }}
+        />
+      )}
       <AbsoluteFill
         style={{
           background:
             mode === 'generated'
-              ? 'linear-gradient(180deg, rgba(2,6,23,0.66), rgba(2,6,23,0.78)), radial-gradient(circle at center, transparent 20%, rgba(2,6,23,0.72) 100%)'
+              ? staged
+                ? 'linear-gradient(180deg, rgba(2,6,23,0.52) 0%, rgba(2,6,23,0.34) 55%, rgba(2,6,23,0.28) 100%), radial-gradient(circle at center, transparent 45%, rgba(2,6,23,0.42) 100%)'
+                : 'linear-gradient(180deg, rgba(2,6,23,0.66), rgba(2,6,23,0.78)), radial-gradient(circle at center, transparent 20%, rgba(2,6,23,0.72) 100%)'
               : 'radial-gradient(circle at center, transparent 30%, rgba(2,6,23,0.74) 100%)',
         }}
       />

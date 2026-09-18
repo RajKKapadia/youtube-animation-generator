@@ -2,7 +2,7 @@
 import {discoverLocalCode, validateSavedCode} from './local-code.js';
 
 import {access, mkdir, readFile, stat, writeFile} from 'node:fs/promises';
-import {constants} from 'node:fs';
+import {constants, existsSync} from 'node:fs';
 import {createInterface} from 'node:readline/promises';
 import {stdin, stdout} from 'node:process';
 import {basename, dirname, extname, resolve} from 'node:path';
@@ -69,6 +69,7 @@ import {
 } from './supertonic/protocol.js';
 import {selectSupertonicVoice} from './supertonic/voice-selection.js';
 import {validateImageBackground, type ImageBackground} from './image-background.js';
+import {authorTopicDocument, countWords, topicFileName} from './topic-author.js';
 
 const VERSION = '0.9.0';
 const FORMATS = new Set<OutputFormat>(['prores', 'webm', 'green', 'h264']);
@@ -79,6 +80,7 @@ Generate editor-ready subtitle overlays or a complete narrated video from text.
 
 Usage:
   youtube-animations <subtitle.srt|subtitle.vtt> [options]
+  youtube-animations topic "<topic name>" [options]
   youtube-animations create <source.txt|source.md> [options]
   youtube-animations publish <narrated-plan.json> [options]
   youtube-animations --render-plan <plan.json> [options]
@@ -106,6 +108,7 @@ Subtitle overlay options:
   --captions <on|off>               Cue captions (default: off)
   --scene-background <mode>         off, ambient, generated, or image (default: off)
   --generated-visuals <off|auto>    Grounded foreground generation (default: off)
+  --require-characters              Fail if a human exchange is not staged as people
   --regenerate-visuals              Explicitly refresh generated foreground images
   --regenerate-backgrounds          Replace matching cached scene images
 
@@ -126,6 +129,11 @@ Narrated video options:
   --regenerate-visuals              Explicitly refresh generated foreground images
   --regenerate-backgrounds          Replace matching cached scene images
 
+Topic authoring options:
+  --guidance <text>                 Extra direction for the topic document
+  --output-dir <path>               Destination file (default: samples/<slug>.md)
+  --force                           Replace an existing topic file
+
 Publish-kit options:
   --cover-aspect <16:9|9:16|both>   Cover orientation (default: both)
   --metadata-only                   Save or validate metadata without rendering covers
@@ -135,6 +143,7 @@ Publish-kit options:
 
 Examples:
   youtube-animations episode.srt --aspect-ratio both
+  youtube-animations topic "International Identity Day"
   youtube-animations create summary.md
   youtube-animations create summary.md --research required --plan-only
   youtube-animations create summary.md --aspect-ratio 9:16
@@ -452,7 +461,12 @@ const resolveSceneBackgrounds = async ({
     palette: plan.palette,
     quality: visual.imageQuality,
     regenerate: visual.regenerateBackgrounds,
-    scenes: plan.scenes,
+    scenes: plan.scenes.map((scene) => ({
+      backgroundPrompt: scene.backgroundPrompt,
+      id: scene.id,
+      staged: scene.visual?.kind === 'character-scene',
+      title: scene.title,
+    })),
     stem,
   });
 };
@@ -705,6 +719,7 @@ const runNarratedWorkflow = async ({
   language,
   model,
   planPath,
+  requireCharacters,
   research,
   sourcePath,
   speed,
@@ -718,6 +733,7 @@ const runNarratedWorkflow = async ({
   language: string;
   model: string;
   planPath?: string;
+  requireCharacters: boolean;
   research: NarratedResearchOptions;
   sourcePath?: string;
   speed: number;
@@ -861,6 +877,7 @@ const runNarratedWorkflow = async ({
       language,
       localImages,
       model,
+      requireCharacters,
       ...(researchBundle ? {originalSourceText: sourceText, research: researchBundle} : {}),
       sourceText: planningSourceText,
       targetDurationSeconds,
@@ -1048,11 +1065,13 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       'metadata-only': {type: 'boolean', default: false},
       model: {type: 'string'},
       'output-dir': {type: 'string'},
+      guidance: {type: 'string'},
       'plan-only': {type: 'boolean', default: false},
       review: {type: 'boolean', default: false},
       'render-plan': {type: 'string'},
       'render-publish': {type: 'string'},
       'regenerate-backgrounds': {type: 'boolean', default: false},
+      'require-characters': {type: 'boolean', default: false},
       'refresh-research': {type: 'boolean', default: false},
       'regenerate-visuals': {type: 'boolean', default: false},
       research: {type: 'string', default: 'off'},
@@ -1088,6 +1107,33 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   const fps = parsePositiveInteger(values.fps, 30, '--fps');
   const aiProvider = resolveAIProvider();
   const model = values.model ?? defaultModelForProvider(aiProvider);
+  // `topic` writes the source document the other commands consume, so it runs
+  // before any of the render-oriented option validation below.
+  if (positionals[0] === 'topic') {
+    const topic = positionals.slice(1).join(' ').trim();
+    if (!topic) throw new Error('Provide a topic, for example: youtube-animations topic "International Identity Day".');
+    const target = values['output-dir']
+      ? resolve(values['output-dir'])
+      : resolve('samples', topicFileName(topic));
+    if (existsSync(target) && !values.force) {
+      throw new Error(`${target} already exists. Pass --force to replace it.`);
+    }
+    console.log(`Writing a source document about "${topic}" with ${model}...`);
+    const authored = await authorTopicDocument({
+      topic,
+      model: values.model,
+      ...(values.guidance ? {guidance: values.guidance} : {}),
+    });
+    await mkdir(dirname(target), {recursive: true});
+    await writeFile(target, `${authored.document.markdown.trim()}\n`, 'utf8');
+    console.log(`Saved topic source: ${target}`);
+    console.log(`  Staged participants: ${authored.document.participants.join(', ')}`);
+    console.log(`  Words: ${countWords(authored.document.markdown)}`);
+    if (authored.attempts > 1) console.log(`  Took ${authored.attempts} attempts to satisfy the source rules.`);
+    console.log(`\nNext: pnpm animations create ${target} --plan-only`);
+    return;
+  }
+
   const publishCommand = positionals[0] === 'publish';
   const usedResearchOption = tokens.some(
     (token) => token.kind === 'option' && [
@@ -1148,7 +1194,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   const commonVisualOptions = {
     imageBackground: imagePath !== undefined ? await validateImageBackground(imagePath) : undefined,
     generatedVisuals: parseGeneratedVisuals(values['generated-visuals']),
-    imageModel: values['image-model'] ?? (process.env.CLOUDFLARE_AI_KEY ? (process.env.CLOUDFLARE_IMAGE_MODEL ?? '@cf/black-forest-labs/flux-1-schnell') : (process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2')),
+    imageModel: values['image-model'] ?? (process.env.CLOUDFLARE_AI_KEY ? (process.env.CLOUDFLARE_IMAGE_MODEL ?? '@cf/stabilityai/stable-diffusion-xl-base-1.0') : (process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2')),
     imageQuality: parseImageQuality(values['image-quality']),
     regenerateBackgrounds: values['regenerate-backgrounds'],
     regenerateVisuals: values['regenerate-visuals'],
@@ -1222,6 +1268,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
         common,
         language: parseLanguage(values.language),
         model,
+        requireCharacters: values['require-characters'],
         planPath: renderPlanPath,
         research,
         speed: parseTtsSpeed(values['tts-speed']),
@@ -1264,6 +1311,7 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
       common,
       language: parseLanguage(values.language),
       model,
+      requireCharacters: values['require-characters'],
       research,
       ...(renderPlanPath ? {planPath: renderPlanPath} : {sourcePath: resolve(positionals[1]!)}),
       speed,

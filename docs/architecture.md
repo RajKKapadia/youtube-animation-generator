@@ -58,6 +58,7 @@ returns an `openai` SDK client pointed at OpenAI, Gemini, or Groq:
 | `src/narration-planner.ts:545` | `create <source.md>` | Tokens |
 | `src/planner.ts:509` | `<subtitle.srt>` without `--render-plan` | Tokens |
 | `src/publish.ts:160` | `publish <plan.json>` | Tokens |
+| `src/topic-author.ts` | `topic "<name>"` | Tokens |
 
 **Direct clients** bypass the abstraction, deliberately:
 
@@ -82,9 +83,13 @@ src/
   types.ts                ~2,000 lines of Zod schemas. Source of truth for all file formats.
 
   ai-client.ts            Provider abstraction + transient-retry helper
+  schema-prompt.ts        Renders a JSON Schema as a terse signature for providers
+                          that receive the response shape in the prompt
   providers/
     cloudflare-image.ts   Cloudflare Workers AI (FLUX.1) image generation
 
+  topic-author.ts         Writes a source document from a topic name, validated
+                          against what the planner will later demand of it
   planner.ts              Subtitle-overlay authoring (AI provider)
   narration-planner.ts    Narrated-video authoring (AI provider)
   source-research.ts      Optional grounded web research (OpenAI only)
@@ -115,6 +120,18 @@ src/
     DirectedScene.tsx     Per-scene direction and transitions
     ExplainerVisuals.tsx  The six explainer treatments
     SubtitleClip.tsx      Overlay composition
+    CharacterScene.tsx    Staged 2-3 person scenes: CharacterStage (used by the
+                          narrated pipeline) + CharacterScene (standalone chrome
+                          for the fixture only)
+    CharacterFigure.tsx   One code-drawn flat-vector person; pose arrives as props.
+                          Limbs are stroked paths with round caps, so an arm has
+                          a real elbow and rounded shoulder
+    character-appearance.ts  Looks resolution: stated traits win, id hash fills gaps
+                             (hair, skin, accessory and build)
+    character-motion.ts      Mouth/blink/bob/head-turn math, arm joint + prop anchor
+                             geometry, stage geometry per orientation, and
+                             characterSceneTimeline (plan -> stage cues)
+    character-prototype.tsx  Fixture-only compositions (3 scenarios x 2 aspects)
     text-fit.ts  timing.ts  chroma-key.ts  publish-layout.ts   pure, unit-tested
 
   supertonic/             Local TTS subsystem
@@ -179,8 +196,41 @@ images; if one is missing the CLI names the scene and requires an explicit
 `--generated-visuals auto` rather than silently substituting unrelated art.
 
 **Testability convention.** Pure logic lives in `text-fit.ts`, `timing.ts`, `chroma-key.ts`,
-`publish-layout.ts` and is unit-tested without a browser. Put new rendering logic there, not
-in components.
+`publish-layout.ts`, `character-motion.ts`, `character-appearance.ts` and is unit-tested
+without a browser. Put new rendering logic there, not in components.
+
+**Character scenes.** `character-scene` stages 2-3 people for sources that narrate a concrete
+human exchange. Two rules make it fit the existing pipeline:
+
+- **No clock of its own.** Speaker turns, prop raises and the callout all derive from
+  `primaryItemTimings` via `characterSceneTimeline`, exactly like sequence messages and chart
+  points, so real TTS timings flow through unchanged.
+- **Looks are derived, not authored.** The planner picks *who* is present and may state `age`;
+  hairstyle, skin tone, hair colour, accessory and build come from a hash of the character id,
+  so the same id looks the same in every scene and a cast never collides. Explicit traits
+  always win over the hash (`character-appearance.ts`).
+- **Only four fields are required.** `kind`, each `cast[].id`, each `cast[].position` and
+  `sourceEvidence`. Everything else carries a `.prefault` in `explainer-visuals.ts`, because a
+  model that omitted a decorative field used to lose the whole scene to a diagram downgrade.
+  Grounding is the one thing never defaulted or repaired. See `docs/plan-schema.md`.
+
+Geometry is per-orientation: 9:16 is **not** a scaled 16:9 stage, it has its own slot spacing,
+figure size and callout placement (`characterStageLayout`, `character-motion.ts`).
+
+Two placement rules are load-bearing and easy to undo by accident:
+
+- **Figures stand on a floor, not on their heads.** `figureTopFor` positions a figure by its
+  feet against `figureBaseline`. `heightScale` varies per character, so head-aligning them put
+  a child's feet ~150px above an adult's. A contact shadow is drawn at `figureFootFor`.
+- **A held prop is anchored to the hand**, via `propAnchorFor` over the same arm joints the
+  figure draws with. A prop placed at a fixed fraction of figure size does not follow the arm,
+  and floats in mid-air beside an empty hand.
+
+**Staged backgrounds.** A scene whose visual is `character-scene` asks the image model for a
+literal empty interior with a visible floor rather than an abstract metaphor, and composites it
+differently: no Ken Burns drift, a lighter scrim weighted to the top instead of the bottom, and
+no grid overlay (`sceneBackgroundPrompt`, `AnimatedSceneBackdrop`). The cast stands in the
+lower half of the frame, which is exactly where the default treatment was darkest.
 
 ## Code conventions
 
@@ -193,4 +243,4 @@ in components.
 
 ## Scale
 
-~23,300 lines across 77 source modules and 39 test files, 337 tests, full suite ≈ 1.9 s.
+~27,900 lines across 85 source modules and 43 test files, 508 tests, full suite ≈ 1.5 s.

@@ -307,6 +307,7 @@ export const narratedVisualKindSchema = z.enum([
   'image-focus',
   'data-visualization',
   'kinetic-text', 'before-after', 'code-walkthrough', 'sequence-diagram', 'layered-architecture',
+  'character-scene',
 ]);
 
 export type NarratedVisualKind = z.infer<typeof narratedVisualKindSchema>;
@@ -340,6 +341,7 @@ const ALLOWED_NARRATED_MOTIONS: Record<NarratedVisualKind, NarratedMotion[]> = {
   'data-visualization': ['reveal', 'count-up'],
   'kinetic-text': ['reveal', 'pulse'], 'before-after': ['reveal'],
   'code-walkthrough': ['scan'], 'sequence-diagram': ['flow'], 'layered-architecture': ['reveal'],
+  'character-scene': ['reveal'],
 };
 
 const addNarratedVisualIssues = (

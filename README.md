@@ -1,6 +1,6 @@
 # YouTube Animations CLI
 
-Create either editor-ready animation overlays from subtitles or a complete narrated video from a text/Markdown source. Planning uses OpenAI Structured Outputs, optional cited web research can enrich narrated sources, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Both video workflows support kinetic typography, before/after transformations, supplied-code walkthroughs, request/response sequences, layered architecture builds, line charts, deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, curated local Lottie assets, coherent cinematic palettes, and optional scene backgrounds. Subtitle inputs remain separate editor-ready clips; they never synthesize or edit audio.
+Write a source document from nothing but a topic name, then create either editor-ready animation overlays from subtitles or a complete narrated video from that text/Markdown source. Planning uses OpenAI Structured Outputs, optional cited web research can enrich narrated sources, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Both video workflows support kinetic typography, before/after transformations, supplied-code walkthroughs, request/response sequences, layered architecture builds, line charts, deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, curated local Lottie assets, coherent cinematic palettes, and optional scene backgrounds. Subtitle inputs remain separate editor-ready clips; they never synthesize or edit audio.
 
 The current CLI supports three workflows:
 
@@ -127,22 +127,16 @@ You do not need Python, `supertonic serve`, an HTTP endpoint, or a separately ma
 To create a video on any topic, follow these simple steps:
 
 #### 1. Create a short topic file in `samples/` (`samples/<topic>.md`):
-Create a file containing your topic title and a few key bullet points or summary paragraphs:
+
+The quickest route is to let the CLI write one for you:
 
 ```bash
-mkdir -p samples
-cat << 'EOF' > samples/topic.md
-# self sovereign identity
-
-Self-sovereign identity (SSI) is a form of digital identity that the user has complete control over. This means that the user decides who sees what information and when. 
-
-Digital identity is a user’s online identification, similar to a physical identification card such as a passport or driver’s license. A digital identity contains characteristics or attributes of the user. With self-sovereign identity, this sensitive identification information is kept secure and private. It is in control of the user at all times.
-
-Self-sovereign identity uses blockchain technology. SSI systems are decentralized using a digital and secure peer-to-peer channel that relies on the triangle of trust. There are three entities in the trust triangle with SSI: the issuer of the digital ID, the owner of the ID, and the verifier of the ID. 
-
-Unlike with other forms of digital identity, with SSI, not all of the information on the ID needs to be shared each time. This can help to guarantee privacy and security by only sharing pertinent information with the ID requestor.
-EOF
+pnpm run animations topic "International Identity Day"
 ```
+
+This saves `samples/international-identity-day.md` and prints the participants it staged. See
+[Author a topic source](#author-a-topic-source) for what it guarantees and why that matters. To
+write the file yourself instead, keep reading.
 
 #### 2. Run the generator command:
 
@@ -151,7 +145,7 @@ EOF
   pnpm run animations create samples/topic.md
   ```
 
-- **With AI-Generated Background Images (Cloudflare FLUX.1)**:
+- **With AI-Generated Background Images (Cloudflare SDXL)**:
   ```bash
   pnpm run animations create samples/topic.md --scene-background generated
   ```
@@ -181,7 +175,7 @@ To inspect and approve each stage before the next stage runs:
 Run one command with `--review`. The CLI pauses after each stage, prints the path to inspect or edit, and waits for you to press **[Enter]** to approve before continuing:
 
 ```bash
-pnpm run animations create samples/topic.md --review
+pnpm run animations create samples/topic.md --review --scene-background generated --aspect-ratio 9:16
 ```
 *(Tip: Add `--scene-background generated` to include AI-generated image backgrounds).*
 
@@ -218,10 +212,42 @@ pnpm run animations create --render-plan samples/topic-video/topic.narration-tim
 #### 5. (Optional) Generate YouTube Publish Kit:
 To generate optimized YouTube titles, description, tags, and thumbnail covers:
 ```bash
-pnpm run animations publish samples/topic-video/topic.narration-timed.json
+pnpm run animations publish samples/topic/topic.narration-timed.json
 ```
 
 ---
+
+### Author a topic source
+
+```bash
+pnpm run animations topic "Zero-knowledge proofs at the airport"
+pnpm run animations topic "Passkeys" --guidance "aim at small business owners"
+pnpm run animations topic "Digital rupee" --output-dir samples/rupee.md --force
+```
+
+Everything the planner can show is bounded by what the source document says, so this command writes
+one shaped for the pipeline rather than generic prose. The rules it follows:
+
+- **One concrete scene naming two people, both in a single sentence.** This is what makes animated
+  characters possible: a character scene must quote an exact excerpt describing the interaction,
+  so the source has to contain one. (The excerpt is checked; the cast's role *labels* are not —
+  they are internal and never drawn, so the planner may call someone "Customer" where the source
+  says "an individual".) A source without such a sentence produces text on a background.
+- **220–400 words**, because the whole document travels inside the planning request and free
+  provider tiers cap a request at roughly 6,000–8,000 tokens.
+- **Short declarative sentences**, since every treatment is grounded by quoting the source exactly.
+- **No invented numbers, dates, or organisations** — a guessed figure becomes a false on-screen claim.
+- **Consistent third person**, and a closing line that returns to the occasion when the topic is a
+  day of observance.
+
+The model also returns the participant roles and the sentence in which they interact. The file is
+written only after that sentence is confirmed to appear verbatim in the document and to name every
+participant, so a saved topic is one the planner can genuinely stage characters from. Up to three
+attempts are made, resending only the list of problems.
+
+Options: `--guidance <text>` for extra direction, `--output-dir <path>` for a different destination
+(default `samples/<slug>.md`), `--force` to replace an existing file, and `--model` / `AI_PROVIDER`
+exactly as for `create`.
 
 ### Command Options Reference
 
@@ -369,7 +395,12 @@ pnpm run animations create summary.md \
   --scene-background generated
 ```
 
-Generated images use `gpt-image-2` at medium quality by default. Change the model or quality with `--image-model` and `--image-quality`. `--regenerate-backgrounds` refreshes matching cached images; `--force` replaces videos and plans without purchasing new images. All requested images are staged before the cache is promoted, and a failed image request stops before voice synthesis or rendering.
+Generated images use Cloudflare `stable-diffusion-xl-base-1.0` when Cloudflare keys are set,
+otherwise OpenAI `gpt-image-2`, at medium quality by default. SDXL rather than FLUX because
+`flux-1-schnell` accepts no width/height and can only return a square plate, which gets cropped
+into a 16:9 frame. A scene staged with characters asks for a literal empty interior with a
+visible floor instead of an abstract metaphor, and is composited with a lighter scrim and no
+drift so the room the cast stands in stays readable. Change the model or quality with `--image-model` and `--image-quality`. `--regenerate-backgrounds` refreshes matching cached images; `--force` replaces videos and plans without purchasing new images. All requested images are staged before the cache is promoted, and a failed image request stops before voice synthesis or rendering.
 
 Use your own background image in either video workflow, including saved-plan renders:
 
@@ -607,9 +638,12 @@ Subtitle overlays:
 --captions <on|off>               Exact cue captions; default: off
 --scene-background <mode>         off, ambient, generated, or image; default: off
 --generated-visuals <off|auto>    Grounded foreground generation; default: off
+--require-characters              Fail rather than degrade when a described human
+                                  exchange is not staged as people
 --regenerate-visuals              Refresh generated foreground assets; requires auto
 --regenerate-backgrounds          Refresh generated backdrops; requires generated mode
---image-model <model>             Default: OPENAI_IMAGE_MODEL or gpt-image-2
+--image-model <model>             Default: Cloudflare SDXL if Cloudflare keys are set,
+                                  else OPENAI_IMAGE_MODEL or gpt-image-2
 --image-quality <quality>         low, medium, or high; default: medium
 
 Narrated videos:

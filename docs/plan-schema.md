@@ -38,6 +38,34 @@ place.
 | `expression` | `none`, `laugh`, `breath`, `sigh` | `supertonic/expressions.ts:3` |
 | `aspectRatio` | `16:9`, `9:16` (`both` for selection) | `types.ts:29` |
 | `voice` | `auto`, `M1`–`M5`, `F1`–`F5` | `supertonic/protocol.ts` |
+| `visual.kind` | 14 treatments incl. `character-scene` | `types.ts:304` |
+
+### `character-scene` payload
+
+Stages 2–3 people. **Only four things are required**: `kind`, each `cast[].id`, each
+`cast[].position` (`left`/`center`/`right`), and `sourceEvidence`. Everything else carries a
+`.prefault` in `explainer-visuals.ts` and is filled in when omitted — `label` (`'character'`),
+`outfit` (`'casual'`), `age` (`'adult'`), `behindSet` (`false`), `prop` and
+`propPrimaryItemIndex` (`null`), `motion`, `motif`, `set` (`'none'`), `sign` and `callout`
+(`null`). This is deliberate: a model that omitted a decorative field used to lose the whole
+scene to a plain-diagram downgrade.
+
+`speakers[]` assigns turns to primary items. A turn runs until the next one begins, so
+**speakers need not cover every item** — they only have to be distinct and point at a visible
+item and a declared cast id. `set` is `none` or `counter`; `sign` requires a counter, and a
+counter requires at least one `behindSet` character. An optional `prop` is a semantic icon id
+paired with the `propPrimaryItemIndex` that raises it. The optional `callout` carries an icon
+id, eyebrow, headline, tone, the `primaryItemIndex` it resolves on, and an extractive
+`sourceEvidence`.
+
+Grounding is the one thing never repaired or defaulted: `visual.sourceEvidence` and
+`callout.sourceEvidence` must each be an exact source excerpt (`explainer-visuals.ts`).
+`cast[].label` is **not** checked against the source — labels are internal and never drawn, and
+demanding them verbatim rejected a correct scene that wrote "Customer" where the source said
+"an individual". Bookkeeping failures (duplicate ids or positions, an out-of-range prop cue or
+callout index, a speaker naming an absent character, an icon id outside the catalogue, a
+counter with nobody behind it) are repaired in `narration-plan-recovery.ts` rather than
+rejected.
 
 ## Cardinality and length limits
 
@@ -53,6 +81,13 @@ place.
 | `reason` | ≤ 180 chars |
 | `backgroundPrompt` | ≤ 600 chars |
 | `leftLabel` / `rightLabel` | ≤ 40 chars |
+| `sourceEvidence` (any treatment) | ≤ 600 chars |
+| `cast[]` | 2 – 3 |
+| `cast[].id` | `^[a-z0-9-]+$` |
+| `cast[].label` | ≤ 32 chars |
+| `speakers[]` | 1 – 6 |
+| `sign` | ≤ 16 chars |
+| `callout.eyebrow` / `callout.headline` | ≤ 28 / ≤ 48 chars |
 
 ## Cross-field rules
 

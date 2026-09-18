@@ -6,10 +6,13 @@ import {
   narrationScriptMarkdown,
   narratedVisualPlanningWarnings,
   recoverUnsupportedNarratedVisuals,
+  NARRATION_RESPONSE_SHAPE,
+  narrationResponseShapeFor,
 } from './narration-planner.js';
 import {
   draftNarratedPlanSchema,
   narratedPlanSchema,
+  narratedVisualKindSchema,
   type AnimationTemplate,
   type NarratedSceneVisual,
   type NarrationExpression,
@@ -779,3 +782,125 @@ describe('estimateDraftNarrationTiming', () => {
   });
 });
 
+
+
+describe('NARRATION_RESPONSE_SHAPE', () => {
+  // Providers without a structured-output helper receive this schema in the
+  // prompt. A hand-maintained copy once drifted and silently restricted every
+  // non-OpenAI provider to the original seven treatments, so assert that the
+  // derived schema offers every kind the pipeline can actually render.
+  it('offers every visual kind to providers that read the schema from the prompt', () => {
+    for (const kind of narratedVisualKindSchema.options) {
+      expect(NARRATION_RESPONSE_SHAPE).toContain(`"${kind}"`);
+    }
+  });
+
+  // Free provider tiers cap a single request at 6-8k tokens and the rest of
+  // the planning prompt already spends ~2.4k. A schema that creeps past this
+  // budget produces a 413 at runtime, so fail here instead.
+  it('fits the token budget that free provider tiers allow', () => {
+    expect(NARRATION_RESPONSE_SHAPE.length).toBeLessThan(6_000);
+  });
+
+  it('keeps literal discriminators rather than collapsing them to string', () => {
+    // z.literal() renders as `const`; mishandling it turns the visual union
+    // into an unusable `kind:string` and hides every treatment.
+    expect(NARRATION_RESPONSE_SHAPE).not.toContain('kind:string');
+  });
+});
+
+describe('narrationResponseShapeFor', () => {
+  const base = {
+    generatedVisuals: 'off' as const,
+    hasCodeSources: false,
+    hasLocalImages: false,
+    sourceHasNumbers: false,
+  };
+
+  // Free tiers count input and output against one per-minute budget, so a
+  // schema describing treatments this run cannot use directly costs the plan
+  // its output budget. A 6,695-token prompt left too little room to finish the
+  // JSON, which surfaced as a 400 rather than a clean rate-limit error.
+  it('drops treatments the run cannot use', () => {
+    const shape = narrationResponseShapeFor(base);
+    expect(shape).not.toContain('"code-walkthrough"');
+    expect(shape).not.toContain('"image-focus"');
+    expect(shape).not.toContain('"data-visualization"');
+  });
+
+  it('keeps every treatment the run can still reach', () => {
+    const shape = narrationResponseShapeFor(base);
+    for (const kind of ['diagram', 'character-scene', 'kinetic-text', 'sequence-diagram']) {
+      expect(shape).toContain(`"${kind}"`);
+    }
+  });
+
+  it('restores a treatment once its precondition is met', () => {
+    expect(narrationResponseShapeFor({...base, hasCodeSources: true}))
+      .toContain('"code-walkthrough"');
+    expect(narrationResponseShapeFor({...base, sourceHasNumbers: true}))
+      .toContain('"data-visualization"');
+    expect(narrationResponseShapeFor({...base, generatedVisuals: 'auto'}))
+      .toContain('"image-focus"');
+    expect(narrationResponseShapeFor({...base, hasLocalImages: true}))
+      .toContain('"image-focus"');
+  });
+
+  it('is meaningfully smaller than the unpruned shape', () => {
+    expect(narrationResponseShapeFor(base).length)
+      .toBeLessThan(NARRATION_RESPONSE_SHAPE.length * 0.65);
+  });
+});
+
+describe('recoverUnsupportedNarratedVisuals — character scenes', () => {
+  const sourceText = 'You arrive at a hotel to check in. The front desk asks the guest for identity proof and whether the guest is over 18.';
+  const scene = (callout: unknown): DraftNarrationSceneSuggestion => ({
+    id: 'scene-1', title: 'Check-in', template: 'callout',
+    primaryItems: ['first step', 'second step'], secondaryItems: [],
+    leftLabel: '', rightLabel: '', reason: 'Staged exchange',
+    backgroundPrompt: 'Plain reception interior, unlit, out of focus.',
+    icons: {focal: null, primary: [null, null], secondary: []},
+    beats: [{
+      id: 'b1', expression: 'none',
+      phrases: [{id: 'p1', text: 'The guest arrives.'}],
+      primaryItemIndices: [0, 1], secondaryItemIndices: [],
+    }],
+    visual: {
+      kind: 'character-scene', motion: 'reveal', motif: 'security',
+      set: 'counter', sign: 'RECEPTION',
+      cast: [
+        {id: 'guest', label: 'guest', position: 'left', outfit: 'casual', age: 'adult', behindSet: false, prop: null, propPrimaryItemIndex: null},
+        {id: 'desk', label: 'front desk', position: 'right', outfit: 'uniform', age: 'adult', behindSet: true, prop: null, propPrimaryItemIndex: null},
+      ],
+      speakers: [{primaryItemIndex: 0, castId: 'guest'}],
+      callout,
+      sourceEvidence: 'The front desk asks the guest for identity proof',
+    },
+  } as DraftNarrationSceneSuggestion);
+
+  // Losing a correctly staged scene because one decorative caption could not
+  // be sourced costs far more than it protects.
+  it('keeps the scene and drops a callout the source does not support', () => {
+    const {scenes, warnings} = recoverUnsupportedNarratedVisuals({
+      scenes: [scene({icon: null, eyebrow: 'Claim', headline: 'Invented outcome', tone: 'positive', primaryItemIndex: 1, sourceEvidence: 'The hotel keeps a photocopy forever.'})],
+      sourceText,
+    });
+    expect(scenes[0]!.visual.kind).toBe('character-scene');
+    expect((scenes[0]!.visual as {callout: unknown}).callout).toBeNull();
+    expect(warnings.join(' ')).toContain('dropped its callout');
+  });
+
+  it('keeps a callout the source does support', () => {
+    const grounded = {icon: null, eyebrow: 'Check', headline: 'Over 18', tone: 'positive', primaryItemIndex: 1, sourceEvidence: 'whether the guest is over 18'};
+    const {scenes} = recoverUnsupportedNarratedVisuals({scenes: [scene(grounded)], sourceText});
+    expect((scenes[0]!.visual as {callout: unknown}).callout).toEqual(grounded);
+  });
+
+  it('still falls back when the scene itself is unsupported', () => {
+    const invented = scene(null);
+    (invented.visual as {sourceEvidence: string}).sourceEvidence =
+      'The butler carries the luggage upstairs.';
+    const {scenes} = recoverUnsupportedNarratedVisuals({scenes: [invented], sourceText});
+    expect(scenes[0]!.visual.kind).toBe('diagram');
+  });
+});

@@ -23,6 +23,10 @@ import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 import {AnimationClip} from './AnimationClip.js';
 import {FittedText, RENDER_FONT_FAMILY} from './FittedText.js';
 import {NarratedMotionAsset} from './NarratedMotionAsset.js';
+import {CharacterStage, type CharacterCastMember} from './CharacterScene.js';
+import {currentItemIndexAt, msAt} from './character-motion.js';
+import {PLACEHOLDER_ITEM} from '../narration-plan-recovery.js';
+import {characterSceneTimeline} from './character-motion.js';
 import {
   SemanticIconsProvider,
   TechnologyBadge,
@@ -1118,6 +1122,137 @@ const CinematicSceneFrame = ({
   );
 };
 
+const CharacterStepLabel = ({
+  accent,
+  profile,
+  text,
+}: {
+  accent: string;
+  profile: RenderProfile;
+  text: string;
+}) => {
+  const vertical = profile.aspectRatio === '9:16';
+  return (
+    <div
+      style={{
+        alignItems: 'center',
+        bottom: profile.safeArea.bottom + (vertical ? 96 : 54),
+        display: 'flex',
+        justifyContent: 'center',
+        left: profile.safeArea.left,
+        position: 'absolute',
+        right: profile.safeArea.right,
+      }}
+    >
+      <div
+        style={{
+          background: keySafeSurface('rgba(2, 6, 23, 0.82)'),
+          border: `2px solid ${accent}66`,
+          borderRadius: 999,
+          boxShadow: keySafeShadow('0 12px 32px rgba(2,6,23,0.55)'),
+          maxWidth: vertical ? 900 : 1_200,
+          padding: vertical ? '14px 30px' : '12px 34px',
+        }}
+      >
+        <FittedText
+          fontWeight={640}
+          letterSpacing={0}
+          lineHeight={1.15}
+          maxFontSize={vertical ? 34 : 34}
+          maxHeight={vertical ? 92 : 48}
+          maxLines={vertical ? 2 : 1}
+          maxWidth={vertical ? 840 : 1_130}
+          style={{color: '#E2E8F0'}}
+          text={text}
+        />
+      </div>
+    </div>
+  );
+};
+
+const CharacterSceneView = ({
+  contentTopInset,
+  fps,
+  palette,
+  profile,
+  scene,
+}: {
+  contentTopInset: number;
+  fps: number;
+  palette: VideoPalette;
+  profile: RenderProfile;
+  scene: RenderableVisualScene;
+}) => {
+  const frame = useCurrentFrame();
+  if (scene.visual.kind !== 'character-scene') return null;
+  const {callout, cast, set, sign, speakers} = scene.visual;
+  const timeline = characterSceneTimeline({
+    callout: callout ? {primaryItemIndex: callout.primaryItemIndex} : null,
+    cast,
+    durationMs: scene.durationMs,
+    primaryItems: scene.primaryItems,
+    primaryItemTimings: scene.primaryItemTimings,
+    speakers,
+  });
+  const members: CharacterCastMember[] = cast.map((member) => ({
+    behindSet: member.behindSet,
+    id: member.id,
+    outfit: member.outfit,
+    position: member.position,
+    prop: member.prop,
+    propAtMs: timeline.propAtMs[member.id] ?? 0,
+    // Age is the one look the source can actually speak to; everything else
+    // is derived from the character id.
+    traits: {age: member.age},
+  }));
+  const stepIndex = currentItemIndexAt(scene.primaryItemTimings, msAt(frame, fps));
+  const rawStep = stepIndex === null ? null : scene.primaryItems[stepIndex] ?? null;
+  // A recovered scene whose items were all dropped carries only the
+  // placeholder. It kept the scene alive; putting it on screen would be worse
+  // than showing nothing.
+  const step = rawStep === PLACEHOLDER_ITEM ? null : rawStep;
+  return (
+    <AbsoluteFill>
+      <CharacterStage
+        beats={timeline.beats}
+        callout={callout && timeline.calloutAtMs !== null
+          ? {
+              atMs: timeline.calloutAtMs,
+              eyebrow: callout.eyebrow,
+              headline: callout.headline,
+              icon: callout.icon,
+              tone: callout.tone,
+            }
+          : null}
+        cast={members}
+        palette={palette}
+        set={set}
+        sign={sign}
+        vertical={profile.aspectRatio === '9:16'}
+      />
+      {/* Every other treatment titles its scene; this one drew no text at all.
+          The title sits below the caption inset and above the callout band. */}
+      <div
+        style={{
+          left: profile.safeArea.left,
+          position: 'absolute',
+          right: profile.safeArea.right,
+          top: profile.safeArea.top + contentTopInset,
+        }}
+      >
+        <SceneTitle directed profile={profile} title={scene.title} />
+      </div>
+      {step ? (
+        <CharacterStepLabel
+          accent={videoPaletteFor(palette).accents.primary}
+          profile={profile}
+          text={step}
+        />
+      ) : null}
+    </AbsoluteFill>
+  );
+};
+
 export const NarratedVisualLayer = ({
   contentTopInset,
   fps,
@@ -1193,6 +1328,14 @@ export const NarratedVisualLayer = ({
         return <IconSpotlight motionAssets={motionAssets} palette={palette} profile={profile} scene={scene} />;
       case 'image-focus':
         return <ImageFocus foregroundAssets={foregroundAssets} palette={palette} profile={profile} scene={scene} />;
+      case 'character-scene':
+        return <CharacterSceneView
+          contentTopInset={contentTopInset}
+          fps={fps}
+          palette={palette}
+          profile={profile}
+          scene={scene}
+        />;
       case 'data-visualization':
         if (scene.visual.chart.type === 'line-chart') return <LineChart palette={palette} profile={profile} scene={scene} />;
         return <DataVisualizationView palette={palette} profile={profile} scene={scene} />;
