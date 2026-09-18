@@ -67,6 +67,7 @@ export const NarratedVideo = ({
               mode={sceneBackground}
               palette={plan.palette}
               scene={scene}
+              staged={scene.visual?.kind === 'character-scene'}
             />}
             <NarratedVisualLayer
               contentTopInset={captionTopInset(captions, profile)}

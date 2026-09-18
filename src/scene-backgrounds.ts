@@ -20,6 +20,7 @@ const backgroundManifestEntrySchema = z.object({
   sceneId: z.string().min(1),
   aspectRatio: renderAspectRatioSchema,
   prompt: z.string().min(1),
+  negativePrompt: z.string().optional(),
   promptHash: z.string().min(1),
   model: z.string().min(1),
   quality: imageQualitySchema,
@@ -57,42 +58,78 @@ const pathExists = async (filePath: string): Promise<boolean> => {
 const safeFilenamePart = (value: string): string =>
   value.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'scene';
 
+/**
+ * Nouns we never want drawn. Deliberately kept OUT of the positive prompt: a
+ * model without a negative-prompt parameter conditions on these words and
+ * draws them, so naming them there invited the text and people it forbade.
+ */
+export const BACKGROUND_EXCLUSIONS =
+  'person, people, human, man, woman, face, figure, silhouette, crowd, '
+  + 'text, letters, numbers, logos, watermarks, user-interface panels';
+
+export interface SceneBackgroundPrompt {
+  negativePrompt: string;
+  prompt: string;
+}
+
 export const sceneBackgroundPrompt = (
-  scene: {backgroundPrompt: string; title: string},
+  scene: {backgroundPrompt: string; staged?: boolean | undefined; title: string},
   aspectRatio: RenderAspectRatio,
   palette: VideoPalette,
-): string => {
+): SceneBackgroundPrompt => {
   const orientation = aspectRatio === '16:9'
     ? 'wide cinematic 16:9 landscape composition'
     : 'tall cinematic 9:16 portrait composition';
-  return [
-    scene.backgroundPrompt.trim(),
-    `${orientation}.`,
-    'Abstract cinematic educational-video background.',
-    videoPaletteFor(palette).generatedImageDirection,
-    'No text, letters, numbers, logos, watermarks, user-interface panels, or prominent people.',
-    'Keep the center and upper caption area low-detail and high-contrast for foreground diagrams and subtitles.',
-  ].join(' ');
+  // A staged scene stands drawn people on a floor, so it needs a literal empty
+  // room with a visible ground plane, not a metaphor. Asking for both at once
+  // produced an abstract blur that the cast appeared to float over.
+  const direction = scene.staged
+    ? [
+      'Completely empty, deserted real interior photographed at eye level from standing height.',
+      'Nobody is present anywhere in the room.',
+      'Floor and wall meet across the lower third; the foreground floor stays clear and unoccupied.',
+      'Plain, evenly lit, shallow depth of field, softly out of focus.',
+    ]
+    : [
+      'Abstract cinematic educational-video background.',
+      'Keep the center and upper caption area low-detail and high-contrast for foreground diagrams and subtitles.',
+    ];
+  return {
+    negativePrompt: BACKGROUND_EXCLUSIONS,
+    // Scene content leads: trailing boilerplate otherwise crowds it out of a
+    // truncated text encoder.
+    prompt: [
+      scene.backgroundPrompt.trim(),
+      `${orientation}.`,
+      ...direction,
+      videoPaletteFor(palette).generatedImageDirection,
+      'Clean bare surfaces, unoccupied, no signage.',
+    ].join(' '),
+  };
 };
 
 export const sceneBackgroundCacheKey = ({
   aspectRatio,
   model,
+  negativePrompt,
   prompt,
   quality,
   sceneId,
 }: {
   aspectRatio: RenderAspectRatio;
   model: string;
+  negativePrompt?: string | undefined;
   prompt: string;
   quality: ImageQuality;
   sceneId: string;
 }): string => createHash('sha256')
-  .update(JSON.stringify({aspectRatio, model, prompt, quality, sceneId}))
+  .update(JSON.stringify({aspectRatio, model, negativePrompt, prompt, quality, sceneId}))
   .digest('hex');
 
 export interface GenerateSceneImageOptions {
   model: string;
+  /** Nouns to exclude. Providers without the parameter fold it into the prompt. */
+  negativePrompt?: string | undefined;
   prompt: string;
   quality: ImageQuality;
   size: string;
@@ -148,7 +185,7 @@ export const createOpenAIImageGenerator = (): GenerateSceneImage => {
     apiKey: process.env.OPENAI_API_KEY,
     maxRetries: 0,
   });
-  return async ({model, prompt, quality, size}) => withTransientImageRetries(
+  return async ({model, negativePrompt, prompt, quality, size}) => withTransientImageRetries(
     async () => {
       const response = await client.images.generate({
         background: 'opaque',
@@ -156,7 +193,9 @@ export const createOpenAIImageGenerator = (): GenerateSceneImage => {
         n: 1,
         output_compression: 88,
         output_format: 'jpeg',
-        prompt,
+        // gpt-image has no negative-prompt parameter but follows a stated
+        // exclusion reliably, so fold it back into the prompt here only.
+        prompt: negativePrompt ? `${prompt} Do not include: ${negativePrompt}.` : prompt,
         quality,
         size,
       });
@@ -203,7 +242,7 @@ export interface MaterializeSceneBackgroundsOptions {
   palette: VideoPalette;
   quality: ImageQuality;
   regenerate: boolean;
-  scenes: Array<{backgroundPrompt: string; id: string; title: string}>;
+  scenes: Array<{backgroundPrompt: string; id: string; staged?: boolean | undefined; title: string}>;
   stem: string;
 }
 
@@ -217,7 +256,7 @@ export const materializeSceneBackgrounds = async (
   const existingManifest = await readManifest(finalDirectory);
   const requested = profilesForSelection(options.aspectRatio).flatMap((profile) =>
     options.scenes.map((scene) => {
-      const prompt = sceneBackgroundPrompt(
+      const {negativePrompt, prompt} = sceneBackgroundPrompt(
         scene,
         profile.aspectRatio,
         options.palette,
@@ -225,6 +264,7 @@ export const materializeSceneBackgrounds = async (
       const promptHash = sceneBackgroundCacheKey({
         aspectRatio: profile.aspectRatio,
         model: options.model,
+        negativePrompt,
         prompt,
         quality: options.quality,
         sceneId: scene.id,
@@ -234,6 +274,7 @@ export const materializeSceneBackgrounds = async (
         sceneId: scene.id,
         aspectRatio: profile.aspectRatio,
         prompt,
+        negativePrompt,
         promptHash,
         model: options.model,
         quality: options.quality,
@@ -273,6 +314,7 @@ export const materializeSceneBackgrounds = async (
       if (!options.regenerate && await pathExists(stagedPath)) continue;
       const bytes = await generateImage({
         model: entry.model,
+        negativePrompt: entry.negativePrompt,
         prompt: entry.prompt,
         quality: entry.quality,
         size: IMAGE_SIZE_BY_ASPECT[entry.aspectRatio],

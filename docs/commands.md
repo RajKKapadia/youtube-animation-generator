@@ -12,6 +12,7 @@ Provider selection is environment-driven, not flag-driven — see [providers.md]
 
 | Invocation | Purpose | Provider key? |
 |---|---|:--:|
+| `topic "<topic name>"` | Write a source document for a topic | ✅ |
 | `<subtitle.srt\|.vtt>` | Author + render overlay | ✅ |
 | `--render-plan <plan.json>` | Render an existing overlay plan | — |
 | `create <source.md>` | Author + render narrated video | ✅ |
@@ -19,6 +20,37 @@ Provider selection is environment-driven, not flag-driven — see [providers.md]
 | `publish <plan.json>` | Author publish metadata + covers | ✅ |
 | `publish --render-publish <publish.json>` | Render edited metadata | — |
 | _any of the above_ `--plan-only` | Validate/save without rendering | — |
+
+## `topic` — writing a source document
+
+```bash
+pnpm animations topic "International Identity Day"
+```
+
+Writes `samples/<slug>.md` and prints the participants it staged. `--output-dir <path>` picks a
+different destination, `--force` replaces an existing file, and `--guidance "<text>"` passes extra
+direction through verbatim.
+
+Everything the planner can later show is bounded by what this document says, so the prompt
+(`topic-author.ts`) encodes the pipeline's actual constraints rather than asking for generic prose:
+
+| Rule | Why it exists |
+|---|---|
+| One concrete scene naming two people, both in a single sentence | A character scene is grounded by an extractive excerpt naming its participants. Without such a sentence the video silently falls back to text on a background |
+| 220–400 words | The whole source travels inside the planning prompt, and free provider tiers cap a request at 6–8k tokens |
+| Short declarative sentences | Every treatment grounds on exact excerpts; long clause chains cannot be quoted cleanly |
+| No invented numbers, dates, or organisations | A guessed figure becomes a false claim on screen |
+| Consistent third person | Mixed "you"/"the individual" reads badly when spoken aloud |
+| Return to the occasion in the closing line | A day-of-observance video that mentions the day once loses its own purpose |
+
+The model returns `participants` and `interactionSentence` alongside the markdown, and the file is
+only written once those check out: the sentence must appear verbatim in the document and name every
+participant, each participant must appear in the prose, they must be distinct, and the word count
+must be inside the budget. Failures are fed back as a list for up to three attempts — only the
+problems are resent, never the rejected draft, because echoing it doubles the request and a free
+tier rejects the retry outright.
+
+So a document that reaches disk is one the planner can actually stage characters from.
 
 ## Staged workflow
 
@@ -91,10 +123,11 @@ Stills bypass the `--force` preflight and overwrite in place, so a preview loop 
 | `--target-duration <s>` | `60` | Planning hint only |
 | `--captions <on\|off>` | `on` (narrated) / `off` (subtitle) | |
 | `--supertonic-assets-dir <path>` | `models/supertonic-3` | |
-| `--model <model>` | per provider (`gpt-5.6` / `gemini-3.5-flash` / `llama-3.3-70b-versatile`) | Script model |
-| `--image-model <model>` | `@cf/…flux-1-schnell` when Cloudflare keys exist, else `gpt-image-2` | `cli.ts:1002` |
+| `--model <model>` | per provider (`gpt-5.6` / `gemini-3.5-flash` / `qwen/qwen3.8-27b`) | Script model |
+| `--image-model <model>` | `@cf/…stable-diffusion-xl-base-1.0` when Cloudflare keys exist, else `gpt-image-2` | `cli.ts:1197`. SDXL because `flux-1-schnell` accepts **no** `width`/`height` and so can only return a square plate, which `objectFit: cover` then crops into a 16:9 frame |
 | `--scene-background <ambient\|generated\|image>` | `ambient` (narrated), `off` (subtitle) | `generated` **bills the image provider** |
 | `--generated-visuals <off\|auto>` | `off` | `auto` **bills image + vision** |
+| `--require-characters` | — | Fail instead of degrading when the source describes a human exchange and no character scene survives. Also allows one extra planning attempt when the model never staged one |
 | `--research <off\|auto\|required>` | `off` | Non-`off` **bills tokens + web search; OpenAI only** |
 | `--format <prores\|webm\|green\|h264>` | `green` (subtitle) | Overlay output format |
 
@@ -126,6 +159,7 @@ model. **Not uniformly portable:**
 | `fixtures:explainers` | Stills + MP4s, 6 treatments × 2 aspects, `index.html` | env var, then Linux probe (`:19`) | ✅ |
 | `fixtures:presentation` | Stills | env var, then Linux probe (`:17`) | ✅ |
 | `fixtures:chroma-text` | Stills | env var, then Linux literal (`:20`) | ✅ |
+| `fixtures:characters` | Stills + MP4s, 3 scenarios × 2 aspects | env var, then macOS + Linux probe | ✅ |
 | `fixtures:narrated` | Audio + JSON | no browser | ✅ |
 | `fixtures:narrated-v6-mixed` | Audio + JSON | no browser | ✅ |
 | `fixtures:publish` | Audio + JSON | no browser | ✅ |
