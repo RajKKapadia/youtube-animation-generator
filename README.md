@@ -1,16 +1,30 @@
 # YouTube Animations CLI
 
-Write a source document from nothing but a topic name, then create either editor-ready animation overlays from subtitles or a complete narrated video from that text/Markdown source. Planning uses OpenAI Structured Outputs, optional cited web research can enrich narrated sources, local voice synthesis uses the embedded Supertonic 3 Node worker, and Remotion renders native 16:9, 9:16, or both. Both video workflows support kinetic typography, before/after transformations, supplied-code walkthroughs, request/response sequences, layered architecture builds, line charts, deterministic diagrams, agent workflows, brand showcases, network maps, metric focus scenes, icon spotlights, source-backed charts, relevant local images, opt-in grounded generated illustrations, curated local Lottie assets, coherent cinematic palettes, and optional scene backgrounds. Subtitle inputs remain separate editor-ready clips; they never synthesize or edit audio.
+Turn text into narrated videos, subtitles into editor-ready animation overlays, and saved narration plans into publish kits. This private TypeScript CLI uses OpenAI, Gemini, or Groq for planning, local Supertonic 3 for speech, and Remotion for native 16:9 and 9:16 rendering. It runs locally with no application server or database.
 
-The current CLI supports three workflows:
+Visuals include animated characters, typography, diagrams, charts, code walkthroughs, local images, icons, and Lottie assets. Generated images and cited web research are optional. Subtitle clips remain separate and audio-free.
+
+The CLI provides four commands:
 
 | Input | Command | Result |
 | --- | --- | --- |
+| Topic name | `youtube-animations topic "Passkeys"` | A Markdown source document for review |
 | `.srt` or `.vtt` subtitles | `youtube-animations episode.srt` | Separate editor-ready overlay clips plus a placement manifest |
 | `.txt` or `.md` source text | `youtube-animations create summary.md` | A planned, voiced, captioned, and rendered narrated video |
 | Narrated plan JSON | `youtube-animations publish summary.narration-timed.json` | Copy-ready title, description, tags, thumbnail, and vertical cover |
 
 Commands in this README use `pnpm run animations` to execute the TypeScript source from the repository. After `pnpm build`, the same arguments can be passed to `node dist/cli.js` or the configured `youtube-animations` binary.
+
+The **plan JSON is the editable contract** between AI authoring and local rendering:
+
+```text
+topic → source.md → draft plan JSON → local speech → timed plan JSON → video
+                      edit here                       reuse audio
+```
+
+Creating a source, plan, or publish metadata calls the selected AI provider. `--render-plan` skips AI planning; rendering can run offline once dependencies, the needed model, and referenced assets are available. Generated-image modes can still call their provider for missing assets.
+
+Jump to [Setup](#setup), [Narrated videos](#create-narrated-videos), [Review stages](#review-before-rendering), [Animated characters](#animated-character-scenes), [Subtitle overlays](#subtitle-animation-overlays), [Publish kits](#create-a-narrated-video-publish-kit), [Options](#options), or [Development checks](#development-checks).
 
 ## What it creates
 
@@ -29,10 +43,12 @@ Default output:
 ├── summary.narration-script.md
 ├── summary.narration-plan.json
 ├── summary.narration-timed.json
+├── summary.stills/                # scene previews with --stills-only or --review
 ├── summary.media/                 # selected files copied from sibling images/
 ├── summary.generated-visuals/     # optional foreground cache and manifest
 ├── summary.audio/
 │   ├── voiceover.wav
+│   ├── spoken-script.json         # exact text sent to speech synthesis
 │   └── beats/
 │       ├── 001-hook.wav
 │       └── ...
@@ -77,21 +93,22 @@ Subtitle input keeps its existing editor-oriented output names. Vertical files i
 ## Requirements
 
 - Node.js 22.13 or newer and pnpm 11.22
-- an OpenAI API key when creating a new narration/overlay plan, new publish metadata, or an uncached scene image
-- Google Chrome or Chromium when rendering video
+- an OpenAI, Gemini, or Groq API key when authoring a topic, narration/overlay plan, or publish metadata
+- Google Chrome or Chromium when rendering video, scene stills, or publish covers
 - Git LFS and the local Supertonic 3 model when synthesizing narrated audio
+- image-provider credentials only for uncached generated images; an OpenAI or Gemini key is also needed to validate generated foreground visuals
 
-Planning-only and saved-plan workflows skip the dependencies they do not use. For example, `--plan-only` does not need Chrome or Supertonic, and a timed narrated plan with ambient backgrounds can be rerendered without OpenAI or Supertonic.
+Planning-only and saved-plan workflows skip the dependencies they do not use. For example, `--plan-only` does not need Chrome or Supertonic, and a timed narrated plan with its existing voiceover and ambient backgrounds can be rerendered without an AI key or the Supertonic model.
 
-Saved-plan rendering never downloads a logo or animation. It validates checked-in asset manifests and hashes for selected local images, copies only referenced files into Remotion's temporary public directory, and removes that staging directory after the render. A timed plan also reuses cached generated foreground images without OpenAI; if one is missing, the CLI names the scene and asks for `--generated-visuals auto` instead of silently substituting unrelated art.
+Saved-plan rendering never downloads a logo or animation. It validates checked-in asset manifests and hashes for selected local images, copies only referenced files into Remotion's temporary public directory, and removes that staging directory after the render. A timed plan also reuses cached generated foreground images without provider calls; if one is missing, the CLI names the scene and asks for `--generated-visuals auto` instead of silently substituting unrelated art.
 
-Publish metadata needs OpenAI only when creating a new publish plan. Rendering an edited publish plan needs Chrome but makes no OpenAI request. Publish covers use Remotion typography, shapes, diagrams, validated data/code, supplied local images, Lucide icons, and the installed Simple Icons catalog; the publish workflow never calls the Image API.
+Publish metadata needs an AI provider only when creating a new publish plan. Rendering an edited publish plan needs Chrome but makes no AI request. Publish covers use Remotion typography, shapes, diagrams, validated data/code, supplied local images, Lucide icons, and the installed Simple Icons catalog; the publish workflow never generates images.
 
 Remotion has separate license terms. Confirm that your use qualifies for its free license or obtain the appropriate license: [Remotion license](https://www.remotion.dev/license).
 
 ## Setup
 
-Install application dependencies and configure OpenAI:
+Install application dependencies and create a local configuration file:
 
 ```bash
 pnpm install
@@ -99,12 +116,58 @@ cp .env.example .env
 ```
 
 ```dotenv
+AI_PROVIDER=openai
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-5.6
 OPENAI_IMAGE_MODEL=gpt-image-2
 ```
 
-Download Supertonic 3 once at the default location:
+The CLI reads `.env` from the current working directory. Configure only the providers you need; keep `.env` and model files out of version control.
+
+### AI and image providers
+
+`AI_PROVIDER` selects `openai`, `gemini`, or `groq` for topic authoring, both planners, and publish metadata. If unset, the first available key wins in the order OpenAI → Gemini → Groq. `--model` overrides the selected provider's model setting.
+
+| Provider | Required key | Model environment variable | Code fallback when unset |
+| --- | --- | --- | --- |
+| OpenAI | `OPENAI_API_KEY` | `OPENAI_MODEL` | `gpt-5.6` |
+| Gemini | `GOOGLE_GEMINI_API_KEY` | `GOOGLE_GEMINI_MODEL` | `gemini-3.5-flash` |
+| Groq | `GROQ_API_KEY` | `GROQ_MODEL` | `qwen/qwen3.8-27b` |
+
+These are the defaults in [`src/ai-client.ts`](src/ai-client.ts), not a guarantee of model availability on your account. The checked-in `.env.example` explicitly sets `GROQ_MODEL=llama-3.3-70b-versatile`, which overrides the code fallback when copied; edit or remove that setting to choose a different model.
+
+For example, to use Gemini, set these values in `.env`:
+
+```dotenv
+AI_PROVIDER=gemini
+GOOGLE_GEMINI_API_KEY=your_key_here
+GOOGLE_GEMINI_MODEL=gemini-3.5-flash
+```
+
+Image generation is selected separately with `IMAGE_PROVIDER=cloudflare|openai`. With no selector, Cloudflare wins when both `CLOUDFLARE_AI_KEY` and `CLOUDFLARE_ACCOUNT_ID` are present; otherwise OpenAI is used. Cloudflare setup:
+
+```dotenv
+IMAGE_PROVIDER=cloudflare
+CLOUDFLARE_AI_KEY=your_token_here
+CLOUDFLARE_ACCOUNT_ID=your_account_id_here
+CLOUDFLARE_IMAGE_MODEL=@cf/stabilityai/stable-diffusion-xl-base-1.0
+```
+
+The code defaults to SDXL for Cloudflare, but `.env.example` currently sets `@cf/black-forest-labs/flux-1-schnell`; replace that value to use SDXL. The adapter requests landscape/portrait dimensions for SDXL, while its FLUX path omits size parameters. `--image-quality` is forwarded to OpenAI; the Cloudflare adapter uses its own model-specific parameters.
+
+When forcing OpenAI images while Cloudflare credentials are also present, pass `--image-model gpt-image-2` (or your chosen OpenAI image model): the CLI's automatic model choice checks for `CLOUDFLARE_AI_KEY` independently of `IMAGE_PROVIDER`. Foreground-image validation prefers OpenAI, then Gemini; Groq alone cannot validate generated images.
+
+`--research auto|required` uses OpenAI-hosted search. Use `AI_PROVIDER=openai` and an OpenAI model for research runs: the same model argument is passed to research and planning. Ambient backgrounds, local images, and character animation need no image-generation credentials. See [provider details](docs/providers.md).
+
+### Browser and local speech
+
+Set the browser path explicitly when it is outside the probed Linux locations. On macOS:
+
+```bash
+export REMOTION_BROWSER_EXECUTABLE="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+```
+
+For narrated audio, download Supertonic 3 once at the default location:
 
 ```bash
 git lfs install
@@ -114,6 +177,21 @@ git clone https://huggingface.co/Supertone/supertonic-3 \
 
 The model directory is ignored by Git. The CLI validates all four ONNX files, `tts.json`, `unicode_indexer.json`, and the requested preset voice before synthesis.
 
+Validate a checked-in draft without a key, model, or browser:
+
+```bash
+pnpm run animations create --render-plan fixtures/sample.narration-plan.json --plan-only
+```
+
+For a browser-only preview without speech synthesis or provider calls:
+
+```bash
+pnpm run animations create --render-plan fixtures/sample.narration-plan.json \
+  --stills-only --output-dir /tmp/youtube-animation-preview
+```
+
+Use `--force` to replace existing previews. See [setup](docs/setup.md) and [troubleshooting](docs/troubleshooting.md) for model and browser diagnostics.
+
 ### No separate Supertonic server
 
 You do not need Python, `supertonic serve`, an HTTP endpoint, or a separately managed background process. The CLI automatically starts a short-lived Node worker, sends one JSON job over stdin, loads the model and selected voice once, synthesizes every beat sequentially, returns exact sample counts, and exits before Remotion starts. This releases ONNX memory between voice generation and video rendering.
@@ -122,100 +200,74 @@ You do not need Python, `supertonic serve`, an HTTP endpoint, or a separately ma
 
 ## Create narrated videos
 
-### Step-by-Step: Generate a Video for Any Topic
+### Quickstart
 
-To create a video on any topic, follow these simple steps:
-
-#### 1. Create a short topic file in `samples/` (`samples/<topic>.md`):
-
-The quickest route is to let the CLI write one for you:
+Write a `.txt` or `.md` source yourself, or ask the selected provider to draft one:
 
 ```bash
-pnpm run animations topic "International Identity Day"
+pnpm run animations topic "Passkeys" --output-dir samples/topic.md
 ```
 
-This saves `samples/international-identity-day.md` and prints the participants it staged. See
-[Author a topic source](#author-a-topic-source) for what it guarantees and why that matters. To
-write the file yourself instead, keep reading.
-
-#### 2. Run the generator command:
-
-- **Standard 16:9 Video (Code-native clean visuals)**:
-  ```bash
-  pnpm run animations create samples/topic.md
-  ```
-
-- **With AI-Generated Background Images (Cloudflare SDXL)**:
-  ```bash
-  pnpm run animations create samples/topic.md --scene-background generated
-  ```
-
-- **For YouTube Shorts / TikTok / Reels (9:16 Vertical Video)**:
-  ```bash
-  pnpm run animations create samples/topic.md --aspect-ratio 9:16 --scene-background generated
-  ```
-
-- **Fast Script/Storyboard Preview Only (No video render)**:
-  ```bash
-  pnpm run animations create samples/topic.md --plan-only
-  ```
-
-#### 3. Output files:
-The CLI outputs a complete package in `samples/<topic>-video/` (e.g. `samples/topic-video/`):
-- `samples/topic-video/topic.mp4`: Final 1080p narrated video (with voiceover, animated typography & visual cards).
-- `samples/topic-video/topic.narration-script.md`: The spoken script for review.
-- `samples/topic-video/topic.audio/voiceover.wav`: Local high-fidelity neural voiceover.
-- `samples/topic-video/topic.backgrounds/`: AI-generated scene background images (when `--scene-background generated` is used).
-
-#### 4. Sequential Review Workflow (Script → Screenshots → Audio → Final Video):
-
-To inspect and approve each stage before the next stage runs:
-
-##### Option A: Interactive Guided Workflow (`--review`)
-Run one command with `--review`. The CLI pauses after each stage, prints the path to inspect or edit, and waits for you to press **[Enter]** to approve before continuing:
+Review the source, then choose an output orientation. These commands use the default code-drawn ambient background:
 
 ```bash
-pnpm run animations create samples/topic.md --review --scene-background generated --aspect-ratio 9:16
+pnpm run animations create samples/topic.md
+pnpm run animations create samples/topic.md --aspect-ratio 9:16
+pnpm run animations create samples/topic.md --aspect-ratio both
 ```
-*(Tip: Add `--scene-background generated` to include AI-generated image backgrounds).*
 
-At each pause:
-1. **Stage 1 (Script & Storyboard)**: Review `samples/topic-video/topic.narration-script.md` and `topic.narration-plan.json`. You can edit either file directly before pressing Enter!
-2. **Stage 2 (Screenshots / Visuals)**: Review 1080p scene stills in `samples/topic-video/topic.stills/*.png`.
-3. **Stage 3 (Voiceover Audio)**: Listen to `samples/topic-video/topic.audio/voiceover.wav`.
-4. **Stage 4 (Final Merged Video)**: Remotion merges the reviewed script, screenshots, and audio into `samples/topic-video/topic.mp4`.
+Each line is an alternative invocation. Existing outputs require `--force`; use the saved-plan workflow below to reuse planning and audio. The output directory is `samples/topic-video/`: landscape video is `topic.mp4`, portrait video is `topic-9x16.mp4`, and both share `topic.audio/voiceover.wav` and `topic.narration-timed.json`.
 
----
+Add `--scene-background generated` only when you want provider-generated background images. That mode can make billed image requests; it is independent of orientation and character animation.
 
-##### Option B: Step-by-Step Individual Commands
-If you prefer running each step manually one by one:
+### Review before rendering
+
+Use separate stages to inspect the script, visuals, and audio:
+
+| Flag | Output | Browser needed? | Supertonic model needed? |
+| --- | --- | --- | --- |
+| `--plan-only` | New script + draft JSON, or validation of a saved plan | No | No |
+| `--stills-only` | Scene PNG previews | Yes | No |
+| `--audio-only` | Voiceover + timed JSON from a draft | No | Yes |
+| `--review` | Interactive script → stills → audio → video workflow | Yes | Yes |
+
+These stage flags apply to narrated videos; subtitle overlays support `--plan-only`. `--stills-only` and `--audio-only` cannot be combined. New planning still calls the selected AI provider. Generated-image options can request images during still or audio stages; `--plan-only` saves directions without generating images.
 
 ```bash
-# Stage 1: Generate script & storyboard
+# 1. Author the script and storyboard.
 pnpm run animations create samples/topic.md --plan-only
-# 👉 Review/edit: samples/topic-video/topic.narration-script.md
-# 👉 Review/edit: samples/topic-video/topic.narration-plan.json
 
-# Stage 2: Render full-resolution scene screenshots without audio
-pnpm run animations create --render-plan samples/topic-video/topic.narration-plan.json --stills-only --force
-# 👉 Review screenshots: samples/topic-video/topic.stills/*.png
+# Edit samples/topic-video/topic.narration-plan.json, then validate it.
+pnpm run animations create --render-plan samples/topic-video/topic.narration-plan.json --plan-only
 
-# Stage 3: Synthesize voiceover audio
-pnpm run animations create --render-plan samples/topic-video/topic.narration-plan.json --audio-only --force
-# 👉 Review audio: samples/topic-video/topic.audio/voiceover.wav
+# 2. Preview each scene without synthesizing speech.
+pnpm run animations create --render-plan samples/topic-video/topic.narration-plan.json \
+  --stills-only --force
 
-# Stage 4: Assemble final merged video
+# 3. Synthesize and review topic.audio/voiceover.wav.
+pnpm run animations create --render-plan samples/topic-video/topic.narration-plan.json \
+  --audio-only --force
+
+# 4. Render using the reviewed audio and its measured timeline.
 pnpm run animations create --render-plan samples/topic-video/topic.narration-timed.json --force
-# 🎬 Final video ready: samples/topic-video/topic.mp4
+
+# Optional: generate metadata and both publish covers.
+pnpm run animations publish samples/topic-video/topic.narration-timed.json
 ```
 
-#### 5. (Optional) Generate YouTube Publish Kit:
-To generate optimized YouTube titles, description, tags, and thumbnail covers:
+**Edit narration in the draft JSON's `scenes[].beats[].phrases[].text`.** The script Markdown is a readable export; changes to it are not read back into the plan. Regenerate audio from the draft after changing narration. Timed-plan renders reuse existing audio, and `--audio-only` on a timed plan simply exits.
+
+Draft previews estimate timing from word counts. Final pacing comes from measured speech. Each scene gets `scene-N-<id>-mid-<aspect>.png` at its midpoint, `scene-N-<id>-final-<aspect>.png` near its end, and a canonical `scene-N-<id>-<aspect>.png` copy of that late frame. Inspect both states; the late frame is sampled at 88%, so it is not proof that every possible late cue has appeared. Existing stills require `--force`.
+
+For an interactive run in a terminal:
+
 ```bash
-pnpm run animations publish samples/topic/topic.narration-timed.json
+pnpm run animations create samples/topic.md --review --aspect-ratio 9:16
 ```
 
----
+The CLI pauses for Enter after the script, scene screenshots, and voiceover. It reloads the draft JSON after the first two pauses. If you change visual or asset directions after inspecting stills, restart from the edited draft to regenerate previews and assets. The final video renders the animated scene components using the timed plan and voiceover; preview PNGs are not stitched into the video.
+
+With non-interactive stdin, review prompts are skipped and execution continues. Use individual stages when you need the process to stop reliably. Repeat render-time options such as `--aspect-ratio`, `--captions`, `--scene-background`, and `--background-image` across separate commands; they are not restored automatically from the draft.
 
 ### Author a topic source
 
@@ -232,24 +284,25 @@ one shaped for the pipeline rather than generic prose. The rules it follows:
   characters possible: a character scene must quote an exact excerpt describing the interaction,
   so the source has to contain one. (The excerpt is checked; the cast's role *labels* are not —
   they are internal and never drawn, so the planner may call someone "Customer" where the source
-  says "an individual".) A source without such a sentence produces text on a background.
-- **220–400 words**, because the whole document travels inside the planning request and free
-  provider tiers cap a request at roughly 6,000–8,000 tokens.
+  says "an individual".) Other visual treatments remain available for sources without a human exchange.
+- **220–400 words**, to keep the source compact when it travels inside the planning request.
 - **Short declarative sentences**, since every treatment is grounded by quoting the source exactly.
 - **No invented numbers, dates, or organisations** — a guessed figure becomes a false on-screen claim.
 - **Consistent third person**, and a closing line that returns to the occasion when the topic is a
   day of observance.
 
 The model also returns the participant roles and the sentence in which they interact. The file is
-written only after that sentence is confirmed to appear verbatim in the document and to name every
-participant, so a saved topic is one the planner can genuinely stage characters from. Up to three
+written only after that sentence is confirmed to appear in the document, allowing normalized whitespace and case, and to name every
+participant. This supplies material for character staging; the planner still chooses the treatment. Up to three
 attempts are made, resending only the list of problems.
+
+Topic authoring does not run web research or fact-check the draft. The checks validate document structure and participant references; review factual claims before treating the generated document as your source.
 
 Options: `--guidance <text>` for extra direction, `--output-dir <path>` for a different destination
 (default `samples/<slug>.md`), `--force` to replace an existing file, and `--model` / `AI_PROVIDER`
 exactly as for `create`.
 
-### Command Options Reference
+### Planning and narration
 
 ```bash
 pnpm run animations create summary.md
@@ -274,7 +327,7 @@ pnpm run animations create summary.md --research auto
 pnpm run animations create summary.md --research required
 ```
 
-`auto` lets the model skip search when the supplied source is already sufficient. `required` forces at least one OpenAI hosted [`web_search`](https://developers.openai.com/api/docs/guides/tools-web-search) call. Both modes use medium search context, permit at most four tool calls, keep response storage disabled, and request the complete consulted-source list.
+These commands require `OPENAI_API_KEY` and an OpenAI model; set `AI_PROVIDER=openai` if another provider is selected. `auto` lets the model skip search when the supplied source is already sufficient. `required` forces at least one OpenAI hosted [`web_search`](https://developers.openai.com/api/docs/guides/tools-web-search) call. Both modes use medium search context, permit at most four tool calls, keep response storage disabled, and request the complete consulted-source list.
 
 The research response is structured into `supported`, `context`, and `contested` claims. Every claim URL is checked against URLs actually returned by the search tool; an invented or unmatched citation aborts planning. Only supported and contextual claims are added to the planner's effective source. Contested claims remain reviewable in `summary.research.json` and `summary.research.md` but cannot ground narration, metrics, charts, or generated imagery.
 
@@ -289,7 +342,27 @@ pnpm run animations create summary.md \
 
 Research options apply only while planning a new narrated video. Subtitle overlays, saved-plan rendering, image validation, and publish-kit generation do not run web searches.
 
-Every version-7 scene persists a discriminated `visual` object plus explicit `icons` selections. `icons.focal` identifies the scene's central semantic symbol, while `icons.primary` and `icons.secondary` align one-for-one with visible items. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated, subject-matched local Lottie asset or remains `null` for code-native icon motion. `image-focus` instead references a plan-level local/generated media id, while `data-visualization` stores its validated chart specification. Older version-6 files without icon selections load with conservative label fallbacks; versions 1–5 still normalize with their original diagram/default behavior and no new foreground media. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. If truthful source material cannot support that variety, the saved plan receives a warning instead of being rejected or padded with invented content.
+### Visual selection
+
+Every version-7 scene persists a discriminated `visual` object plus explicit `icons` selections. `icons.focal` identifies the scene's central semantic symbol, while `icons.primary` and `icons.secondary` align one-for-one with visible items. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated, subject-matched local Lottie asset or remains `null` for code-native visuals. `image-focus` instead references a plan-level local/generated media id, while `data-visualization` stores its validated chart specification. Older version-6 files without icon selections load with conservative label fallbacks; versions 1–5 retain their supported legacy visuals without new foreground media. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. A character exchange can continue across adjacent scenes. If truthful source material cannot support variety, the saved plan receives a warning instead of being rejected or padded with invented content.
+
+### Animated character scenes
+
+`character-scene` stages a source-described interaction between two or three people, such as a reception check-in, consultation, purchase, or handoff. Characters are drawn in code and animated with speaking turns, mouth movement, blinks, nods, held props, and optional outcome callouts. Both video workflows support the treatment in landscape and portrait using code-drawn figures.
+
+Give the planner a concrete interaction in the source, for example: “The hotel guest hands a booking confirmation to the receptionist. The receptionist checks the reservation and gives the hotel guest a key.” The scene must preserve an exact evidence excerpt. It can use a counter, a short sign, casual or uniform outfits, semantic-icon props, and a source-backed callout. Appearance is derived deterministically from cast IDs and explicit age choices; retain the same IDs and cast when continuing an exchange.
+
+Speaking turns reference primary-item cues, so gesture and mouth timing follow narration beats or subtitle cues. Narrated videos still use one selected Supertonic voice for the entire video; character staging does not synthesize separate voices or perform phoneme alignment. Subtitle character clips remain silent.
+
+For new narrated plans, request an extra attempt when a detected human exchange is missing:
+
+```bash
+pnpm run animations create samples/topic.md --require-characters --plan-only
+```
+
+If attempted character scenes are rejected and none survives, this flag fails planning instead of accepting the fallback. It is not an unconditional cast guarantee: if the model never attempts the treatment, the extra attempt can still yield a valid plan without characters. Inspect `visual.kind` and `planningWarnings`. The flag currently affects new narrated planning only, even though CLI help lists it under subtitle options. It does not add characters to saved plans.
+
+When editing a plan, use two cast positions (`left`, `right`) or three (`left`, `center`, `right`), distinct cast IDs, and speaker/prop/callout indices that reference existing primary items. Character scenes use no secondary items. See [`src/explainer-visuals.ts`](src/explainer-visuals.ts) for the schema and [plan documentation](docs/plan-schema.md).
 
 ### Local foreground images
 
@@ -343,6 +416,7 @@ Both planners choose animations automatically according to the explanation's str
 | `code-walkthrough` | Source ID/range, embedded `excerpt`, and `highlights` linking primary items to absolute code line ranges; `scan` |
 | `sequence-diagram` | Named `participants` and ordered `messages` with endpoints, primary item index, and evidence; `flow` |
 | `layered-architecture` | `layerOrder` and evidence supporting all layers and their order; `reveal` |
+| `character-scene` | `cast`, source evidence, item-linked `speakers`, optional counter/props/callout; `reveal` |
 | `data-visualization`, chart type `line-chart` | `points` referencing x/y datum IDs and primary items; `reveal` |
 
 Line charts use 2–6 observations with numeric x values in strictly increasing order, consistent units on each axis, proportional axes, and straight connecting segments. Both coordinates must preserve exact source values, tokens, and evidence. Dates and numeric coordinates are not inferred from categorical labels. Line-chart `series`, `categories`, `cards`, and `derivedAnnotations` are empty. Point readouts display exact values without count-up. Unsupported optional selections fall back to a diagram with a warning; invalid saved payloads fail validation.
@@ -361,7 +435,7 @@ pnpm run animations create summary.md \
 
 `auto` permits at most two scenes and may generate zero. Each selected scene saves exact source evidence, 2–5 exact source anchors, its narration beat, literal subject/action/environment/framing, and exclusions. Generic decoration, values, charts, quotes, text, logos, interfaces, named-person likenesses, and fabricated documentary evidence are forbidden. Literal editorial depiction is preferred; a metaphor must save its exact relationship to the source.
 
-The CLI uses the [OpenAI Image API](https://developers.openai.com/api/docs/guides/image-generation) to create separate opaque JPEGs at 2048×1152 and 1152×2048. A structured high-detail vision check then requires a strong subject/action match, no unsupported content, no text/logos/charts/UI, and orientation-safe composition. One failed check gets one corrective regeneration; a second failure aborts before voice synthesis or rendering.
+The CLI uses the selected image provider for separate landscape and portrait assets. OpenAI requests JPEGs at 2048×1152 and 1152×2048; Cloudflare's SDXL adapter requests 1344×760 and 760×1344, while other Cloudflare models can return different dimensions or encodings. A vision check using OpenAI or Gemini then requires a strong subject/action match, no unsupported content, no text/logos/charts/UI, and orientation-safe composition. One failed check gets one corrective regeneration; a second failure aborts before voice synthesis or rendering.
 
 Assets and their evidence, prompts, model, quality, aspect, cache hash, validation result, and attempt count live in `summary.generated-visuals/manifest.json`. Matching cache entries rerender with `--generated-visuals off`. `--force` does not refresh them; use both `--generated-visuals auto --regenerate-visuals` for an explicit paid refresh.
 
@@ -378,7 +452,7 @@ Materialize those reviewed directions later:
 ```bash
 pnpm run animations create \
   --render-plan summary-video/summary.narration-plan.json \
-  --generated-visuals auto
+  --generated-visuals auto --force
 ```
 
 Phrase captions are enabled by default and can be disabled for a clean export:
@@ -387,7 +461,9 @@ Phrase captions are enabled by default and can be disabled for a clean export:
 pnpm run animations create summary.md --captions off
 ```
 
-The former black canvas is replaced by a deterministic animated ambient background. To generate and cache a separate OpenAI image for every scene and requested orientation:
+### Scene backgrounds and saved-plan rendering
+
+The default narrated background is a deterministic animated ambient scene. To generate and cache a separate image for every scene and requested orientation:
 
 ```bash
 pnpm run animations create summary.md \
@@ -395,10 +471,7 @@ pnpm run animations create summary.md \
   --scene-background generated
 ```
 
-Generated images use Cloudflare `stable-diffusion-xl-base-1.0` when Cloudflare keys are set,
-otherwise OpenAI `gpt-image-2`, at medium quality by default. SDXL rather than FLUX because
-`flux-1-schnell` accepts no width/height and can only return a square plate, which gets cropped
-into a 16:9 frame. A scene staged with characters asks for a literal empty interior with a
+Provider and model selection follow the [setup rules](#ai-and-image-providers), including overrides in `.env`. A scene staged with characters asks for a literal empty interior with a
 visible floor instead of an abstract metaphor, and is composited with a lighter scrim and no
 drift so the room the cast stands in stays readable. Change the model or quality with `--image-model` and `--image-quality`. `--regenerate-backgrounds` refreshes matching cached images; `--force` replaces videos and plans without purchasing new images. All requested images are staged before the cache is promoted, and a failed image request stops before voice synthesis or rendering.
 
@@ -422,12 +495,16 @@ pnpm run animations create summary.md --plan-only
 
 Narrated planning automatically replaces malformed or unsupported optional visuals with a code-native diagram and saves a warning. An empty comparison becomes a callout without inventing another side. Other validation failures, such as missing or duplicate item anchors, get up to two corrective model requests with the validation details. The CLI reports these attempts and saves their warnings; the final plan must still pass strict timing, structure, and source-grounding checks. Saved-plan validation remains strict.
 
-After reviewing or editing the draft, synthesize and render without another OpenAI request:
+After reviewing or editing the draft, validate it before synthesis and rendering:
 
 ```bash
 pnpm run animations create \
   --render-plan summary-video/summary.narration-plan.json \
-  --aspect-ratio both
+  --plan-only
+
+pnpm run animations create \
+  --render-plan summary-video/summary.narration-plan.json \
+  --aspect-ratio both --force
 ```
 
 A timed plan can also be rendered again without planning or Supertonic. Use `--force` to replace an existing video, or choose a new `--output-dir` to preserve it:
@@ -443,7 +520,7 @@ pnpm run animations create \
   --force
 ```
 
-The first command uses the default deterministic ambient background and makes no OpenAI call. The second reuses matching images from `summary.backgrounds/` and requests only missing generated assets.
+The first command uses the default deterministic ambient background and makes no provider call when all referenced foreground assets are cached. The second reuses matching images from `summary.backgrounds/` and requests missing backgrounds from the selected image provider.
 
 Narrated output is H.264 video with AAC voiceover audio. Planning and TTS happen once; `both` performs two independent Remotion render passes.
 
@@ -468,7 +545,7 @@ New publish kits save `thumbnail.composition`, `primaryItemIndices`, and `second
 Render the comparison gallery (both orientations, speech-aligned states, old/new covers, and audio-free subtitle samples):
 
 ```bash
-pnpm fixtures:presentation -- --output=/tmp/youtube-presentation-preview
+pnpm run fixtures:presentation --output=/tmp/youtube-presentation-preview
 # Skip video encoding when inspecting layouts only:
 node --import tsx src/render-presentation-fixtures.ts --stills-only --output=/tmp/youtube-presentation-preview
 ```
@@ -484,7 +561,7 @@ pnpm run animations publish \
   summary-video/summary.narration-timed.json
 ```
 
-The command makes one source-grounded Structured Outputs request, then saves:
+The command requests source-grounded metadata from the selected AI provider, then saves:
 
 - `summary.publish.json` — editable metadata and cover direction
 - `summary.publish.md` — copy-ready recommended title, alternatives, description, tags, and hashtags
@@ -501,12 +578,12 @@ pnpm run animations publish \
   --metadata-only
 ```
 
-After editing `summary.publish.json`, render its covers without another OpenAI request:
+After editing `summary.publish.json`, render its covers without another AI request:
 
 ```bash
 pnpm run animations publish \
   summary-video/summary.narration-plan.json \
-  --render-publish summary-video/summary.publish.json
+  --render-publish summary-video/summary.publish.json --force
 ```
 
 Use `--cover-aspect 16:9` or `--cover-aspect 9:16` to render one orientation. The default is `both`. Existing metadata and images are protected unless `--force` is supplied. `--output-dir` moves the complete publish-kit output when generating new metadata and moves cover output when rerendering an edited publish plan.
@@ -526,6 +603,8 @@ Publish backgrounds follow the video image rules: PNG/JPEG/WebP up to 20 MB, rel
 
 The image selection is not saved in `publish.json`; repeat `--background-image` when rerendering. `--metadata-only` validates a supplied image without staging it or starting Chrome. To use different images for each orientation, run the command separately with `--cover-aspect 16:9` and `--cover-aspect 9:16`.
 
+## Local narration
+
 ### Automatic Supertonic voice selection
 
 Narrated videos default to `--voice auto`. After planning, the CLI scores the final title, scene titles, narration, visual motifs, and source text against Supertone's documented use cases for its ten included presets. For example, investor and finance material favors M3, educational walkthroughs favor M4, news-style reports favor F3, and technical training favors F4. The selected voice and a short source-signal reason are printed before synthesis, and the concrete voice ID is persisted in the timed plan for deterministic rerendering.
@@ -540,7 +619,7 @@ Expression metadata stays separate from spoken text and captions. The Supertonic
 
 After creating a draft with `--plan-only`, you can change a beat's `expression` in `summary.narration-plan.json` before synthesis. Use one of the supported values instead of adding `<laugh>`, `<breath>`, or `<sigh>` to phrase text.
 
-## Voice-derived timing
+### Voice-derived timing
 
 The worker concatenates every beat's caption phrases into one natural utterance and calls Supertonic once for that complete beat. It trims the returned float PCM to Supertonic's predicted voiced duration, writes the existing per-beat mono 44.1 kHz PCM16 files, and records the exact number of written samples. There is no inserted silence or prosody reset at a caption boundary. The combined voiceover adds:
 
@@ -585,7 +664,7 @@ pnpm run animations episode.srt --plan-only
 pnpm run animations --render-plan animations/episode.animation-plan.json
 ```
 
-New overlay plans speech-align visible items to subtitle cues. Saved version-1 plans remain compatible and fall back to evenly distributed reveals when item timings are absent. Version-3 output manifests retain `aspectRatio`, `width`, and `height` and add palette, captions, scene background, and asset-credit metadata while landscape filenames remain unchanged.
+New overlay plans speech-align visible items to subtitle cues. Saved version-1 plans remain compatible and fall back to evenly distributed reveals when item timings are absent. Current version-4 output manifests record `aspectRatio`, `width`, `height`, palette, captions, scene background, and asset-credit metadata while landscape filenames remain unchanged.
 
 Version-3 subtitle plans select one palette and can use all narrated visual treatments. Put relevant PNG, JPEG, or WebP files in an `images/` directory beside the subtitle file; each selected image is copied once into the plan output for deterministic rerenders. Exact chart values, brand names, metrics, and generated-image evidence must occur in the selected cue range. An unsupported optional treatment falls back to a diagram with a saved warning instead of rendering invented information.
 
@@ -621,9 +700,10 @@ Landscape remains 1920×1080 and preserves the original layouts.
 ## Options
 
 ```text
+Shared:
 --aspect-ratio <16:9|9:16|both>   Output orientation (default: 16:9)
 --output-dir <path>               Override the output directory
---model <model>                   Default: OPENAI_MODEL or gpt-5.6
+--model <model>                   Selected provider's model; see provider setup
 --fps <number>                    Frames per second (default: 30)
 --plan-only                       Save or validate without synthesis/rendering
 --render-plan <path>              Load a saved plan without text planning
@@ -632,42 +712,45 @@ Landscape remains 1920×1080 and preserves the original layouts.
 --help                            Show CLI help
 --version                         Show the CLI version
 
+Visual options for both video workflows:
+--captions <on|off>               Narrated default: on; subtitle default: off
+--scene-background <mode>         Narrated: ambient (default), generated, image
+                                  Subtitle: off (default), ambient, generated, image
+--generated-visuals <off|auto>    Grounded foreground generation; default: off
+--regenerate-visuals              Refresh generated foregrounds; requires auto
+--regenerate-backgrounds          Refresh generated backdrops; requires generated
+--image-model <model>             See provider setup for defaults and overrides
+--image-quality <quality>         low, medium, high; default: medium (OpenAI)
+
 Subtitle overlays:
 --format <prores|webm|green|h264> Output format (green by default; h264 for scene backgrounds)
 --max-suggestions <number>        Maximum overlays (default: 6; max: 12)
---captions <on|off>               Exact cue captions; default: off
---scene-background <mode>         off, ambient, generated, or image; default: off
---generated-visuals <off|auto>    Grounded foreground generation; default: off
---require-characters              Fail rather than degrade when a described human
-                                  exchange is not staged as people
---regenerate-visuals              Refresh generated foreground assets; requires auto
---regenerate-backgrounds          Refresh generated backdrops; requires generated mode
---image-model <model>             Default: Cloudflare SDXL if Cloudflare keys are set,
-                                  else OPENAI_IMAGE_MODEL or gpt-image-2
---image-quality <quality>         low, medium, or high; default: medium
 
 Narrated videos:
+--stills-only                     Scene previews without speech synthesis or video
+--audio-only                      Voiceover and timed plan without video rendering
+--review                          Pause between script, stills, audio, and video
+--require-characters              Retry missing character staging; see limitations above
 --supertonic-assets-dir <path>    Default: models/supertonic-3
 --voice <auto|M1..M5|F1..F5>      Default: auto
 --language <code>                 Default: en; use na for language-agnostic
 --tts-speed <number>              0.7-2.0 (default: 1.05)
 --tts-steps <number>              1-20 (default: 8)
 --target-duration <seconds>       Default: 60
---captions <on|off>               Default: on
---scene-background <mode>         ambient, generated, or image; default: ambient
---image-model <model>             Default: OPENAI_IMAGE_MODEL or gpt-image-2
---image-quality <quality>         low, medium, or high; default: medium
 --research <off|auto|required>    Web research before planning; default: off
 --refresh-research                Replace the matching research cache
---regenerate-backgrounds          Refresh cached assets; requires generated mode
+
+Topic authoring:
+--guidance <text>                 Extra direction for the source document
+--output-dir <path>               Destination FILE; default: samples/<slug>.md
 
 Publish kits:
 --cover-aspect <16:9|9:16|both>   Default: both
 --metadata-only                   Save or validate metadata without rendering covers
---render-publish <publish.json>   Render edited metadata without calling OpenAI
+--render-publish <publish.json>   Render edited metadata without AI generation
 ```
 
-Subtitle inputs default to an adjacent `animations/` directory. Narrated source inputs default to `<source-stem>-video/`, while a loaded plan defaults to its own directory. Every requested output is checked before rendering, and existing generated files are never replaced unless `--force` is supplied. Matching generated-background cache entries remain reusable unless `--regenerate-backgrounds` is also supplied.
+Subtitle inputs default to an adjacent `animations/` directory. Saved subtitle plans also default to `animations/` beside their recorded `sourceSubtitle` path; use `--output-dir` when relocating the plan. Narrated source inputs default to `<source-stem>-video/`, and saved narrated plans default to their own directory. Existing videos, plans, audio, and stills are protected unless `--force` is supplied. Matching generated-background cache entries remain reusable unless `--regenerate-backgrounds` is also supplied.
 
 ## Templates and visual behavior
 
@@ -690,16 +773,17 @@ These four layouts remain available under `visual.kind: "diagram"`. Narrated vid
 - `code-walkthrough` — a literal supplied code excerpt with speech-timed line highlights
 - `sequence-diagram` — 2–4 participants exchanging 2–6 directed, source-supported messages
 - `layered-architecture` — 2–6 source-ordered layers assembled progressively
+- `character-scene` — 2–3 code-drawn people with cue-timed speaking turns, props, and optional counter/callout
 
 All treatments use the same motion grammar: narration-beat or subtitle-cue entrances, stable hold frames, small ambient movement, and one dominant moving element. They do not use random motion, constant bouncing, rapid spinning, or effects behind the protected caption lane.
 
 Titles and labels are measured and fitted into their bounds. Icon resolution is deterministic: an explicit, relevance-checked scene icon is tried first; an exact Simple Icons name or explicit brand alias is tried second; an exact entry from `assets/brands/manifest.json` is tried third; and a conservative Lucide label fallback is used last. The built-in catalog includes standards/protocols, compatibility, CPUs, accelerators, memory, circuits, AI models, and the existing software-system concepts. Brand showcases do not use fuzzy matching. Missing or ambiguous logos produce a planning warning; brand names absent from the source and source-unsupported metric numbers are rejected before the plan is saved. The renderer never fabricates a mark or silently substitutes another company. Original logo colors are preserved unless a curated manifest explicitly allows monochrome use.
 
-Narrated plan files are version 7. New subtitle animation plans are version 3 and persist the same palette, treatment, icons, media, captions, background prompts, warnings, and required asset credits; subtitle output manifests are version 4 and record the render-time caption/background settings. Narrated versions 1–6, subtitle versions 1–2, and placement manifests 2–3 remain readable. Existing visuals and timing are preserved during normalization. New treatments require the new plan version. Version-1 subtitle plans normalize to cyan diagrams and render unchanged with the default caption/background-off options. Captions require regeneration because legacy files do not contain original per-cue timing.
+Narrated plan files are version 7. New subtitle animation plans are version 3 and persist the same palette, treatment, icons, media, captions, background prompts, warnings, and required asset credits; subtitle output manifests are version 4 and record the render-time caption/background settings. Narrated versions 1–6, subtitle versions 1–2, and placement manifests 2–3 remain readable. Existing visuals and timing are preserved during normalization. Use the current plan formats when authoring new treatments. Version-1 subtitle plans normalize to cyan diagrams and render unchanged with the default caption/background-off options. Captions require regeneration because legacy files do not contain original per-cue timing.
 
-Ambient backgrounds are generated entirely in Remotion from palette-driven deterministic gradients, moving light fields, a subtle grid, and a vignette. The same palette drives diagram accents and new publish covers. Generated backgrounds use native `2048×1152` and `1152×2048` JPEG assets, receive the stored palette direction in their prompt, add a slow pan/zoom plus neutral readability overlays, and never silently fall back to ambient when generation was requested. Changing the palette changes the prompt hash, so cached images cannot silently retain the previous color family.
+Ambient backgrounds are generated entirely in Remotion from palette-driven deterministic gradients, moving light fields, a subtle grid, and a vignette. The same palette drives diagram accents and new publish covers. Generated-background dimensions depend on the provider. Prompts include the saved palette, and non-character scenes add slow pan/zoom with readability overlays; character settings stay still. Requested generation never silently falls back to ambient. Changing the palette changes the prompt hash, so cached images cannot silently retain the previous color family.
 
-The OpenAI Responses API uses Zod Structured Outputs with response storage disabled (`store: false`). Optional source research uses the hosted `web_search` tool, bounds it to four calls, saves complete source metadata, and verifies structured claim URLs against tool-returned URLs. OpenAI selects and fills the planning templates; it does not generate arbitrary React code.
+OpenAI narration, overlay, and publish planning use the Responses API with Zod Structured Outputs and `store: false`. Gemini and Groq use JSON mode through their OpenAI-compatible endpoints, followed by local validation. The narrated planner derives its compact prompt schema from the same Zod definitions so every provider sees the available treatments. Optional source research uses OpenAI-hosted `web_search`, bounds it to four calls, saves source metadata, and verifies claim URLs against tool-returned URLs. Models select and fill planning templates; they do not generate arbitrary React code.
 
 ## Local icon, motion, and brand assets
 
@@ -714,12 +798,12 @@ Asset intake workflow:
 1. Obtain a logo SVG from the company's official brand or press kit, or obtain an SVG/Lottie from an approved source under a license that covers the intended video use. Never use an AI-generated company logo.
 2. Put the selected file under `assets/brands/`, `assets/icons/`, or `assets/motion/`. For a custom animation, Jitter, Lottielab, or SVGator can export Lottie from controlled SVG artwork.
 3. Add complete provenance, semantic keywords, attribution, and playback/color metadata to the matching manifest. Mark external icons that require per-video credit with `attributionRequired: true`; used credits are persisted in narrated plans and version-3 subtitle plans, copied into subtitle placement manifests, and appended to generated narrated publish Markdown. For third-party assets, also add any required notice to `THIRD_PARTY_NOTICES.md`.
-4. Run `pnpm assets:validate`, `pnpm test`, `pnpm check`, and `pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixtures` before assigning the asset ID to a scene.
+4. Run `pnpm assets:validate`, `pnpm test`, and `pnpm check`, then render a relevant fixture before assigning the asset ID to a scene. Check [fixture portability](#development-checks) for your platform.
 5. Inspect early, middle, and final frames in both orientations, then render the representative narrated MP4 fixture to check for flicker and caption collisions.
 
 LottieFiles is an approved intake source when the individual asset's license and attribution are recorded. Flaticon, Lordicon, and IconScout are manual intake sources only; free Flaticon and Lordicon assets generally require attribution, while paid assets can be used when the user supplies the licensed file and records its terms. The planner and renderer never hotlink or automatically download search results. Rive remains deferred for state-driven character work. Brandfetch is intentionally not integrated because its hotlinking model conflicts with reproducible offline rendering.
 
-Optional scene imagery uses the OpenAI Image API. This is separate from publish covers, which are always code-native and never use that API. GPT Image access can depend on account and organization availability; see the [official image-generation guide](https://developers.openai.com/api/docs/guides/image-generation).
+Optional scene imagery uses Cloudflare Workers AI or the OpenAI Image API. Publish covers are code-native and never generate images. For OpenAI image setup, see the [official image-generation guide](https://developers.openai.com/api/docs/guides/image-generation).
 
 ## Supertonic terms and project notice
 
@@ -729,18 +813,32 @@ The official repository announced on July 23, 2026 that it will be archived and 
 
 ## Development checks
 
+Run the quality gates before submitting changes. These do not need a provider key, browser, or speech model:
+
 ```bash
 pnpm check
 pnpm test
+pnpm assets:validate
 pnpm build
 ```
+
+If the package-manager launcher cannot start in your environment, use the already installed local tools to run the same checks without changing source or dependency policy:
+
+```bash
+./node_modules/.bin/tsc -p tsconfig.json --noEmit
+./node_modules/.bin/vitest run
+node --import tsx src/validate-assets.ts
+./node_modules/.bin/tsc -p tsconfig.json
+```
+
+Fixture renders need Chrome. `fixtures:layouts` and `fixtures:subtitle-visuals` hardcode `/usr/bin/google-chrome-stable`; `fixtures:narrated-layouts` probes Linux paths and does not read the browser environment variable. On macOS, use `fixtures:explainers`, `fixtures:presentation`, or `fixtures:characters` with `REMOTION_BROWSER_EXECUTABLE` set. See [fixture portability](docs/commands.md#fixture-scripts).
 
 Render early, middle, and completed stress-test frames for all four templates and both orientations:
 
 ```bash
-pnpm fixtures:layouts -- /tmp/youtube-animation-layout-fixtures
-pnpm fixtures:subtitle-visuals -- /tmp/youtube-animation-subtitle-visual-fixtures
-pnpm fixtures:narrated-layouts -- /tmp/youtube-animation-narrated-layout-fixtures
+pnpm run fixtures:layouts /tmp/youtube-animation-layout-fixtures
+pnpm run fixtures:subtitle-visuals /tmp/youtube-animation-subtitle-visual-fixtures
+pnpm run fixtures:narrated-layouts /tmp/youtube-animation-narrated-layout-fixtures
 ```
 
 Together, these commands cover the four diagram templates and the original eight visual kinds with early, middle, and completed states in both orientations. The subtitle fixture also covers caption-off green output for legacy and modern visual paths, caption-on ambient output, and a mock generated background without an API call. Inspect the rendered PNGs or assemble them into contact sheets to catch clipping, logo distortion, chroma-key spill, Lottie flicker, chart readability, and unsafe positioning.
@@ -748,33 +846,42 @@ Together, these commands cover the four diagram templates and the original eight
 Render green-screen text regression samples (legacy labels, directed text, and code) in both orientations, with matching dark-background controls and optional H.264 videos:
 
 ```bash
-pnpm fixtures:chroma-text -- --output=/tmp/chroma-text-fixtures --video
+pnpm run fixtures:chroma-text --output=/tmp/chroma-text-fixtures --video
 ```
 
-Render the six new treatments as a complete offline gallery:
+Render the six chart and explainer treatments as an offline gallery:
 
 ```bash
-pnpm fixtures:explainers -- /tmp/youtube-animation-explainer-gallery
+pnpm run fixtures:explainers /tmp/youtube-animation-explainer-gallery
 # Faster layout inspection, without video encoding:
-pnpm fixtures:explainers -- /tmp/youtube-animation-explainer-gallery --stills-only
+pnpm run fixtures:explainers /tmp/youtube-animation-explainer-gallery --stills-only
 # Edge cases: 12-line code, long messages sharing a cue, clustered/constant chart data:
-pnpm fixtures:explainers -- /tmp/youtube-animation-explainer-gallery --stress-only
+pnpm run fixtures:explainers /tmp/youtube-animation-explainer-gallery --stress-only
 ```
 
-Open the generated `index.html`. It includes early/middle/completed stills for both workflows, green and transparent overlays, and supplied-background fixtures. The full run also writes individual audio-free green MP4s, representative alpha WebMs, and two narrated montage MP4s. Narrated previews use a silent timing track; no OpenAI call or speech synthesis is required. Editable draft/timed narration and subtitle plans are saved beside the gallery.
+Open the generated `index.html`. It includes early/middle/completed stills for both workflows, green and transparent overlays, and supplied-background fixtures. The full run also writes individual audio-free green MP4s, representative alpha WebMs, and two narrated montage MP4s. Narrated previews use a silent timing track; no provider call or speech synthesis is required. Editable draft/timed narration and subtitle plans are saved beside the gallery.
 
-Render narrated MP4 fixtures with captions in both orientations. The second command uses local mock artwork to exercise the generated-image rendering path without an API call:
+Render narrated MP4 fixtures with silent timing audio and captions in both orientations, or inspect publish covers and speech expressions. The second command uses local mock artwork to exercise generated backgrounds without an API call:
 
 ```bash
-pnpm fixtures:narrated -- /tmp/youtube-animation-narrated ambient
-pnpm fixtures:narrated -- /tmp/youtube-animation-narrated-generated generated
-pnpm fixtures:publish -- /tmp/youtube-animation-publish
-pnpm fixtures:voice-expressions -- /tmp/youtube-animation-voice-expressions
+pnpm run fixtures:narrated /tmp/youtube-animation-narrated ambient
+pnpm run fixtures:narrated /tmp/youtube-animation-narrated-generated generated
+pnpm run fixtures:publish /tmp/youtube-animation-publish
+pnpm run fixtures:voice-expressions /tmp/youtube-animation-voice-expressions
 ```
 
 The narrated fixture contains six scenes and visibly exercises a legacy diagram, AI-agent workflow, exact company-logo scene, network map, metric focus, and Lottie spotlight. It accepts an optional palette after the background mode, for example `ambient emerald`. The publish fixture accepts an optional palette after its output directory. Run it once for each of `cyan`, `violet`, `emerald`, `amber`, and `rose` to compare both cover orientations without an API call. These fixtures make typography, safe areas, treatment variety, color consistency, and mobile readability inspectable directly.
 
-The voice-expression fixture renders plain, laugh, breath, and sigh WAVs from the same sentence for listening QA. Its JSON manifest records exact sample counts and durations; optional second and third arguments override the Supertonic assets directory and voice.
+The voice-expression fixture requires the local Supertonic model and renders plain, laugh, breath, and sigh WAVs from the same sentence for listening QA. Its JSON manifest records exact sample counts and durations; optional second and third arguments override the Supertonic assets directory and voice.
+
+Preview all three standalone character scenarios without provider calls or a TTS model:
+
+```bash
+pnpm run fixtures:characters /tmp/youtube-character-preview all --stills-only
+pnpm run fixtures:characters /tmp/youtube-character-preview all --stills-only --vertical
+```
+
+Omit `--stills-only` for silent MP4s. These are renderer prototypes; use a saved narrated plan to inspect character scenes in the full caption and voiceover pipeline.
 
 An offline overlay plan remains available for a full media render:
 
@@ -785,3 +892,5 @@ node dist/cli.js \
 ```
 
 If Chrome is installed in a nonstandard location, set `REMOTION_BROWSER_EXECUTABLE`.
+
+For implementation details, start with [architecture](docs/architecture.md), [plan schemas](docs/plan-schema.md), [commands](docs/commands.md), and [contributing](docs/contributing.md). Implementation entry points: [provider resolution](src/ai-client.ts#L11), [CLI options](src/cli.ts#L1044), [review stages](src/cli.ts#L898), [character retry behavior](src/narration-planner.ts#L795), [stills and overwrite checks](src/narrated-render.ts#L114), and [character schema](src/explainer-visuals.ts#L50).
