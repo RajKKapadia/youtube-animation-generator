@@ -621,7 +621,7 @@ Landscape remains 1920×1080 and preserves the original layouts.
 ## Options
 
 ```text
---aspect-ratio <16:9|9:16|both>  Output orientation (default: 16:9)
+--aspect-ratio <16:9|9:16|both>   Output orientation (default: 16:9)
 --output-dir <path>               Override the output directory
 --model <model>                   Default: OPENAI_MODEL or gpt-5.6
 --fps <number>                    Frames per second (default: 30)
@@ -648,7 +648,7 @@ Subtitle overlays:
 
 Narrated videos:
 --supertonic-assets-dir <path>    Default: models/supertonic-3
---voice <auto|M1..M5|F1..F5>     Default: auto
+--voice <auto|M1..M5|F1..F5>      Default: auto
 --language <code>                 Default: en; use na for language-agnostic
 --tts-speed <number>              0.7-2.0 (default: 1.05)
 --tts-steps <number>              1-20 (default: 8)
