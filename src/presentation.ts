@@ -31,6 +31,8 @@ export const compositionChoices = (scene: Presentable): Composition[] => {
   if (scene.template === 'comparison' && scene.secondaryItems.length) return ['comparison'];
   if (['agent-workflow', 'network-map', 'sequence-diagram', 'layered-architecture'].includes(kind ?? '') || scene.template === 'process-flow' || scene.template === 'timeline') return ['process'];
   if (kind === 'kinetic-text') return ['statement'];
+  // A staged exchange is a sequence of turns, so it reads as a process.
+  if (kind === 'character-scene') return ['process'];
   if (kind === 'brand-showcase' || kind === 'icon-spotlight') return ['focal'];
   return scene.icons?.focal || scene.icons?.primary.some(Boolean) ? ['statement', 'focal'] : ['statement'];
 };

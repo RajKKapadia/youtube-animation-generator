@@ -4,7 +4,7 @@ Operating guide for agents in this repo. Keep this file small — it loads into 
 Detailed references live in [`docs/`](docs/) and are read **on demand**; the routing table
 below says which one to open.
 
-**Verified:** 2026-09-16 · `c47ea13` + multi-provider changes · darwin-arm64, Node 26.5.0, pnpm 11.22.0
+**Verified:** 2026-09-18 · `1b086e0` + character-scene changes · darwin-arm64, Node 26.5.0, pnpm 11.22.0
 **Owner:** _Unassigned — populate before using this for onboarding._
 
 ---
@@ -87,6 +87,28 @@ These apply before you read anything else.
 2. Run `pnpm check && pnpm test` before declaring work done.
 3. Ground claims in `file:line`. Code moves; re-verify rather than trusting these docs blindly.
 4. Prefer `--render-plan` / `--plan-only` over anything that authors a new plan.
+5. **Adding a visual treatment? It must reach both provider paths.** OpenAI gets the schema
+   from Zod via `zodTextFormat` (`narration-planner.ts:713`); every other provider gets it as
+   a compact shape embedded in the prompt (`narration-planner.ts:728`). That copy used to be
+   hand-written and had silently drifted, so Gemini/Groq could only ever pick the original
+   seven kinds — the model was told the newer ones did not exist, and no prompt wording could
+   change that. It is now derived from the same Zod schema, rendered compactly by
+   `schema-prompt.ts` (raw JSON Schema costs ~4.1k tokens and 413s on free tiers), with drift
+   and size tests in `narration-planner.test.ts`. If a treatment is never chosen, check the
+   schema the provider actually received **before** tuning prompt wording.
+6. **A required field is a field a model can lose the whole treatment on.** Give anything
+   decorative or obviously-defaulted a `.prefault` rather than making it required: it keeps the
+   key in `required` (which OpenAI strict mode demands) while filling it when omitted, and it
+   costs nothing in prompt tokens. `.optional()` without `.nullable()` is rejected by the SDK,
+   and `.default()` emits a `"default"` keyword outside OpenAI's strict subset. Never prefault
+   `sourceEvidence` or anything else carrying a grounding guarantee. Invariants that cross
+   fields (an index pointing past the last item, an id naming nobody on stage) belong in
+   `narration-plan-recovery.ts` as repairs, and must run for **every** provider — strict
+   structured outputs guarantee shape, never cross-field consistency. See
+   `docs/plan-schema.md`.
+
+**Symptom → cause.** A treatment the planner never selects is usually a schema problem, not a
+prompt problem. Confirm which provider ran (`model` in the saved plan) and which branch it took.
 
 **Useful invariant.** Every provider client throws when its key is unset (`ai-client.ts:44-77`),
 and no other module reaches the network. So if a command exits 0 with no provider keys in the
@@ -100,6 +122,7 @@ environment, it provably made no billed API call.
 | Understand the pipeline, subsystems, or where a module lives | [`docs/architecture.md`](docs/architecture.md) |
 | Write or edit a plan JSON — schemas, enums, limits, versioning | [`docs/plan-schema.md`](docs/plan-schema.md) |
 | Look up a CLI command, flag, fixture script, or output path | [`docs/commands.md`](docs/commands.md) |
+| Write a source document for a topic (`topic` command) | [`docs/commands.md`](docs/commands.md#topic--writing-a-source-document) |
 | Diagnose an error, or check if it's a known defect | [`docs/troubleshooting.md`](docs/troubleshooting.md) |
 | Configure or debug an AI / image provider | [`docs/providers.md`](docs/providers.md) |
 | Ship output externally, or touch dependencies | [`docs/compliance.md`](docs/compliance.md) |

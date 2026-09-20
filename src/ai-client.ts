@@ -27,7 +27,7 @@ export const defaultModelForProvider = (provider: AIProvider): string => {
     case 'gemini':
       return process.env.GOOGLE_GEMINI_MODEL ?? 'gemini-3.5-flash';
     case 'groq':
-      return process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
+      return process.env.GROQ_MODEL ?? 'qwen/qwen3.8-27b';
     case 'openai':
     default:
       return process.env.OPENAI_MODEL ?? 'gpt-5.6';
@@ -87,7 +87,22 @@ export const createAIClient = (options: {
 const isTransientError = (error: unknown): boolean => {
   const status = (error as {status?: unknown})?.status;
   const message = String((error as {message?: unknown})?.message ?? '').toLowerCase();
+  // Groq reports a per-minute token overrun as 413, not 429, when the request
+  // plus the current window exceeds the tier limit. That is a rate limit that
+  // clears on its own, so it must back off rather than fail the run. A genuine
+  // oversized payload ("request entity too large") stays fatal — waiting
+  // cannot shrink it.
+  const isWindowOverrun = status === 413 &&
+    (message.includes('tokens per minute') || message.includes('(tpm)'));
+  // Groq returns 400 when a JSON-mode generation comes back unparseable. That
+  // is the model failing a roll, not a bad request: the identical call
+  // succeeds on a retry. Without this the run dies on the first bad sample,
+  // before the repair loop ever gets a turn.
+  const isGenerationMiss = status === 400 &&
+    (message.includes('failed to generate json') || message.includes('failed to validate json'));
   return (
+    isWindowOverrun ||
+    isGenerationMiss ||
     status === 429 ||
     status === 503 ||
     (typeof status === 'number' && status >= 500) ||
@@ -102,9 +117,14 @@ const isTransientError = (error: unknown): boolean => {
 
 const extractRetryDelay = (error: unknown, attempt: number): number => {
   const message = String((error as {message?: unknown})?.message ?? '');
-  const match = message.match(/retry in ([0-9.]+)s/i);
+  const match = message.match(/(?:retry|try again) in ([0-9.]+)s/i);
   if (match && match[1]) {
     return Math.ceil(parseFloat(match[1]) * 1000) + 1500;
+  }
+  // A per-minute budget only frees up when the window rolls over, so a short
+  // exponential backoff just burns attempts. Wait out the window instead.
+  if (message.toLowerCase().includes('tokens per minute') || message.toLowerCase().includes('(tpm)')) {
+    return 62_000;
   }
   return 1500 * 2 ** attempt;
 };

@@ -4,7 +4,8 @@ import {EXPLAINER_FIXTURES, FIXTURE_CODE, fixtureSubtitleSuggestion, makeExplain
 import {recoverUnsupportedNarratedVisuals} from './narration-planner.js';
 import {materializeSubtitleVisualPlan} from './planner.js';
 import {dataVisualizationSchema, draftNarrationSceneSuggestionSchema, narratedPlanSchema, outputManifestSchema, savedPlanSchema, subtitleAnimationPlanResponseSchema} from './types.js';
-import {explainerGroundingIssue, visualTreatmentKey} from './explainer-visuals.js';
+import {characterSceneSuggestionSchema, explainerGroundingIssue, visualTreatmentKey} from './explainer-visuals.js';
+import {narrationResponseSchema} from './narration-plan-recovery.js';
 import {activeItemIndex, chartDomain, itemAnimationWindow, windowProgress} from './remotion/explainer-timing.js';
 
 describe('six explainer treatments', () => {
@@ -129,5 +130,150 @@ describe('speech-window motion', () => {
     expect(chartDomain([0, 0])).toEqual([-1, 1]);
     expect(chartDomain([-5, -2])).toEqual([-5, -2]);
     expect(chartDomain([1, 2, 8])).toEqual([1, 8]);
+  });
+});
+
+describe('character-scene grounding', () => {
+  const source = 'You arrive at a hotel to check in. The front desk asks for identity proof. Is this guest over 18?';
+  const evidence = 'The front desk asks for identity proof';
+  const scene = (cast: Array<{id: string; label: string; position: string}>) => ({
+    template: 'callout' as const, title: 'Check-in',
+    primaryItems: ['first', 'second'], secondaryItems: [],
+    leftLabel: '', rightLabel: '', reason: 'r',
+    icons: {focal: null, primary: [], secondary: []},
+    visual: {
+      kind: 'character-scene' as const, motion: 'reveal' as const, motif: 'security' as const,
+      set: 'none' as const, sign: null,
+      cast: cast.map((member) => ({
+        ...member, outfit: 'casual', age: 'adult',
+        behindSet: false, prop: null, propPrimaryItemIndex: null,
+      })),
+      speakers: [{primaryItemIndex: 0, castId: cast[0]!.id}],
+      callout: null,
+      sourceEvidence: evidence,
+    },
+  });
+
+  it('accepts role names the source does not use verbatim', () => {
+    // Labels are internal and never drawn; demanding them word-for-word
+    // rejected a correct scene because the model wrote "Customer" where the
+    // source said "an individual".
+    expect(explainerGroundingIssue(scene([
+      {id: 'visitor', label: 'Arriving Customer', position: 'left'},
+      {id: 'clerk', label: 'Desk Agent', position: 'right'},
+    ]) as never, source)).toBeNull();
+  });
+
+  it('rejects a staged exchange the source never describes', () => {
+    const invented = scene([
+      {id: 'a', label: 'one', position: 'left'},
+      {id: 'b', label: 'two', position: 'right'},
+    ]) as {visual: {sourceEvidence: string}};
+    invented.visual.sourceEvidence = 'The butler carries the luggage upstairs.';
+    expect(explainerGroundingIssue(invented as never, source))
+      .toContain('exact source excerpt');
+  });
+});
+
+
+describe('character-scene schema forgiveness', () => {
+  const minimal = {
+    kind: 'character-scene',
+    cast: [
+      {id: 'guest', position: 'left'},
+      {id: 'front-desk', position: 'right'},
+    ],
+    sourceEvidence: 'The front desk asks for identity proof',
+    speakers: [{primaryItemIndex: 0, castId: 'guest'}],
+  };
+
+  // The single test that justifies the whole prefault change: a model that
+  // produces only the fields that carry meaning must not lose the scene. Every
+  // omitted field here previously downgraded it to a plain diagram.
+  it('fills every decorative field a model left out', () => {
+    const parsed = characterSceneSuggestionSchema.parse(structuredClone(minimal));
+    expect(parsed).toMatchObject({
+      callout: null,
+      motif: 'none',
+      motion: 'reveal',
+      set: 'none',
+      sign: null,
+    });
+    expect(parsed.cast[0]).toMatchObject({
+      age: 'adult',
+      behindSet: false,
+      label: 'character',
+      outfit: 'casual',
+      prop: null,
+      propPrimaryItemIndex: null,
+    });
+  });
+
+  // Forgiveness must not become "accept anything". These stay red.
+  it('still rejects an invented or missing payload', () => {
+    const without = (key: string) => {
+      const candidate = structuredClone(minimal) as Record<string, unknown>;
+      delete candidate[key];
+      return characterSceneSuggestionSchema.safeParse(candidate).success;
+    };
+    expect(without('sourceEvidence')).toBe(false);
+    expect(without('cast')).toBe(false);
+    expect(without('kind')).toBe(false);
+
+    const oneActor = structuredClone(minimal);
+    oneActor.cast = [oneActor.cast[0]!];
+    expect(characterSceneSuggestionSchema.safeParse(oneActor).success).toBe(false);
+  });
+
+  // A prefault must not silently swallow a value the model got wrong.
+  it('rejects a wrong value rather than replacing it', () => {
+    for (const [key, value] of [['age', 'grown-up'], ['outfit', 'tuxedo'], ['position', 'middle']]) {
+      const candidate = structuredClone(minimal);
+      (candidate.cast[0] as Record<string, unknown>)[key as string] = value;
+      expect(characterSceneSuggestionSchema.safeParse(candidate).success).toBe(false);
+    }
+    const badSet = structuredClone(minimal) as Record<string, unknown>;
+    badSet['set'] = 'desk';
+    expect(characterSceneSuggestionSchema.safeParse(badSet).success).toBe(false);
+  });
+});
+
+// This is the test that would have caught the assumption that defaults cannot
+// coexist with OpenAI strict structured outputs. The API requires every
+// property to appear in its object's `required` array; `.prefault` satisfies
+// that while `.optional()` does not, and `.default` would add a `"default"`
+// keyword outside the documented strict subset.
+describe('OpenAI strict structured-output invariants', () => {
+  const format = zodTextFormat(narrationResponseSchema, 'narrated_video_plan') as unknown as {
+    schema: Record<string, unknown>;
+    strict: boolean;
+  };
+
+  it('stays strict', () => {
+    expect(format.strict).toBe(true);
+  });
+
+  it('lists every property of every object as required', () => {
+    const offenders: string[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (Array.isArray(node)) {
+        node.forEach((child, index) => walk(child, `${path}[${index}]`));
+        return;
+      }
+      if (!node || typeof node !== 'object') return;
+      const record = node as Record<string, unknown>;
+      if (record['type'] === 'object' && record['properties']) {
+        const keys = Object.keys(record['properties'] as Record<string, unknown>);
+        const required = new Set((record['required'] as string[] | undefined) ?? []);
+        for (const key of keys) if (!required.has(key)) offenders.push(`${path}.${key}`);
+      }
+      for (const [key, value] of Object.entries(record)) walk(value, `${path}.${key}`);
+    };
+    walk(format.schema, '$');
+    expect(offenders).toEqual([]);
+  });
+
+  it('emits no "default" keyword', () => {
+    expect(JSON.stringify(format.schema)).not.toContain('"default"');
   });
 });

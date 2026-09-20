@@ -1,5 +1,73 @@
 import {withTransientImageRetries, type GenerateSceneImage} from '../scene-backgrounds.js';
 
+// Workers AI models do not share a parameter set, and sending the wrong one is
+// a 400 rather than a warning. Two families matter here:
+//   flux-1-schnell            prompt (<=2048 chars), steps (<=8), seed.
+//                             NO width/height - it returns a square - and NO
+//                             negative_prompt. Responds with base64 in JSON.
+//   stable-diffusion-xl-*     prompt, negative_prompt, width/height (256-2048),
+//                             num_steps (<=20), guidance, seed.
+//                             Responds with a raw image stream.
+// The square plate is why generated backgrounds never fitted a 16:9 frame:
+// objectFit:cover cropped ~42% of the height away before anything drew over it.
+const FLUX_MODEL = '@cf/black-forest-labs/flux-1-schnell';
+const DEFAULT_MODEL = '@cf/stabilityai/stable-diffusion-xl-base-1.0';
+
+const FLUX_MAX_PROMPT = 2_048;
+const FLUX_MAX_STEPS = 8;
+const SDXL_STEPS = 20;
+/** SDXL is trained at ~1 megapixel; 1344 on the long edge is its 16:9 sweet
+ *  spot. Larger is accepted but degrades composition. */
+const SDXL_MAX_EDGE = 1_344;
+
+/**
+ * Turn the `"2048x1152"` size the pipeline already computes into dimensions
+ * Workers AI accepts: aspect preserved, long edge capped, snapped to a multiple
+ * of 8, clamped to the documented 256-2048 range. Returns null for an
+ * unparseable size so the caller can simply omit the parameter.
+ */
+export const cloudflareDimensions = (
+  size: string,
+  maxEdge: number = SDXL_MAX_EDGE,
+): {height: number; width: number} | null => {
+  const match = /^\s*(\d+)\s*x\s*(\d+)\s*$/u.exec(size);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!width || !height) return null;
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  const snap = (value: number): number =>
+    Math.max(256, Math.min(2_048, Math.round((value * scale) / 8) * 8));
+  return {height: snap(height), width: snap(width)};
+};
+
+const isSdxlFamily = (model: string): boolean => model.includes('stable-diffusion');
+
+/** Exported for tests: the exact body we post for a given model. */
+export const cloudflareImageBody = ({
+  model,
+  negativePrompt,
+  prompt,
+  size,
+}: {
+  model: string;
+  negativePrompt?: string | undefined;
+  prompt: string;
+  size: string;
+}): Record<string, unknown> => {
+  if (model === FLUX_MODEL) {
+    return {prompt: prompt.slice(0, FLUX_MAX_PROMPT), steps: FLUX_MAX_STEPS};
+  }
+  if (!isSdxlFamily(model)) return {prompt};
+  const dimensions = cloudflareDimensions(size);
+  return {
+    ...(dimensions ?? {}),
+    ...(negativePrompt ? {negative_prompt: negativePrompt} : {}),
+    num_steps: SDXL_STEPS,
+    prompt,
+  };
+};
+
 export const createCloudflareImageGenerator = (): GenerateSceneImage => {
   const token = process.env.CLOUDFLARE_AI_KEY || process.env.CLOUDFLARE_API_TOKEN;
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -10,11 +78,9 @@ export const createCloudflareImageGenerator = (): GenerateSceneImage => {
     );
   }
 
-  return async ({prompt, model}) => withTransientImageRetries(
+  return async ({prompt, model, negativePrompt, size}) => withTransientImageRetries(
     async () => {
-      const activeModel = model && model.startsWith('@cf/')
-        ? model
-        : '@cf/black-forest-labs/flux-1-schnell';
+      const activeModel = model && model.startsWith('@cf/') ? model : DEFAULT_MODEL;
       const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${activeModel}`;
       const response = await fetch(url, {
         method: 'POST',
@@ -22,12 +88,28 @@ export const createCloudflareImageGenerator = (): GenerateSceneImage => {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({prompt}),
+        body: JSON.stringify(
+          cloudflareImageBody({model: activeModel, negativePrompt, prompt, size}),
+        ),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Cloudflare image generation failed (${response.status}): ${errorText}`);
+        const error = new Error(
+          `Cloudflare image generation failed (${response.status}): ${errorText}`,
+        );
+        // withTransientImageRetries keys off status, and fetch does not set it.
+        Object.assign(error, {status: response.status});
+        throw error;
+      }
+
+      // SDXL-family models stream the image; flux returns base64 inside JSON.
+      if (!(response.headers.get('content-type') ?? '').includes('application/json')) {
+        const binary = Buffer.from(await response.arrayBuffer());
+        if (!binary.length) {
+          throw new Error('Cloudflare image generation returned an empty image stream.');
+        }
+        return binary;
       }
 
       const data = await response.json() as {
