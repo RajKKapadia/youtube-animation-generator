@@ -9,6 +9,10 @@
 | `OpenAIError: Missing credentials` | A key-requiring path was reached | Usually intended. Use `--render-plan` / `--render-publish`. Only set a key if authoring is genuinely required. |
 | `GOOGLE_GEMINI_API_KEY is required…` / `GROQ_API_KEY is required…` | `AI_PROVIDER` names a provider whose key is unset | Set that key, or change/unset `AI_PROVIDER` |
 | `OPENAI_API_KEY is required for web research…` | `--research` is OpenAI-only | Set `OPENAI_API_KEY`, or use `--research off` |
+| `sources: Too big: expected array to have <=100 items` | The hosted search returned more URLs than the saved bundle allows; four tool calls do not limit URL count | Fixed by validating citations against the complete results before retaining at most 100 sources, preserving every surviving citation (`source-research.ts:177`). Rerun with the updated code. |
+| `Research warning: …` after a failed URL open or an unmatched citation | The tool reported an incomplete/failed action, or a claim cited a URL outside usable results | Failed URLs/citations are excluded; claims with no valid citations are omitted. Other supported claims can continue. Review warnings in the saved research and plan (`source-research.ts:80`, `source-research.ts:177`). |
+| `Optional web research was unavailable…` | Research exceeded its 120-second deadline, the provider failed transiently, or output/citations were unusable | `auto` continues using the original source and saves an explicit warning that it has not been web-verified. Use `required` when research must succeed; it stops before planning on the same failure (`source-research.ts:313`, `source-research.ts:476`). |
+| `Cached research does not match the current source or settings` | Source/model/mode or the versioned research prompt changed | Use `--refresh-research` to explicitly replace it; this purchases a new research pass. `--force` only controls output replacement (`source-research.ts:160`, `source-research.ts:476`). |
 | `CLOUDFLARE_AI_KEY … and CLOUDFLARE_ACCOUNT_ID are required` | Only one Cloudflare var set | Both are needed; routing requires the pair |
 | Wrong provider used unexpectedly | Auto-detection picked a key you forgot was set | OpenAI wins script ties, **Cloudflare wins image ties**. Set `AI_PROVIDER` / `IMAGE_PROVIDER` explicitly |
 | `Cloudflare image generation failed (…)` | Workers AI rejected the request | Check account ID, token scope, and that the model starts with `@cf/` |
@@ -29,6 +33,7 @@
 | `--review` never pauses | stdin is not a TTY (CI, piped output) | By design. Run it in an interactive terminal |
 | Stills regenerate without `--force` | Stills deliberately bypass the overwrite preflight | Expected, so the preview loop stays fast |
 | Missing generated image on a timed plan | Cache miss | CLI names the scene and requires explicit `--generated-visuals auto` (**billed**) rather than substituting art |
+| `Generated visual for scene … failed relevance validation twice` | Both generated images failed the vision check | The error reports the orientation and rejection reasons (`generated-visuals.ts:413-415`). Check the saved `mediaAssets[].direction`, including the literal/metaphor relationship, framing, and exclusions supplied to both validators (`generated-visuals.ts:178-190`). Resume with `create --render-plan <draft-plan> --generated-visuals auto --force` to skip research and script planning; image generation and vision checks are still billed. |
 
 ---
 

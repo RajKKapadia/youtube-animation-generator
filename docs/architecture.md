@@ -66,9 +66,9 @@ returns an `openai` SDK client pointed at OpenAI, Gemini, or Groq:
 |---|---|---|---|
 | `src/scene-backgrounds.ts:147` | `--scene-background generated` | OpenAI Images | Image API, not chat |
 | `src/providers/cloudflare-image.ts:19` | `--scene-background generated` | Cloudflare (`fetch`) | Workers AI REST |
-| `src/generated-visuals.ts:182` | `--generated-visuals auto` | OpenAI vision | Validator |
-| `src/generated-visuals.ts:219` | `--generated-visuals auto` | Gemini vision | Validator |
-| `src/source-research.ts:217` | `--research auto\|required` | **OpenAI only** | Hosted `web_search` tool has no compat equivalent |
+| `src/generated-visuals.ts:208` | `--generated-visuals auto` | OpenAI vision | Validator |
+| `src/generated-visuals.ts:241` | `--generated-visuals auto` | Gemini vision | Validator |
+| `src/source-research.ts:282` | `--research auto\|required` | **OpenAI only** | Hosted `web_search` tool has no compat equivalent |
 
 Provider clients throw when their key is unset (`ai-client.ts:44-77`). If a command exits 0
 with no provider keys in the environment, it provably made no billed call.

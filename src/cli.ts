@@ -852,6 +852,7 @@ const runNarratedWorkflow = async ({
     }
     let planningSourceText = sourceText;
     let researchBundle;
+    let researchWarnings: string[] = [];
     if (research.mode !== 'off') {
       console.log(`Researching the source with ${model} (${research.mode})...`);
       const researched = await loadOrCreateWebResearch({
@@ -863,11 +864,15 @@ const runNarratedWorkflow = async ({
         stem,
       });
       researchBundle = researched.bundle;
-      planningSourceText = enrichSourceWithResearch(sourceText, researchBundle);
-      console.log(
-        `${researched.reused ? 'Reused' : 'Saved'} web research: ${researched.paths.json}`,
-      );
-      console.log(`Saved research report: ${researched.paths.markdown}`);
+      researchWarnings = researched.warnings;
+      for (const warning of researchWarnings) console.warn(`Research warning: ${warning}`);
+      if (researchBundle) {
+        planningSourceText = enrichSourceWithResearch(sourceText, researchBundle);
+        console.log(
+          `${researched.reused ? 'Reused' : 'Saved'} web research: ${researched.paths.json}`,
+        );
+        console.log(`Saved research report: ${researched.paths.markdown}`);
+      }
     }
     const code = await discoverLocalCode({sourcePath, sourceText});
     draft = await planNarratedVideo({
@@ -882,7 +887,7 @@ const runNarratedWorkflow = async ({
       sourceText: planningSourceText,
       targetDurationSeconds,
     });
-    draft.planningWarnings = [...code.warnings, ...(draft.planningWarnings ?? [])];
+    draft.planningWarnings = [...researchWarnings, ...code.warnings, ...(draft.planningWarnings ?? [])];
     await stageSelectedLocalImages({
       catalog: localImages,
       outputDirectory,

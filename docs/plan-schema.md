@@ -102,7 +102,12 @@ rejected.
 - Phrase `text` must not contain `<laugh>`, `<breath>` or `<sigh>` — expressions belong in the
   beat's `expression` field.
 - Research-enriched plans must carry **both** `originalSourceText` and `research`, or neither
-  (`types.ts:1184`).
+  (`types.ts:1197`). Research bundles contain at most 16 claims, six citations per claim,
+  100 sources and 20 queries; every claim citation must name a saved source. Optional
+  `research.warnings` records dropped citations, failed tool actions and trimmed results
+  (`types.ts:68`, `types.ts:94`). An unavailable `auto` research run instead records its
+  warning in `planningWarnings` and keeps the original source without a research bundle
+  (`cli.ts:855`, `cli.ts:890`).
 
 ## Field-by-field: what controls what on screen
 
