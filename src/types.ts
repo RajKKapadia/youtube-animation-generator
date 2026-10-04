@@ -65,20 +65,30 @@ export const webResearchClaimStatusSchema = z.enum([
   'context',
 ]);
 
-const webResearchUrlSchema = z.string().max(2_048).url().refine(
+export const WEB_RESEARCH_LIMITS = {
+  sources: 100,
+  queries: 20,
+  queryLength: 500,
+  urlLength: 2_048,
+  titleLength: 300,
+  claims: 16,
+  citationsPerClaim: 6,
+} as const;
+
+const webResearchUrlSchema = z.string().max(WEB_RESEARCH_LIMITS.urlLength).url().refine(
   (value) => value.startsWith('https://') || value.startsWith('http://'),
   'Research sources must use HTTP or HTTPS URLs.',
 );
 
 export const webResearchSourceSchema = z.object({
   url: webResearchUrlSchema,
-  title: z.string().min(1).max(300),
+  title: z.string().min(1).max(WEB_RESEARCH_LIMITS.titleLength),
 });
 
 export const webResearchClaimSchema = z.object({
   claim: z.string().min(1).max(800),
   status: webResearchClaimStatusSchema,
-  sourceUrls: z.array(webResearchUrlSchema).min(1).max(6),
+  sourceUrls: z.array(webResearchUrlSchema).min(1).max(WEB_RESEARCH_LIMITS.citationsPerClaim),
 });
 
 export const webResearchBundleSchema = z.object({
@@ -90,10 +100,11 @@ export const webResearchBundleSchema = z.object({
   mode: webResearchModeSchema.exclude(['off']),
   searchContextSize: z.literal('medium'),
   maxToolCalls: z.literal(4),
-  queries: z.array(z.string().min(1).max(500)).max(20),
+  queries: z.array(z.string().min(1).max(WEB_RESEARCH_LIMITS.queryLength)).max(WEB_RESEARCH_LIMITS.queries),
   summary: z.string().min(1).max(3_000),
-  claims: z.array(webResearchClaimSchema).max(16),
-  sources: z.array(webResearchSourceSchema).max(100),
+  claims: z.array(webResearchClaimSchema).max(WEB_RESEARCH_LIMITS.claims),
+  sources: z.array(webResearchSourceSchema).max(WEB_RESEARCH_LIMITS.sources),
+  warnings: z.array(z.string().min(1).max(2_048)).max(100).optional(),
 }).superRefine((bundle, context) => {
   const sourceUrls = new Set(bundle.sources.map(({url}) => url));
   if (sourceUrls.size !== bundle.sources.length) {

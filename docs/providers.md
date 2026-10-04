@@ -60,6 +60,11 @@ Verified behaviour:
 
 `--generated-visuals auto` validates each generated image against the source evidence using a
 vision model. `OPENAI_API_KEY` is preferred; otherwise `GOOGLE_GEMINI_API_KEY`.
+Both validators receive the complete generated direction, including framing, exclusions,
+depiction mode, and metaphor relationship (`generated-visuals.ts:178-190`). A metaphor must
+express that source-supported relationship without adding unsupported meaning. Failed checks
+remain strict; after one corrective regeneration, the error includes the rejection reasons
+(`generated-visuals.ts:403-415`).
 
 ## API surface differences
 
@@ -260,10 +265,18 @@ logs to stdout only when the wait exceeds 2 s.
 
 ## Known limitation — `--research` is OpenAI-only
 
-`source-research.ts:217` uses OpenAI's **hosted `web_search` tool**, which has no equivalent in
+`source-research.ts:282` uses OpenAI's **hosted `web_search` tool**, which has no equivalent in
 the Gemini or Groq compatibility layers. `--research auto|required` therefore requires
 `OPENAI_API_KEY` even when `AI_PROVIDER=gemini`. The error message says so explicitly. Use
 `--research off` to avoid it.
+
+Research permits four tool calls per request and one SDK retry, with a 120-second deadline
+covering requests and backoff (`source-research.ts:19-20`, `source-research.ts:313`). `auto`
+continues from the original source with a saved warning when research is unavailable;
+`required` propagates the failure. Configuration, cache and file errors remain fatal
+(`source-research.ts:476`). The complete returned URL list is normalized to the bundle's
+100-source cap after citation validation, retaining every surviving citation; failed tool
+actions cannot supply evidence (`source-research.ts:80`, `source-research.ts:177`).
 
 ## Choosing a combination
 
