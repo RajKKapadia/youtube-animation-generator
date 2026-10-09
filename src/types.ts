@@ -1,5 +1,6 @@
 import {compositionSchema, presentationIssue, presentationSchema, storyRoleSchema, type Presentation} from './presentation.js';
 import {explainerSuggestionSchema, explainerSceneSchema, explainerStructureIssue, explainerGroundingIssue, visualMotifSchema} from './explainer-visuals.js';
+import {MAX_NARRATED_SCENES, sourceCoverageSchema, sourceCoverageIssues, sourcePointsFor} from './source-coverage.js';
 import {z} from 'zod';
 import {
   narrationExpressionSchema,
@@ -1191,9 +1192,15 @@ export const draftNarratedPlanSchema = z.object({
   planningWarnings: z.array(z.string().min(1)).optional(),
   assetAttributions: z.array(assetAttributionSchema).max(12).default([]),
   mediaAssets: z.array(narratedMediaAssetSchema).max(8),
-  scenes: z.array(draftNarrationSceneSchema).min(1).max(6),
+  sourceCoverage: sourceCoverageSchema.optional(),
+  scenes: z.array(draftNarrationSceneSchema).min(1).max(MAX_NARRATED_SCENES),
 }).superRefine((plan, context) => {
   addNarratedPlanIssues(plan, context);
+  if (plan.sourceCoverage) {
+    for (const message of sourceCoverageIssues(sourcePointsFor(plan.originalSourceText ?? plan.sourceText), plan.sourceCoverage, plan.scenes)) {
+      context.addIssue({code: 'custom', message, path: ['sourceCoverage']});
+    }
+  }
   if (Boolean(plan.originalSourceText) !== Boolean(plan.research)) {
     context.addIssue({
       code: 'custom',
@@ -1327,9 +1334,15 @@ export const timedNarratedPlanSchema = z.object({
   voiceoverFile: z.string().min(1),
   durationMs: z.number().int().positive(),
   totalSamples: z.number().int().positive(),
-  scenes: z.array(timedNarrationSceneSchema).min(1).max(6),
+  sourceCoverage: sourceCoverageSchema.optional(),
+  scenes: z.array(timedNarrationSceneSchema).min(1).max(MAX_NARRATED_SCENES),
 }).superRefine((plan, context) => {
   addNarratedPlanIssues(plan, context);
+  if (plan.sourceCoverage) {
+    for (const message of sourceCoverageIssues(sourcePointsFor(plan.originalSourceText ?? plan.sourceText), plan.sourceCoverage, plan.scenes)) {
+      context.addIssue({code: 'custom', message, path: ['sourceCoverage']});
+    }
+  }
   if (Boolean(plan.originalSourceText) !== Boolean(plan.research)) {
     context.addIssue({
       code: 'custom',

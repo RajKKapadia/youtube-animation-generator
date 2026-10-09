@@ -9,6 +9,7 @@ import {videoPaletteFor} from '../visual-palettes.js';
 import {NarratedVisualLayer} from './NarratedVisualLayer.js';
 import {LocalBrandAssetsProvider} from './TechnologyBadge.js';
 import {LocalIconAssetsProvider} from './SemanticIcon.js';
+import {NarratedProgress} from './NarratedProgress.js';
 
 const renderableNarratedScene = (
   scene: NarratedRenderInput['plan']['scenes'][number],
@@ -83,6 +84,7 @@ export const NarratedVideo = ({
           </AbsoluteFill>
         </Sequence>
       ))}
+      <NarratedProgress plan={plan} profile={profile} fps={fps} />
       </AbsoluteFill>
     </LocalIconAssetsProvider>
   </LocalBrandAssetsProvider>

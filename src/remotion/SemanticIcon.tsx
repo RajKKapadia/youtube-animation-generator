@@ -43,6 +43,10 @@ import {
   Zap,
   CircuitBoard,
   Cog,
+  GitBranch,
+  FlaskConical,
+  BriefcaseBusiness,
+  Languages,
   type LucideIcon,
 } from 'lucide-react';
 import type {LocalIconAsset, NarratedMotion} from '../types.js';
@@ -53,6 +57,10 @@ import {
 import {keySafeFilter} from './chroma-key.js';
 
 const ICON_COMPONENTS: Record<SemanticIconId, LucideIcon> = {
+  'git-branch': GitBranch,
+  experiment: FlaskConical,
+  briefcase: BriefcaseBusiness,
+  language: Languages,
   'standard-protocol': Braces,
   'standard-compatible': BadgeCheck,
   'hardware-cpu': Cpu,

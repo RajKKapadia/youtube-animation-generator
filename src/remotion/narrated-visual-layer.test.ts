@@ -1,4 +1,6 @@
 import {describe, expect, it} from 'vitest';
+import {hasDirectedLayout} from './DirectedScene.js';
+import {makeExplainerTimedPlan} from '../explainer-fixtures.js';
 import type {SelectedMotionAsset} from '../types.js';
 import {
   lottieSourceFrameAt,
@@ -18,6 +20,13 @@ const asset: SelectedMotionAsset = {
 };
 
 describe('narrated visual motion', () => {
+  it('keeps dedicated motion treatments active when saved presentation metadata exists', async () => {
+    const scene = (await makeExplainerTimedPlan()).scenes[0]!;
+    for (const kind of ['kinetic-text', 'icon-spotlight', 'metric-focus', 'before-after'] as const) {
+      expect(hasDirectedLayout({...scene, presentation: {composition: 'statement', reveal: 'focus'}, visual: {...scene.visual, kind} as typeof scene.visual})).toBe(false);
+    }
+    expect(hasDirectedLayout({...scene, presentation: {composition: 'statement', reveal: 'focus'}, visual: {kind: 'diagram', motion: 'reveal', motif: 'none', assetId: null}})).toBe(true);
+  });
   it('keeps metric text exact at the hold frame', () => {
     expect(metricDisplayAtProgress('Revenue grew 42.5%', 0)).toBe('Revenue grew 0.0%');
     expect(metricDisplayAtProgress('Revenue grew 42.5%', 0.5)).toBe('Revenue grew 21.3%');

@@ -8,6 +8,7 @@ import {
   recoverUnsupportedNarratedVisuals,
   NARRATION_RESPONSE_SHAPE,
   narrationResponseShapeFor,
+  humanExchangeSignal,
 } from './narration-planner.js';
 import {
   draftNarratedPlanSchema,
@@ -18,6 +19,23 @@ import {
   type NarrationExpression,
 } from './types.js';
 import type {AssetRegistry} from './asset-registry.js';
+
+describe('human exchange detection', () => {
+  it.each([
+    'GQG-linked funds are the seller. Fidelity and other institutional buyers acquired ITC shares.',
+    'Software agents review a repository and approve automated changes.',
+    'The company hands investors a dividend. The market is under pressure.',
+  ])('does not force human staging for %s', (source) => {
+    expect(humanExchangeSignal(source)).toBe(false);
+  });
+  it.each([
+    'A guest arrives to check in. The receptionist hands over a key.',
+    'The buyer hands payment to the seller.',
+    'She asks the manager to review the application.',
+  ])('still recognises a human exchange in %s', (source) => {
+    expect(humanExchangeSignal(source)).toBe(true);
+  });
+});
 
 const validPlan = {
   version: 7 as const,

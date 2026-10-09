@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {narrationExpressionSchema} from './expressions.js';
+import {MAX_NARRATED_SCENES} from '../source-coverage.js';
 
 export const supertonicVoiceSchema = z.enum([
   'M1',
@@ -49,7 +50,7 @@ export const supertonicJobSchema = z.object({
         }),
       ).min(1),
     }),
-  ).min(1).max(6),
+  ).min(1).max(MAX_NARRATED_SCENES),
 });
 
 export type SupertonicJob = z.infer<typeof supertonicJobSchema>;

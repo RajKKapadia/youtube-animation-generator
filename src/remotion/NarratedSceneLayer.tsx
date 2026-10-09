@@ -319,7 +319,9 @@ export const TimedCaptionLayer = ({
           fontFamily: RENDER_FONT_FAMILY,
           justifyContent: 'center',
           minHeight: vertical ? 116 : 92,
+          overflow: 'hidden',
           padding: vertical ? '20px 34px 24px' : '14px 34px 18px',
+          position: 'relative',
         }}
       >
         <FittedText
@@ -332,6 +334,7 @@ export const TimedCaptionLayer = ({
           maxWidth={vertical ? 840 : 1420}
           text={phrase.text}
         />
+        <div style={{background: '#67E8F9', bottom: 0, height: 4, left: 0, position: 'absolute', transform: `scaleX(${Math.max(0, Math.min(1, (currentMs - phrase.startMs) / phrase.durationMs))})`, transformOrigin: 'left', width: '100%'}} />
       </div>
     </div>
   );

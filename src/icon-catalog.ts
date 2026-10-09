@@ -5,6 +5,10 @@ export interface SemanticIconDefinition {
 }
 
 export const SEMANTIC_ICON_DEFINITIONS = [
+  {id: 'git-branch', label: 'Version control', keywords: ['git', 'github', 'repository', 'repositories', 'commit', 'commits', 'branch', 'branches', 'version control']},
+  {id: 'experiment', label: 'Experiment', keywords: ['experiment', 'experimentation', 'experiments', 'a/b', 'test hooks', 'hook testing']},
+  {id: 'briefcase', label: 'Hiring and careers', keywords: ['hiring', 'jobs', 'openings', 'career', 'careers', 'employment', 'recruitment']},
+  {id: 'language', label: 'Languages', keywords: ['language', 'languages', 'multilingual', 'translation', 'localization']},
   {
     id: 'standard-protocol',
     label: 'Standard or protocol',
@@ -93,7 +97,7 @@ export const SEMANTIC_ICON_DEFINITIONS = [
   {
     id: 'document',
     label: 'Document',
-    keywords: ['document', 'invoice', 'receipt', 'report', 'file', 'pdf', 'markdown'],
+    keywords: ['document', 'invoice', 'receipt', 'report', 'file', 'files', 'pdf', 'markdown'],
   },
   {
     id: 'download',
@@ -198,12 +202,12 @@ export const SEMANTIC_ICON_DEFINITIONS = [
   {
     id: 'video',
     label: 'Video',
-    keywords: ['video', 'youtube', 'media', 'render'],
+    keywords: ['video', 'youtube', 'media', 'render', 'short', 'shorts'],
   },
   {
     id: 'web',
     label: 'Web application',
-    keywords: ['browser', 'frontend', 'website', 'web app', 'ui'],
+    keywords: ['browser', 'frontend', 'website', 'web app', 'web page', 'ui'],
   },
   {
     id: 'webhook',
