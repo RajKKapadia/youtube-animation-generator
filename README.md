@@ -310,7 +310,13 @@ pnpm run animations create summary.md --aspect-ratio 9:16
 pnpm run animations create summary.md --aspect-ratio both
 ```
 
-The planning request creates a faithful hook, explanation, and conclusion using at most six scenes. It also selects one dark cinematic palette—`cyan`, `violet`, `emerald`, `amber`, or `rose`—from the source's dominant subject and tone. The saved `palette` field drives every scene and makes rerenders deterministic; edit that field in the draft or timed plan to override the automatic choice.
+The planning request covers every distinct point in the source, with a concise hook and natural transitions between topics. Numbered stories, bullet points, Markdown sections and separate plain-text paragraphs become a coverage checklist. Supporting lists introduced inside a section and tabular headers stay in their parent section, so a closing list of takeaways does not force duplicate stories. New multi-point plans must map every point to its own spoken explanation and an exact source excerpt; missing coverage triggers a bounded repair attempt. The script includes a source-coverage checklist for review. These checks verify references and evidence, so review the script to confirm the explanation preserves each point's meaning and caveats.
+
+`--target-duration` defaults to 60 seconds and is a soft target. A longer summary gets a larger word budget and up to 24 scenes; the renderer uses measured speech without cutting off at one minute. One clear idea belongs in each scene. A multi-topic summary should not become a video about only one of its stories. Existing saved plans keep their written narration: run `create summary.md` again to replan an old one-topic result.
+
+Planning selects varied, relevant visual treatments: moving text, animated semantic icons, source-backed charts, comparisons, flows and supplied images with camera motion. Kinetic text alternates entrances and highlights the active item, captions include a phrase progress sweep, and narrated videos show progress across scenes. Place suitable PNG, JPEG or WebP images in the source's sibling `images/` folder. Rendering local visuals is offline; generated imagery remains an explicit paid opt-in.
+
+The planner also selects one dark cinematic palette—`cyan`, `violet`, `emerald`, `amber`, or `rose`—from the source's dominant subject and tone. The saved `palette` field drives every scene and makes rerenders deterministic; edit that field in the draft or timed plan to override the automatic choice.
 
 Every visible item is anchored to exactly one semantic narration beat. A beat is one coherent utterance that can be spoken in a natural breath; its short ordered phrases are caption and reveal boundaries, not separate TTS calls. The complete spoken copy is also saved as `summary.narration-script.md` for review, including any nonverbal voice direction as an italic cue such as `*[breath]*`.
 
@@ -365,6 +371,8 @@ pnpm run animations create samples/topic.md --require-characters --plan-only
 ```
 
 If attempted character scenes are rejected and none survives, this flag fails planning instead of accepting the fallback. It is not an unconditional cast guarantee: if the model never attempts the treatment, the extra attempt can still yield a valid plan without characters. Inspect `visual.kind` and `planningWarnings`. The flag currently affects new narrated planning only, even though CLI help lists it under subtitle options. It does not add characters to saved plans.
+
+Institutional buyers/sellers and software agents alone do not trigger the missing-character retry. Planning shares a three-attempt budget across character, schema and coverage repairs; independent validation errors are reported together. Duplicate caption phrase IDs are renamed locally without changing narration or consuming another provider call.
 
 When editing a plan, use two cast positions (`left`, `right`) or three (`left`, `center`, `right`), distinct cast IDs, and speaker/prop/callout indices that reference existing primary items. Character scenes use no secondary items. See [`src/explainer-visuals.ts`](src/explainer-visuals.ts) for the schema and [plan documentation](docs/plan-schema.md).
 
@@ -740,7 +748,7 @@ Narrated videos:
 --language <code>                 Default: en; use na for language-agnostic
 --tts-speed <number>              0.7-2.0 (default: 1.05)
 --tts-steps <number>              1-20 (default: 8)
---target-duration <seconds>       Default: 60
+--target-duration <seconds>       Soft target (default: 60); full coverage may run longer
 --research <off|auto|required>    Web research before planning; default: off
 --refresh-research                Replace the matching research cache
 

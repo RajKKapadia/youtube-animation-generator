@@ -579,6 +579,12 @@ describe('losing a character scene triggers one targeted retry', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+  it('does not spend a character retry on institutional buyers and sellers', async () => {
+    create.mockResolvedValue(response(payload()));
+    await planNarratedVideo({...options, requireCharacters: true, sourceText: `${sourceText} Foreign funds were the sellers and domestic mutual funds were buyers.`});
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   it('fails only when --require-characters was asked for', async () => {
     const broken = structuredClone(goodVisual) as Record<string, unknown>;
     delete broken['sourceEvidence'];

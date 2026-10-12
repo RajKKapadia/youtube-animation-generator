@@ -118,7 +118,7 @@ Narrated video options:
   --language <code>                 Narration language (default: en)
   --tts-speed <number>              Speech speed, 0.7-2.0 (default: 1.05)
   --tts-steps <number>              Inference steps, 1-20 (default: 8)
-  --target-duration <seconds>       Planning target (default: 60)
+  --target-duration <seconds>       Soft planning target; full coverage may run longer (default: 60)
   --captions <on|off>               Phrase captions (default: on)
   --scene-background <mode>         ambient, generated, or image (default: ambient)
   --image-model <model>             Image model (default: OPENAI_IMAGE_MODEL or gpt-image-2)
@@ -845,7 +845,7 @@ const runNarratedWorkflow = async ({
             }).map(({outputPath}) => outputPath),
           ];
     await preflightOutputs(futurePaths, common.force);
-    console.log(`Planning a roughly ${targetDurationSeconds}-second narrated video with ${model}...`);
+    console.log(`Planning complete source coverage with ${model} (${targetDurationSeconds}s soft target; may run longer)...`);
     const localImages = await discoverLocalImages({sourcePath, stem});
     if (localImages.length > 0) {
       console.log(`Found ${localImages.length} valid local image${localImages.length === 1 ? '' : 's'} in ${resolve(dirname(sourcePath), 'images')}.`);

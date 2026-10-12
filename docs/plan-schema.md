@@ -71,7 +71,7 @@ rejected.
 
 | Constraint | Limit |
 |---|---|
-| Scenes per plan | 1 – 6 |
+| Scenes per v7 plan / Supertonic job | 1 – 24 (`src/source-coverage.ts:4`) |
 | Beats per scene | 1 – 12 |
 | `primaryItems` / `secondaryItems` | 1 – 6 / 0 – 6 |
 | Plan `title` | ≤ 100 chars |
@@ -90,6 +90,24 @@ rejected.
 | `callout.eyebrow` / `callout.headline` | ≤ 28 / ≤ 48 chars |
 
 ## Cross-field rules
+
+New multi-point narration requests require `sourceCoverage`, an array of `{pointId, sceneId,
+beatIds, sourceEvidence}`. The inventory follows the original summary when research is enabled.
+Each point needs an extractive excerpt from its own block and existing spoken beats; reusing
+only the same recap beats for several topics fails validation (`src/source-coverage.ts:86`).
+Supporting lists introduced inside a section, indented subitems, and tabular headers stay in
+their parent point (`src/source-coverage.ts:13`). This avoids demanding another story for each
+closing takeaway while retaining the complete text for planning.
+Saved v7 draft/timed schemas validate this metadata when present and allow it to be absent for
+older or hand-written plans (`src/types.ts:1195`, `src/types.ts:1337`). These are structural
+coverage and grounding checks; script review still establishes semantic completeness.
+
+The scene limit is shared by planning, saved plans, and speech-worker jobs. Legacy schemas
+retain their original limits. JSON-mode recovery preserves scenes beyond the sixth and wraps
+long caption phrases rather than truncating narration (`src/narration-plan-recovery.ts`).
+All providers rename duplicate caption phrase IDs during response recovery, preserving speech,
+beat IDs and anchors (`src/narration-plan-recovery.ts:386`). Saved-plan validation still rejects
+duplicate IDs; recovery runs only when authoring a new plan (`src/types.ts:968`).
 
 - `template: "comparison"` **fails validation** when `secondaryItems` is empty
   (`types.ts:946`).

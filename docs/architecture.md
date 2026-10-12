@@ -55,7 +55,7 @@ returns an `openai` SDK client pointed at OpenAI, Gemini, or Groq:
 
 | Call site | Triggered by | Cost class |
 |---|---|---|
-| `src/narration-planner.ts:545` | `create <source.md>` | Tokens |
+| `src/narration-planner.ts:719` | `create <source.md>` | Tokens |
 | `src/planner.ts:509` | `<subtitle.srt>` without `--render-plan` | Tokens |
 | `src/publish.ts:160` | `publish <plan.json>` | Tokens |
 | `src/topic-author.ts` | `topic "<name>"` | Tokens |
@@ -92,6 +92,7 @@ src/
                           against what the planner will later demand of it
   planner.ts              Subtitle-overlay authoring (AI provider)
   narration-planner.ts    Narrated-video authoring (AI provider)
+  source-coverage.ts      Original source-point inventory and spoken coverage validation
   source-research.ts      Optional grounded web research (OpenAI only)
   publish.ts              Publish-kit metadata authoring (AI provider)
   scene-backgrounds.ts    Background image generation + image-provider routing

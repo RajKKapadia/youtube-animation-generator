@@ -6,7 +6,7 @@ import {visibleItemIndices} from '../presentation.js';
 import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 import {FittedText} from './FittedText.js';
 import {TechnologyBadge} from './TechnologyBadge.js';
-import {VisualIcon} from './SemanticIcon.js';
+import {AnimatedVisualIcon, VisualIcon} from './SemanticIcon.js';
 import {CINEMATIC_MOTION} from './cinematic-motion.js';
 
 export const directedTitleStyle = (vertical: boolean) => ({
@@ -18,10 +18,11 @@ export const directedTitleStyle = (vertical: boolean) => ({
   opacity: keySafeOpacity(0.8),
 } as const);
 
+// Dedicated treatments carry their own animation and structure. Routing them
+// through the generic layout erased icon motion, count-ups and paired changes
+// on every newly planned scene (which always has presentation metadata).
 export const hasDirectedLayout = (scene: RenderableVisualScene): boolean => Boolean(scene.presentation) && (
-  scene.visual.kind === 'diagram' || scene.visual.kind === 'kinetic-text' ||
-  scene.visual.kind === 'icon-spotlight' || scene.visual.kind === 'brand-showcase' ||
-  scene.visual.kind === 'metric-focus' || scene.visual.kind === 'before-after'
+  scene.visual.kind === 'diagram' || scene.visual.kind === 'brand-showcase'
 );
 
 /** Use the existing gap only when the title has time to fade in and be read.
@@ -102,8 +103,10 @@ export const DirectedScene = ({scene, profile, palette, contentTopInset}: {
       {scene.primaryItems.map((item, i) => {
         const p = shown.includes(i) ? entry(primaryStarts[i]!) : 0;
         return <div key={i} style={{display: 'flex', alignItems: 'center', gap: 28, opacity: keySafeOpacity(p), transform: `translateY(${(1 - p) * 14}px)`, minHeight: vertical ? 134 : 180, borderLeft: `4px solid ${theme.accents.primary}`, paddingLeft: 24}}>
-          <span style={{fontSize: vertical ? 42 : 38, fontWeight: 850, color: theme.accents.secondary, flexShrink: 0}}>{String(i + 1).padStart(2, '0')}</span>
-          {label(item, cellWidth - 126, vertical ? 54 : 50, vertical ? 134 : 180, 3)}
+          <span style={{fontSize: vertical ? 42 : 38, fontWeight: 850, color: theme.accents.secondary, flexShrink: 0, width: 72}}>{scene.icons.primary[i]
+            ? <AnimatedVisualIcon id={scene.icons.primary[i]} color={theme.accents.primary} secondaryColor={theme.accents.secondary} motion="pulse" size={72} />
+            : String(i + 1).padStart(2, '0')}</span>
+          {label(item, cellWidth - 152, vertical ? 54 : 50, vertical ? 134 : 180, 3)}
         </div>;
       })}
     </div>;

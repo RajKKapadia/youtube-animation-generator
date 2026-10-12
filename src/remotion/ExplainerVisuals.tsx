@@ -5,8 +5,10 @@ import type {RenderableVisualScene, RenderProfile, VideoPalette} from '../types.
 import {hexToRgba, videoPaletteFor} from '../visual-palettes.js';
 import {formatChartDatum} from '../data-visualization.js';
 import {FittedText} from './FittedText.js';
-import {keySafeShadow, keySafeOpacity} from './chroma-key.js';
+import {keySafeShadow, keySafeOpacity, keySafeSurface} from './chroma-key.js';
 import {activeItemIndex, chartDomain, itemAnimationWindow, windowProgress} from './explainer-timing.js';
+import {AnimatedVisualIcon} from './SemanticIcon.js';
+import {ambientWave} from './cinematic-motion.js';
 
 export interface ExplainerProps {scene: RenderableVisualScene; profile: RenderProfile; palette: VideoPalette}
 const useExplainer = ({scene, profile, palette}: ExplainerProps) => {
@@ -37,14 +39,18 @@ const Shell = ({scene, profile, children}: ExplainerProps & {children: ReactNode
 
 export const KineticText = (props: ExplainerProps) => {
   const {scene} = props;
-  const {theme, width, vertical, progress, active} = useExplainer(props);
+  const {theme, width, vertical, progress, active, frame, fps} = useExplainer(props);
   return <Shell {...props}><div style={{display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center', gap: vertical ? 38 : 22}}>
     {scene.primaryItems.map((item, index) => {
       const p = progress(index);
-      const pulse = scene.visual.motion === 'pulse' && active === index ? 1 + Math.sin(p * Math.PI) * 0.015 : 1;
-      return <div key={index} style={{display: 'flex', gap: 26, alignItems: 'center', opacity: keySafeOpacity(p), transform: `translateY(${(1 - p) * 18}px) scale(${pulse})`, padding: '10px 24px', borderLeft: `6px solid ${active === index ? theme.accents.primary : '#53657e'}`}}>
-        <span style={{color: theme.accents.secondary, fontSize: vertical ? 34 : 30, fontWeight: 800, width: 50, flexShrink: 0}}>{String(index + 1).padStart(2, '0')}</span>
-        {text(item, width - 180, vertical ? 64 : 76, vertical ? 220 : 116)}
+      const focused = active === index;
+      const pulse = scene.visual.motion === 'pulse' && focused ? 1 + ambientWave(frame, fps, index) * 0.012 : 1;
+      const icon = scene.icons.primary[index];
+      return <div key={index} style={{display: 'flex', gap: 26, alignItems: 'center', opacity: keySafeOpacity(p), transform: `translateX(${(1 - p) * (index % 2 === 0 ? -48 : 48)}px) scale(${pulse})`, padding: '18px 24px', borderLeft: `6px solid ${focused ? theme.accents.primary : '#53657e'}`, borderRadius: '0 20px 20px 0', background: focused ? keySafeSurface(hexToRgba(theme.accents.primary, .1)) : 'transparent', color: focused ? '#F8FAFC' : '#94A3B8'}}>
+        <span style={{color: theme.accents.secondary, fontSize: vertical ? 34 : 30, fontWeight: 800, width: 72, flexShrink: 0}}>{icon
+          ? <AnimatedVisualIcon id={icon} color={theme.accents.primary} secondaryColor={theme.accents.secondary} motion={focused ? 'pulse' : 'reveal'} size={72} />
+          : String(index + 1).padStart(2, '0')}</span>
+        {text(item, width - 206, vertical ? 64 : 76, vertical ? 220 : 116)}
       </div>;
     })}
   </div></Shell>;

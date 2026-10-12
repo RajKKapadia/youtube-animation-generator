@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {MAX_NARRATED_SCENES} from './source-coverage.js';
 import {semanticIconDefinitionFor} from './icon-catalog.js';
 import {characterSceneSuggestionSchema} from './explainer-visuals.js';
 import {
@@ -12,7 +13,7 @@ import {
 export const narrationResponseSchema = z.object({
   title: z.string().min(1).max(100),
   palette: videoPaletteSchema,
-  scenes: z.array(draftNarrationSceneSuggestionSchema).min(1).max(6),
+  scenes: z.array(draftNarrationSceneSuggestionSchema).min(1).max(MAX_NARRATED_SCENES),
 });
 
 // This intake schema is local only. The API still receives the full strict
@@ -23,7 +24,7 @@ const responseIntakeSchema = z.object({
   scenes: z.array(z.object({
     ...draftNarrationSceneSuggestionSchema.shape,
     visual: z.unknown(),
-  })).min(1).max(6),
+  })).min(1).max(MAX_NARRATED_SCENES),
 });
 
 /**
@@ -245,7 +246,7 @@ export const sanitizeNarratedCandidate = (input: unknown): unknown => {
   const validExpressions = ['none', 'laugh', 'breath', 'sigh'];
 
   const rawScenes = Array.isArray(candidate.scenes) ? candidate.scenes : [];
-  const scenes = rawScenes.slice(0, 6).map((rawScene: Record<string, unknown>, sIdx: number) => {
+  const scenes = rawScenes.map((rawScene: Record<string, unknown>, sIdx: number) => {
     const template = validTemplates.includes(String(rawScene.template))
       ? String(rawScene.template)
       : (Array.isArray(rawScene.secondaryItems) && rawScene.secondaryItems.length > 0 ? 'comparison' : 'callout');
@@ -268,15 +269,18 @@ export const sanitizeNarratedCandidate = (input: unknown): unknown => {
     const rawBeats = Array.isArray(rawScene.beats) ? rawScene.beats : [];
     let beats = rawBeats.map((rawBeat: Record<string, unknown>, bIdx: number) => {
       const rawPhrases = Array.isArray(rawBeat.phrases) ? rawBeat.phrases : [];
-      const phrases = rawPhrases.map((rawPhrase: Record<string, unknown>, pIdx: number) => {
-        let text = String(rawPhrase.text || 'Key takeaway.');
-        if (text.length > 120) {
-          text = text.slice(0, 117) + '...';
+      const phrases = rawPhrases.flatMap((rawPhrase: Record<string, unknown>, pIdx: number) => {
+        let remaining = String(rawPhrase.text || 'Key takeaway.').trim();
+        const chunks: string[] = [];
+        while (remaining.length > 120) {
+          const boundary = remaining.lastIndexOf(' ', 120);
+          const length = boundary > 0 ? boundary : 120;
+          chunks.push(remaining.slice(0, length));
+          remaining = remaining.slice(length).trimStart();
         }
-        return {
-          id: String(rawPhrase.id || `phrase-${sIdx}-${bIdx}-${pIdx}`),
-          text,
-        };
+        if (remaining) chunks.push(remaining);
+        const id = String(rawPhrase.id || `phrase-${sIdx}-${bIdx}-${pIdx}`);
+        return chunks.map((text, index) => ({id: index === 0 ? id : `${id}-part-${index + 1}`, text}));
       });
 
       const expression = validExpressions.includes(String(rawBeat.expression))
@@ -390,6 +394,24 @@ export const recoverNarrationResponse = (input: unknown): {
   const warnings: string[] = [];
   const lostVisuals: LostVisual[] = [];
   const scenes = parsed.scenes.map((scene): DraftNarrationSceneSuggestion => {
+    // Strict output schemas cannot enforce uniqueness across beats. Only ids
+    // change here: keep all speech, anchors and existing unique ids intact.
+    const reservedPhraseIds = new Set(scene.beats.flatMap(({phrases}) => phrases.map(({id}) => id)));
+    const seenPhraseIds = new Set<string>();
+    let renamedPhrases = 0;
+    const beats = scene.beats.map((beat) => ({...beat, phrases: beat.phrases.map((phrase) => {
+      let id = phrase.id;
+      if (seenPhraseIds.has(id)) {
+        let suffix = 2;
+        while (reservedPhraseIds.has(`${phrase.id}-${suffix}`)) suffix += 1;
+        id = `${phrase.id}-${suffix}`;
+        reservedPhraseIds.add(id);
+        renamedPhrases += 1;
+      }
+      seenPhraseIds.add(id);
+      return {...phrase, id};
+    })}));
+    if (renamedPhrases) warnings.push(`Scene "${scene.title}" (${scene.id}) had ${renamedPhrases} duplicate caption phrase ids renamed; narration was preserved.`);
     // Cross-field bookkeeping is repaired for every provider here, not just on
     // the compat path: strict structured outputs guarantee the shape of a
     // character scene, never that its speakers name a character on stage.
@@ -424,6 +446,7 @@ export const recoverNarrationResponse = (input: unknown): {
     }
     return {
       ...scene,
+      beats,
       template: emptyComparison ? 'callout' : scene.template,
       visual: visual.success ? visual.data : {kind: 'diagram', motion: 'reveal', motif: 'none'},
     };

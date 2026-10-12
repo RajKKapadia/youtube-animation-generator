@@ -120,14 +120,14 @@ Stills bypass the `--force` preflight and overwrite in place, so a preview loop 
 | `--language <code>` | `en` | |
 | `--tts-speed <0.7-2.0>` | `1.05` | |
 | `--tts-steps <1-20>` | `8` | Higher = slower, marginally better |
-| `--target-duration <s>` | `60` | Planning hint only |
+| `--target-duration <s>` | `60` | Soft target; complete coverage takes priority and may run longer (`src/narration-planner.ts:679`) |
 | `--captions <on\|off>` | `on` (narrated) / `off` (subtitle) | |
 | `--supertonic-assets-dir <path>` | `models/supertonic-3` | |
 | `--model <model>` | per provider (`gpt-5.6` / `gemini-3.5-flash` / `qwen/qwen3.8-27b`) | Script model |
 | `--image-model <model>` | `@cf/…stable-diffusion-xl-base-1.0` when Cloudflare keys exist, else `gpt-image-2` | `cli.ts:1197`. SDXL because `flux-1-schnell` accepts **no** `width`/`height` and so can only return a square plate, which `objectFit: cover` then crops into a 16:9 frame |
 | `--scene-background <ambient\|generated\|image>` | `ambient` (narrated), `off` (subtitle) | `generated` **bills the image provider** |
 | `--generated-visuals <off\|auto>` | `off` | `auto` **bills image + vision** |
-| `--require-characters` | — | Fail instead of degrading when the source describes a human exchange and no character scene survives. Also allows one extra planning attempt when the model never staged one |
+| `--require-characters` | — | Fail when attempted character scenes are all rejected; retry missing human staging once within the shared three-attempt budget. Institutional buyers/sellers alone do not trigger this retry (`narration-planner.ts:63`, `narration-planner.ts:713`) |
 | `--research <off\|auto\|required>` | `off` | Non-`off` **bills tokens + web search; OpenAI only** |
 | `--format <prores\|webm\|green\|h264>` | `green` (subtitle) | Overlay output format |
 
