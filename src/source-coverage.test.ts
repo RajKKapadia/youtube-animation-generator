@@ -135,8 +135,10 @@ describe('complete summary planning', () => {
     expect(estimateDraftNarrationTiming(plan).sourceCoverage).toEqual(coverage);
     const request = JSON.stringify(mock.mock.calls[0]![0]);
     expect(request).toContain('ALL its distinct points');
-    expect(request).toContain('soft target, never a cutoff');
-    expect(request).toContain('165 spoken words');
+    expect(request).toContain('absolute maximum of 25 seconds');
+    expect(request).toContain('spoken words TOTAL');
+    expect(request).not.toContain('soft target, never a cutoff');
+    expect(request).not.toContain('165 spoken words');
     expect(request).not.toContain('focused on ONE clear takeaway');
   });
   it('fails after bounded retries rather than accepting a first-topic-only plan', async () => {
@@ -152,15 +154,44 @@ describe('complete summary planning', () => {
     await planNarratedVideo({provider: 'openai', model: 'fixture', sourceText: `${source}\n\n- Extra research note.`, originalSourceText: source, research, targetDurationSeconds: 60, language: 'en', generatedVisuals: 'off'});
     expect(JSON.stringify(create.mock.calls[0]![0])).toContain('REQUIRED SOURCE POINTS (3, in source order)');
   });
-  it('keeps scenes after the sixth on the JSON-mode path and allows speech over sixty seconds', async () => {
+  it('keeps scenes after the sixth on the JSON-mode path within a longer requested duration', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'fixture-key');
     const many = Array.from({length: 8}, (_, index) => ({...scenes[index % 3]!, id: `scene-${index}`, beats: scenes.map((scene, beatIndex) => ({...scene.beats[0]!, id: `beat-${beatIndex}`, phrases: scene.beats[0]!.phrases.map((phrase) => ({...phrase, id: `phrase-${beatIndex}`})), primaryItemIndices: beatIndex === 0 ? [0] : []}))}));
     expect((sanitizeNarratedCandidate({title: 'All stories', scenes: many}) as {scenes: unknown[]}).scenes).toHaveLength(8);
     create.mockResolvedValue(response({title: 'All stories', palette: 'cyan', scenes: many}));
-    const plan = await planNarratedVideo({provider: 'openai', model: 'fixture', sourceText: stories.map(([, text]) => text).join(' '), targetDurationSeconds: 60, language: 'en', generatedVisuals: 'off'});
+    const plan = await planNarratedVideo({provider: 'openai', model: 'fixture', sourceText: stories.map(([, text]) => text).join(' '), targetDurationSeconds: 180, language: 'en', generatedVisuals: 'off'});
     expect(plan.scenes).toHaveLength(8);
     expect(estimateDraftNarrationTiming(plan).durationMs).toBeGreaterThan(60000);
     expect(supertonicJobSchema.parse({assetsDirectory: '/tmp/model', outputDirectory: '/tmp/output', voice: 'M1', language: 'en', speed: 1.05, steps: 8, scenes: plan.scenes}).scenes).toHaveLength(8);
+  });
+  it.each(['openai', 'groq'] as const)('shortens an oversized plan on %s without losing any source point', async (provider) => {
+    vi.stubEnv(provider === 'openai' ? 'OPENAI_API_KEY' : 'GROQ_API_KEY', 'fixture-key');
+    const oversized = structuredClone(payload);
+    for (const scene of oversized.scenes) {
+      scene.beats[0]!.phrases = Array.from({length: 12}, (_, i) => ({id: `phrase-${i}`, text: scene.beats[0]!.phrases[0]!.text}));
+    }
+    const mock = provider === 'openai' ? create : chat;
+    const wrap = provider === 'openai' ? response : (value: unknown) => ({choices: [{message: {content: JSON.stringify(value)}}]});
+    mock.mockResolvedValueOnce(wrap(oversized)).mockResolvedValueOnce(wrap(payload));
+    const plan = await planNarratedVideo({provider, model: 'fixture', sourceText: source, targetDurationSeconds: 150, language: 'en', generatedVisuals: 'off'});
+    expect(mock).toHaveBeenCalledTimes(2);
+    expect(plan.sourceCoverage).toEqual(coverage);
+    expect(plan.scenes.map(({beats}) => beats[0]!.phrases)).toEqual(scenes.map(({beats}) => beats[0]!.phrases));
+    const repair = JSON.stringify(mock.mock.calls[1]![0]);
+    expect(repair).toContain('Narration exceeds the duration budget');
+    expect(repair).toContain('maximum 165s');
+    expect(repair).toContain('Cover EVERY source point');
+    expect(repair).toContain('update visual items, beat anchors and sourceCoverage together');
+  });
+  it.each(['openai', 'groq'] as const)('rejects persistent duration overruns on %s after bounded repair attempts', async (provider) => {
+    vi.stubEnv(provider === 'openai' ? 'OPENAI_API_KEY' : 'GROQ_API_KEY', 'fixture-key');
+    const oversized = structuredClone(payload);
+    oversized.scenes = Array.from({length: 8}, (_, i) => ({...scenes[0]!, id: `long-${i}`}));
+    oversized.sourceCoverage = coverage.map((entry) => ({...entry, sceneId: 'long-0'}));
+    const mock = provider === 'openai' ? create : chat;
+    mock.mockResolvedValue(provider === 'openai' ? response(oversized) : {choices: [{message: {content: JSON.stringify(oversized)}}]});
+    await expect(planNarratedVideo({provider, model: 'fixture', sourceText: source, targetDurationSeconds: 10, language: 'en', generatedVisuals: 'off'})).rejects.toThrow('Narration exceeds the duration budget');
+    expect(mock).toHaveBeenCalledTimes(3);
   });
   it('wraps long JSON-mode caption phrases without losing the rest of the narration', () => {
     const original = 'This is a detailed source supported explanation. '.repeat(4) + 'The qualification at the end must survive.';

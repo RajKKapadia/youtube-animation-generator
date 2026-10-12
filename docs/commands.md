@@ -4,7 +4,7 @@
 behaviour · Verified at commit `d1e65f3`
 
 `pnpm run animations <args>` runs the CLI in development (`node --import tsx src/cli.ts`).
-Full usage text lives at `src/cli.ts:70-140`.
+Full usage text lives at `src/cli.ts:71-140`.
 
 Provider selection is environment-driven, not flag-driven — see [providers.md](providers.md).
 
@@ -120,24 +120,41 @@ Stills bypass the `--force` preflight and overwrite in place, so a preview loop 
 | `--language <code>` | `en` | |
 | `--tts-speed <0.7-2.0>` | `1.05` | |
 | `--tts-steps <1-20>` | `8` | Higher = slower, marginally better |
-| `--target-duration <s>` | `60` | Soft target; complete coverage takes priority and may run longer (`src/narration-planner.ts:679`) |
+| `--target-duration <s>` | `60` | Fixed narration budget across all topics, with at most 15s measured overrun; oversized scripts retry and oversized audio stops before video rendering (`src/narration-duration.ts`, `src/narration-planner.ts`) |
 | `--captions <on\|off>` | `on` (narrated) / `off` (subtitle) | |
 | `--supertonic-assets-dir <path>` | `models/supertonic-3` | |
 | `--model <model>` | per provider (`gpt-5.6` / `gemini-3.5-flash` / `qwen/qwen3.8-27b`) | Script model |
-| `--image-model <model>` | `@cf/…stable-diffusion-xl-base-1.0` when Cloudflare keys exist, else `gpt-image-2` | `cli.ts:1197`. SDXL because `flux-1-schnell` accepts **no** `width`/`height` and so can only return a square plate, which `objectFit: cover` then crops into a 16:9 frame |
+| `--image-model <model>` | `@cf/…stable-diffusion-xl-base-1.0` when Cloudflare keys exist, else `gpt-image-2` | `cli.ts:1217`. SDXL because `flux-1-schnell` accepts **no** `width`/`height` and so can only return a square plate, which `objectFit: cover` then crops into a 16:9 frame |
 | `--scene-background <ambient\|generated\|image>` | `ambient` (narrated), `off` (subtitle) | `generated` **bills the image provider** |
 | `--generated-visuals <off\|auto>` | `off` | `auto` **bills image + vision** |
-| `--require-characters` | — | Fail when attempted character scenes are all rejected; retry missing human staging once within the shared three-attempt budget. Institutional buyers/sellers alone do not trigger this retry (`narration-planner.ts:63`, `narration-planner.ts:713`) |
+| `--require-characters` | — | Fail when attempted character scenes are all rejected; retry missing human staging once within the shared three-attempt budget. Institutional buyers/sellers alone do not trigger this retry (`narration-planner.ts:64`, `narration-planner.ts:718`) |
 | `--research <off\|auto\|required>` | `off` | Non-`off` **bills tokens + web search; OpenAI only** |
 | `--format <prores\|webm\|green\|h264>` | `green` (subtitle) | Overlay output format |
 
 ## Output conventions
 
+For example, `create summary.md --target-duration 150` aims for 150s and allows at most
+165s after speech is measured. Planning budgets account for the selected `--tts-speed`,
+expanded spoken quantities, and scene/beat pauses. The planner writes concise explanations
+for all topics before choosing visuals and retries oversized drafts within its existing
+three-attempt limit. It never expands the budget just because there are more topics.
+
+`--render-plan` uses the target saved in the plan; `--target-duration` only affects new
+authoring. Saved drafts are checked before synthesis, and measured plans before rendering.
+An audio overrun leaves its WAV and timed JSON available for review and exits with an error;
+shorten the draft and synthesize it again, or replan from source with a longer target. It
+never rewrites a saved plan or makes a billed planning call. Preview-only stills from timed
+plans may still be inspected without enforcing their estimated duration.
+
+The word-based estimate is conservative, but is not an exact TTS prediction, especially
+across voices and languages. Measured PCM is authoritative (`src/narration-duration.ts`,
+`src/cli.ts`). Short source material can finish earlier; it is not padded to fill the target.
+
 | Input | Output directory |
 |---|---|
-| `create <source.md>` | `<dir>/<stem>-video/` (`cli.ts:741`) |
-| `--render-plan <plan>` | `dirname(plan)` (`cli.ts:708`) |
-| `<subtitle.srt>` | `<dir>/animations/` (`cli.ts:512`) |
+| `create <source.md>` | `<dir>/<stem>-video/` (`cli.ts:743`) |
+| `--render-plan <plan>` | `dirname(plan)` (`cli.ts:710`) |
+| `<subtitle.srt>` | `<dir>/animations/` (`cli.ts:513`) |
 
 For `X.narration-plan.json` a render emits:
 

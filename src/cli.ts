@@ -13,6 +13,7 @@ import {
   narrationScriptMarkdown,
   planNarratedVideo,
 } from './narration-planner.js';
+import {assertDraftNarrationDuration, assertMeasuredNarrationDuration, estimateNarrationDuration, NARRATION_DURATION_TOLERANCE_SECONDS} from './narration-duration.js';
 import {synthesizeNarration} from './narration-audio.js';
 import {narratedOutputPaths, renderNarratedVideo} from './narrated-render.js';
 import {
@@ -118,7 +119,7 @@ Narrated video options:
   --language <code>                 Narration language (default: en)
   --tts-speed <number>              Speech speed, 0.7-2.0 (default: 1.05)
   --tts-steps <number>              Inference steps, 1-20 (default: 8)
-  --target-duration <seconds>       Soft planning target; full coverage may run longer (default: 60)
+  --target-duration <seconds>       Narration target, maximum 15s overrun (default: 60)
   --captions <on|off>               Phrase captions (default: on)
   --scene-background <mode>         ambient, generated, or image (default: ambient)
   --image-model <model>             Image model (default: OPENAI_IMAGE_MODEL or gpt-image-2)
@@ -664,6 +665,7 @@ const renderTimedNarration = async ({
   stem: string;
   visual: NarratedVisualOptions;
 }) => {
+  if (!common.stillsOnly) assertMeasuredNarrationDuration(plan);
   if (common.planOnly) {
     console.log('Timed narrated plan is valid; --plan-only skipped rendering.');
     return;
@@ -756,6 +758,7 @@ const runNarratedWorkflow = async ({
     stem = narratedPlanStem(planPath);
     outputDirectory = common.outputDirectory ?? dirname(planPath);
     if (loaded.plan.stage === 'timed') {
+      if (!common.stillsOnly) assertMeasuredNarrationDuration(loaded.plan);
       if (common.audioOnly) {
         console.log('Audio is already synthesized for this timed plan; --audio-only skipped rendering.');
         return;
@@ -770,6 +773,7 @@ const runNarratedWorkflow = async ({
       return;
     }
     draft = loaded.plan;
+    assertDraftNarrationDuration(draft, speed);
     if (common.planOnly) {
       console.log('Draft narrated plan is valid; --plan-only skipped synthesis.');
       return;
@@ -845,7 +849,7 @@ const runNarratedWorkflow = async ({
             }).map(({outputPath}) => outputPath),
           ];
     await preflightOutputs(futurePaths, common.force);
-    console.log(`Planning complete source coverage with ${model} (${targetDurationSeconds}s soft target; may run longer)...`);
+    console.log(`Planning complete source coverage with ${model} (${targetDurationSeconds}s target; at most ${NARRATION_DURATION_TOLERANCE_SECONDS}s overrun)...`);
     const localImages = await discoverLocalImages({sourcePath, stem});
     if (localImages.length > 0) {
       console.log(`Found ${localImages.length} valid local image${localImages.length === 1 ? '' : 's'} in ${resolve(dirname(sourcePath), 'images')}.`);
@@ -886,8 +890,10 @@ const runNarratedWorkflow = async ({
       ...(researchBundle ? {originalSourceText: sourceText, research: researchBundle} : {}),
       sourceText: planningSourceText,
       targetDurationSeconds,
+      ttsSpeed: speed,
     });
     draft.planningWarnings = [...researchWarnings, ...code.warnings, ...(draft.planningWarnings ?? [])];
+    assertDraftNarrationDuration(draft, speed);
     await stageSelectedLocalImages({
       catalog: localImages,
       outputDirectory,
@@ -906,6 +912,8 @@ const runNarratedWorkflow = async ({
       console.log(`  - Script file:     ${scriptPath}`);
       console.log(`  - Storyboard plan: ${draftPath}`);
       console.log(`  - Scene structure: ${draft.scenes.length} scene(s), ${draft.scenes.reduce((acc, s) => acc + s.beats.length, 0)} beat(s)`);
+      const estimate = estimateNarrationDuration(draft.scenes, draft.language, speed);
+      console.log(`  - Narration:       ${estimate.units} ${estimate.unitLabel}, estimated ${estimate.seconds.toFixed(1)}s; maximum ${draft.targetDurationSeconds + NARRATION_DURATION_TOLERANCE_SECONDS}s`);
       console.log(`👉 You can review or edit the narration script and plan now.`);
       console.log('═'.repeat(65));
     }
@@ -945,23 +953,27 @@ const runNarratedWorkflow = async ({
         matchedSignals: [],
         reason: 'Selected explicitly with --voice.',
       };
+  assertDraftNarrationDuration(draft, speed);
+  const durationEstimate = estimateNarrationDuration(draft.scenes, draft.language, speed);
+  console.log(`Narration budget: ${durationEstimate.units} ${durationEstimate.unitLabel}, estimated ${durationEstimate.seconds.toFixed(1)}s; target ${draft.targetDurationSeconds}s, maximum ${draft.targetDurationSeconds + NARRATION_DURATION_TOLERANCE_SECONDS}s. Actual duration is measured after synthesis.`);
   if (voice === 'auto') {
     console.log(`Auto-selected Supertonic ${selectedVoice.voice}: ${selectedVoice.reason}`);
   }
-  const foregroundAssets = await resolveForegroundVisuals({
+  // Full renders prepare imagery only after measured narration fits the budget.
+  const foregroundAssets = common.review || common.stillsOnly ? await resolveForegroundVisuals({
     aspectRatio: common.aspectRatio,
     plan: draft,
     planDirectory: outputDirectory,
     stem,
     visual,
-  });
-  const backgroundAssets = await resolveSceneBackgrounds({
+  }) : undefined;
+  const backgroundAssets = common.review || common.stillsOnly ? await resolveSceneBackgrounds({
     aspectRatio: common.aspectRatio,
     outputDirectory,
     plan: draft,
     stem,
     visual,
-  });
+  }) : undefined;
 
   if (common.review || common.stillsOnly) {
     const estimatedPlan = estimateDraftNarrationTiming(draft);
@@ -989,6 +1001,7 @@ const runNarratedWorkflow = async ({
     }
   }
 
+  assertDraftNarrationDuration(draft, speed);
   console.log(`Synthesizing ${draft.scenes.reduce((count, scene) => count + scene.beats.length, 0)} narration beats with Supertonic ${selectedVoice.voice}...`);
   const timed = await synthesizeNarration({
     assetsDirectory,
@@ -1007,6 +1020,8 @@ const runNarratedWorkflow = async ({
   }
   console.log(`Saved timed plan: ${timedPath}`);
   console.log(`Saved voiceover: ${resolve(outputDirectory, timed.voiceoverFile)}`);
+  console.log(`Measured narration duration: ${(timed.durationMs / 1000).toFixed(1)}s (target ${draft.targetDurationSeconds}s).`);
+  assertMeasuredNarrationDuration(timed);
 
   if (common.review || common.audioOnly) {
     console.log(`\n${'═'.repeat(65)}`);

@@ -72,8 +72,8 @@ This is the subtlety that makes the abstraction non-trivial.
 
 | Provider | API used | Schema enforcement | How the model learns the shape |
 |---|---|---|---|
-| OpenAI | Responses API — `client.responses.parse` / `.create` with `zodTextFormat` | Strict, schema-enforced | From Zod (`narration-planner.ts:724`) |
-| Gemini / Groq | `client.chat.completions.create` with `response_format: {type: 'json_object'}` | JSON mode only — **not** schema-enforced | Compact shape in the prompt (`narration-planner.ts:739`) |
+| OpenAI | Responses API — `client.responses.parse` / `.create` with `zodTextFormat` | Strict, schema-enforced | From Zod (`narration-planner.ts:729`) |
+| Gemini / Groq | `client.chat.completions.create` with `response_format: {type: 'json_object'}` | JSON mode only — **not** schema-enforced | Compact shape in the prompt (`narration-planner.ts:744`) |
 
 > ### Why Gemini cannot use `json_schema`
 >
@@ -114,11 +114,19 @@ This is the subtlety that makes the abstraction non-trivial.
 > **Do not reintroduce a hand-written copy.**
 
 Multi-point summaries extend that same response schema with required `sourceCoverage` for
-both paths (`narration-planner.ts:92`). Its evidence excerpts and beat references are checked
-after recovery on every provider (`narration-planner.ts:825`); missing topics or a shared generic
-recap trigger the same bounded repair loop. Independent schema, coverage and character errors
-are collected into one repair request (`narration-planner.ts:823`). The source inventory uses the original summary,
+both paths (`narration-planner.ts:93`). Its evidence excerpts and beat references are checked
+after recovery on every provider (`narration-planner.ts:832`); missing topics or a shared generic
+recap trigger the same bounded repair loop. Independent schema, coverage, duration and character errors
+are collected into one repair request (`narration-planner.ts:828`). The source inventory uses the original summary,
 so research-added bullets cannot displace its topics.
+
+The same duration budget and validator apply to structured and JSON-mode providers
+(`src/narration-duration.ts`, `src/narration-planner.ts`). Topic count divides the total
+budget rather than raising it. Oversized responses request a concise rewrite that preserves
+every source point and essential caveats, updating visual items, anchors and coverage
+together. These repairs share the existing three-attempt limit; no additional authoring
+phase is added. Measured audio over the target plus 15 seconds stops before rendering,
+without another provider request (`src/cli.ts`).
 
 ### The other half of the trap: token budget
 
@@ -146,7 +154,7 @@ dominant term.
 > touching prompt wording.
 
 The compat endpoints do **not** implement `/responses`, so every planner branches on
-`aiInfo.provider` — `planner.ts:513`, `publish.ts:178`, `narration-planner.ts:719`.
+`aiInfo.provider` — `planner.ts:513`, `publish.ts:178`, `narration-planner.ts:724`.
 
 Because JSON mode does not enforce a schema, non-OpenAI output is parsed with Zod and may fail.
 Two compensations apply:
@@ -154,7 +162,7 @@ Two compensations apply:
 1. **A 3-attempt repair loop** (`narration-planner.ts`) feeds validation errors back to the
    model and asks it to fix the plan, on every provider.
 2. **Coercion before validation** — `sanitizeNarratedCandidate`
-   (`narration-plan-recovery.ts:241`), applied only to non-OpenAI output at `narration-planner.ts:798`.
+   (`narration-plan-recovery.ts:241`), applied only to non-OpenAI output at `narration-planner.ts:803`.
 
 A third compensation applies to **every** provider: `repairCharacterScene` also runs inside
 `recoverNarrationResponse`, because strict structured outputs guarantee a character scene's
@@ -199,7 +207,7 @@ OPENAI_MODEL=gpt-5.6
 OPENAI_IMAGE_MODEL=gpt-image-2
 ```
 
-`CLOUDFLARE_IMAGE_MODEL` is resolved at `cli.ts:1197`; the Cloudflare generator additionally
+`CLOUDFLARE_IMAGE_MODEL` is resolved at `cli.ts:1217`; the Cloudflare generator additionally
 rejects any model not starting with `@cf/` and falls back to the SDXL default
 (`providers/cloudflare-image.ts`).
 
@@ -249,9 +257,9 @@ for `openai/gpt-oss-120b`). Four things keep planning inside it:
    prompt.
 
 A lost character scene triggers **at most one** extra planning attempt per run
-within the shared three-attempt budget (`narration-planner.ts:713`). Missing-character detection
+within the shared three-attempt budget (`narration-planner.ts:718`). Missing-character detection
 does not treat institutional buyers/sellers or software agents alone as a human exchange
-(`narration-planner.ts:63`). On Groq that retry is a second full-prompt request inside the same
+(`narration-planner.ts:64`). On Groq that retry is a second full-prompt request inside the same
 per-minute window and can itself return 413, which is why the prompt savings above matter more
 here than they look.
 
