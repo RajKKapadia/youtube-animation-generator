@@ -125,7 +125,24 @@ duplicate IDs; recovery runs only when authoring a new plan (`src/types.ts:968`)
   `research.warnings` records dropped citations, failed tool actions and trimmed results
   (`types.ts:68`, `types.ts:94`). An unavailable `auto` research run instead records its
   warning in `planningWarnings` and keeps the original source without a research bundle
-  (`cli.ts:855`, `cli.ts:890`).
+  (`cli.ts:872`, `cli.ts:895`).
+
+## Duration contract for narrated CLI workflows
+
+`targetDurationSeconds` is the saved narration target. The CLI permits at most 15 seconds
+of measured overrun. New authoring divides a fixed spoken-text budget among all original
+source points, validates estimated duration after recovery, and requests concise repairs
+within the existing three attempts (`src/narration-duration.ts`, `src/narration-planner.ts`).
+The estimate expands English quantities exactly as synthesis does, counts Japanese spoken
+characters, and accounts for speech speed and scene/beat pauses. It is a planning heuristic;
+measured PCM duration remains authoritative.
+
+This is workflow validation, not a Zod shape change: no plan-version bump is required, and
+timing is still derived from audio. A saved draft must fit the estimate at the requested
+TTS speed before synthesis; an oversized timed plan cannot render video through the CLI.
+`--render-plan --plan-only` checks this without models or providers. Timed still previews
+remain available (`src/cli.ts`). To shorten an existing video, edit or reauthor the draft
+and regenerate its audio; changing scene timings cannot shorten spoken content.
 
 ## Field-by-field: what controls what on screen
 

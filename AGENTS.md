@@ -88,8 +88,8 @@ These apply before you read anything else.
 3. Ground claims in `file:line`. Code moves; re-verify rather than trusting these docs blindly.
 4. Prefer `--render-plan` / `--plan-only` over anything that authors a new plan.
 5. **Adding a visual treatment? It must reach both provider paths.** OpenAI gets the schema
-   from Zod via `zodTextFormat` (`narration-planner.ts:713`); every other provider gets it as
-   a compact shape embedded in the prompt (`narration-planner.ts:728`). That copy used to be
+   from Zod via `zodTextFormat` (`narration-planner.ts:725`); every other provider gets it as
+   a compact shape embedded in the prompt (`narration-planner.ts:745`). That copy used to be
    hand-written and had silently drifted, so Gemini/Groq could only ever pick the original
    seven kinds — the model was told the newer ones did not exist, and no prompt wording could
    change that. It is now derived from the same Zod schema, rendered compactly by

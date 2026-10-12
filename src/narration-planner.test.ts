@@ -718,6 +718,7 @@ describe('narrationScriptMarkdown', () => {
     expressive.scenes[0]!.beats[0]!.expression = 'breath';
     expect(narrationScriptMarkdown(draftNarratedPlanSchema.parse(expressive))).toBe(
       '# Why queues help\n\n' +
+        'Target: 60s; maximum measured duration: 75s. Narration: 12 spoken words across 1 scene.\n\n' +
         '## Scene 1: A queue decouples work\n\n' +
         '*[breath]* The producer submits work. The queue lets the consumer process it independently.\n',
     );
