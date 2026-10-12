@@ -25,6 +25,9 @@ describe('human exchange detection', () => {
     'GQG-linked funds are the seller. Fidelity and other institutional buyers acquired ITC shares.',
     'Software agents review a repository and approve automated changes.',
     'The company hands investors a dividend. The market is under pressure.',
+    'The service is intended for a large telecommunications customer base, but broad availability has not been established.',
+    'An AI agent requests tool access. The company serves millions of customers.',
+    'The teacher studies course materials. The company approves a software release.',
   ])('does not force human staging for %s', (source) => {
     expect(humanExchangeSignal(source)).toBe(false);
   });
@@ -32,6 +35,7 @@ describe('human exchange detection', () => {
     'A guest arrives to check in. The receptionist hands over a key.',
     'The buyer hands payment to the seller.',
     'She asks the manager to review the application.',
+    'The customer requests a refund from the cashier.',
   ])('still recognises a human exchange in %s', (source) => {
     expect(humanExchangeSignal(source)).toBe(true);
   });

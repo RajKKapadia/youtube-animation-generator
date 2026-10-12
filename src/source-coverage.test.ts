@@ -1,5 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {sourceCoverageIssues, sourcePointsFor} from './source-coverage.js';
+import {sourceCoverageEvidenceFor, sourceCoverageIssues, sourceCoveragePrompt, sourcePointsFor} from './source-coverage.js';
+import {sourceContainsGroundedText} from './source-grounding.js';
+import {zodTextFormat} from 'openai/helpers/zod';
 import {estimateDraftNarrationTiming, narrationResponseSchemaFor, narrationResponseShapeFor, planNarratedVideo} from './narration-planner.js';
 import {sanitizeNarratedCandidate} from './narration-plan-recovery.js';
 import {supertonicJobSchema} from './supertonic/protocol.js';
@@ -85,9 +87,85 @@ describe('spoken coverage validation', () => {
     expect(narrationResponseSchemaFor(true).safeParse({...payload, sourceCoverage: undefined}).success).toBe(false);
     expect(narrationResponseShapeFor({generatedVisuals: 'off', hasCodeSources: false, hasLocalImages: false, sourceHasNumbers: false, requireCoverage: true})).toContain('sourceCoverage');
   });
+  it('constrains authoring to supplied original excerpts on both provider paths', () => {
+    const points = sourcePointsFor(source);
+    const excerpts = points.map(sourceCoverageEvidenceFor);
+    const schema = narrationResponseSchemaFor(true, points);
+    const format = zodTextFormat(schema, 'fixture');
+    const coverageItem = (format.schema as any).properties.sourceCoverage.items;
+    expect(coverageItem.properties.sourceEvidence.enum).toEqual(excerpts);
+    expect(coverageItem.properties.pointId.enum).toEqual(points.map(({id}) => id));
+    expect(coverageItem.required).toContain('sourceEvidence');
+    expect(coverageItem.additionalProperties).toBe(false);
+    const valid = {...payload, sourceCoverage: coverage.map((entry, i) => ({...entry, sourceEvidence: excerpts[i]}))};
+    expect(schema.safeParse(valid).success).toBe(true);
+    expect(schema.safeParse({...valid, sourceCoverage: [{...valid.sourceCoverage[0], sourceEvidence: 'Mistral launched a model.'}]}).success).toBe(false);
+    const shape = narrationResponseShapeFor({generatedVisuals: 'off', hasCodeSources: false, hasLocalImages: false, sourceHasNumbers: false, requireCoverage: true, sourcePoints: points});
+    for (const excerpt of excerpts) {
+      expect(shape).toContain(excerpt);
+      expect(sourceCoveragePrompt(points)).toContain(JSON.stringify(excerpt));
+    }
+    // The enum does not prove that an excerpt belongs to the chosen point.
+    const mismatched = valid.sourceCoverage.map((entry, i) => ({...entry, sourceEvidence: excerpts[(i + 1) % excerpts.length]!}));
+    expect(schema.safeParse({...payload, sourceCoverage: mismatched}).success).toBe(true);
+    expect(sourceCoverageIssues(points, mismatched, scenes).join(' ')).toContain('copied from that source point');
+  });
+  it('selects bounded verbatim evidence with versions, quotes, Unicode and long source lines', () => {
+    const points = sourcePointsFor('1. Release\nBun 1.4.3 introduced "bun check"—a static checker. A caveat.\n\n2. Long source\n' + 'Grounded Unicode detail ×. '.repeat(40) + '\n\n3. ' + 'A very long statement without punctuation '.repeat(20));
+    for (const point of points) {
+      const excerpt = sourceCoverageEvidenceFor(point);
+      expect(excerpt.length).toBeGreaterThan(0);
+      expect(excerpt.length).toBeLessThanOrEqual(240);
+      expect(point.text).toContain(excerpt);
+      expect(sourceContainsGroundedText(point.text, excerpt)).toBe(true);
+    }
+    expect(sourceCoverageEvidenceFor(points[0]!)).toBe('Bun 1.4.3 introduced "bun check"—a static checker.');
+    expect(sourceCoverageEvidenceFor(points[2]!).length).toBeGreaterThan(200);
+  });
+  it('gives a valid replacement for invalid evidence without reporting the same point as omitted', () => {
+    const points = sourcePointsFor(source);
+    const invalid = coverage.map((entry) => ({...entry, sourceEvidence: 'A paraphrase rather than a source excerpt.'}));
+    const issues = sourceCoverageIssues(points, invalid, scenes);
+    expect(issues).toHaveLength(points.length);
+    expect(issues.join(' ')).not.toContain('Missing narrated coverage');
+    expect(issues[0]).toContain(`sourceEvidence=${JSON.stringify(sourceCoverageEvidenceFor(points[0]!))}`);
+    expect(sourceCoverageIssues(points, [], scenes).join(' ')).toContain('Missing narrated coverage for point-1');
+  });
 });
 
 describe('complete summary planning', () => {
+  it.each(['openai', 'groq'] as const)('repairs paraphrased coverage evidence on %s while preserving spoken coverage', async (provider) => {
+    vi.stubEnv(provider === 'openai' ? 'OPENAI_API_KEY' : 'GROQ_API_KEY', 'fixture-key');
+    const invalid = {...payload, sourceCoverage: coverage.map((entry) => ({...entry, sourceEvidence: 'Paraphrased research wording.'}))};
+    const fixed = {...payload, sourceCoverage: coverage.map((entry, i) => ({...entry, sourceEvidence: sourceCoverageEvidenceFor(sourcePointsFor(source)[i]!)}))};
+    const mock = provider === 'openai' ? create : chat;
+    const wrap = provider === 'openai' ? response : (value: unknown) => ({choices: [{message: {content: JSON.stringify(value)}}]});
+    mock.mockResolvedValueOnce(wrap(invalid)).mockResolvedValueOnce(wrap(fixed));
+    const plan = await planNarratedVideo({provider, model: 'fixture', sourceText: source, targetDurationSeconds: 150, language: 'en', generatedVisuals: 'off'});
+    expect(mock).toHaveBeenCalledTimes(2);
+    expect(plan.sourceCoverage).toEqual(fixed.sourceCoverage);
+    expect(plan.scenes.map(({beats}) => beats)).toEqual(scenes.map(({beats}) => beats));
+    expect(JSON.stringify(mock.mock.calls[1]![0])).toContain('Use sourceEvidence=');
+  });
+  it.each(['openai', 'groq'] as const)('does not demand character scenes from a research-added exchange on %s', async (provider) => {
+    vi.stubEnv(provider === 'openai' ? 'OPENAI_API_KEY' : 'GROQ_API_KEY', 'fixture-key');
+    const research = {version: 1 as const, kind: 'web-research' as const, sourceHash: 'a'.repeat(64), researchedAt: '2026-10-12T00:00:00Z', model: 'fixture', mode: 'auto' as const, searchContextSize: 'medium' as const, maxToolCalls: 4 as const, queries: ['fixture'], summary: 'Supporting evidence.', claims: [], sources: []};
+    const mock = provider === 'openai' ? create : chat;
+    mock.mockResolvedValue(provider === 'openai' ? response(payload) : {choices: [{message: {content: JSON.stringify(payload)}}]});
+    await planNarratedVideo({provider, model: 'fixture', sourceText: `${source}\n\nA customer asks a cashier for a refund.`, originalSourceText: source, research, requireCharacters: true, targetDurationSeconds: 150, language: 'en', generatedVisuals: 'off'});
+    expect(mock).toHaveBeenCalledTimes(1);
+    const request = JSON.stringify(mock.mock.calls[0]![0]);
+    expect(request).toContain('Mistral released a multimodal model.');
+    const excerpts = sourcePointsFor(source).map(sourceCoverageEvidenceFor);
+    if (provider === 'openai') {
+      expect(mock.mock.calls[0]![0].text.format.schema.properties.sourceCoverage.items.properties.sourceEvidence.enum).toEqual(excerpts);
+    } else {
+      const systemPrompt = mock.mock.calls[0]![0].messages[0].content;
+      excerpts.forEach((excerpt) => expect(systemPrompt).toContain(excerpt));
+    }
+    const schema = narrationResponseSchemaFor(true, sourcePointsFor(source));
+    expect(schema.safeParse({...payload, sourceCoverage: coverage.map((entry) => ({...entry, sourceEvidence: 'A customer asks a cashier for a refund.'}))}).success).toBe(false);
+  });
   it.each(['openai', 'groq'] as const)('repairs repeated caption ids locally on %s without changing speech or coverage', async (provider) => {
     vi.stubEnv(provider === 'openai' ? 'OPENAI_API_KEY' : 'GROQ_API_KEY', 'fixture-key');
     const input = structuredClone(payload);

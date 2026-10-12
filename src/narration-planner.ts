@@ -41,7 +41,7 @@ import {
 } from './source-grounding.js';
 import {webResearchSourceListMarkdown} from './source-research.js';
 import {narrationResponseSchema, planningValidationSummary, recoverNarrationResponse, sanitizeNarratedCandidate, type LostVisual} from './narration-plan-recovery.js';
-import {MAX_NARRATED_SCENES, sourceCoverageSchema, sourceCoverageIssues, sourceCoveragePrompt, sourcePointsFor} from './source-coverage.js';
+import {MAX_NARRATED_SCENES, sourceCoverageSchema, sourceCoverageResponseSchemaFor, sourceCoverageIssues, sourceCoveragePrompt, sourcePointsFor, type SourcePoint} from './source-coverage.js';
 
 /**
  * Thrown when a character scene the model asked for was discarded by recovery.
@@ -62,18 +62,22 @@ class PlanRepairRequest extends Error {
  * a concrete exchange; forcing a cast for them wastes the repair budget.
  */
 export const humanExchangeSignal = (sourceText: string): boolean => {
-  const text = sourceText.toLocaleLowerCase('en-US');
   const roles = ['customer', 'client', 'guest', 'patient', 'clerk', 'officer', 'teller',
     'doctor', 'nurse', 'pharmacist', 'cashier', 'applicant', 'interviewer', 'interviewee',
     'passenger', 'student', 'teacher', 'receptionist', 'visitor', 'tenant',
     'landlord', 'staff', 'attendant', 'inspector'];
-  const containsWord = (word: string) => new RegExp(`\\b${word}s?\\b`, 'u').test(text);
-  if (roles.some(containsWord)) return true;
   const verbs = ['asks', 'tells', 'hands', 'signs', 'greets', 'requests', 'submits',
     'checks in', 'interviews', 'consults', 'presents', 'approves'];
   const people = ['person', 'people', 'someone', 'somebody', 'they', 'she', 'he',
     'buyer', 'seller', 'agent', 'manager', 'operator', 'reviewer'];
-  return verbs.some(containsWord) && people.some(containsWord);
+  // A customer base or a job title alone does not describe an exchange. Match
+  // the action and person within the same sentence, never across roundup topics.
+  const text = sourceText.toLocaleLowerCase('en-US')
+    .replace(/\b(?:ai|software|autonomous|research|coding)(?:[-\s]+(?:ai|software|autonomous|research|coding))*[-\s]+agents?\b/gu, '');
+  return text.split(/[.!?](?:\s+|$)|[;\n]+/u).some((text) => {
+    const containsWord = (word: string) => new RegExp(`\\b${word}s?\\b`, 'u').test(text);
+    return verbs.some(containsWord) && [...roles, ...people].some(containsWord);
+  });
 };
 import {compactSchemaText, withoutVisualKinds} from './schema-prompt.js';
 
@@ -90,12 +94,12 @@ export {joinNarrationPhrases} from './narration-text.js';
  * Free provider tiers cap a request at 6-8k tokens, and the JSON Schema form
  * alone spent ~4.1k of that.
  */
-export const narrationResponseSchemaFor = (requireCoverage: boolean) => requireCoverage
-  ? narrationResponseSchema.extend({sourceCoverage: sourceCoverageSchema})
+export const narrationResponseSchemaFor = (requireCoverage: boolean, sourcePoints: SourcePoint[] = []) => requireCoverage
+  ? narrationResponseSchema.extend({sourceCoverage: sourceCoverageResponseSchemaFor(sourcePoints)})
   : narrationResponseSchema;
 
-const narrationJsonSchema = (requireCoverage = false) =>
-  z.toJSONSchema(narrationResponseSchemaFor(requireCoverage), {io: 'output', unrepresentable: 'any'});
+const narrationJsonSchema = (requireCoverage = false, sourcePoints: SourcePoint[] = []) =>
+  z.toJSONSchema(narrationResponseSchemaFor(requireCoverage, sourcePoints), {io: 'output', unrepresentable: 'any'});
 
 export const NARRATION_RESPONSE_SHAPE = compactSchemaText(narrationJsonSchema());
 
@@ -111,18 +115,20 @@ export const narrationResponseShapeFor = ({
   hasLocalImages,
   sourceHasNumbers,
   requireCoverage = false,
+  sourcePoints = [],
 }: {
   generatedVisuals: 'off' | 'auto';
   hasCodeSources: boolean;
   hasLocalImages: boolean;
   sourceHasNumbers: boolean;
   requireCoverage?: boolean;
+  sourcePoints?: SourcePoint[];
 }): string => {
   const excluded = new Set<string>();
   if (!hasCodeSources) excluded.add('code-walkthrough');
   if (generatedVisuals !== 'auto' && !hasLocalImages) excluded.add('image-focus');
   if (!sourceHasNumbers) excluded.add('data-visualization');
-  return compactSchemaText(withoutVisualKinds(narrationJsonSchema(requireCoverage), excluded));
+  return compactSchemaText(withoutVisualKinds(narrationJsonSchema(requireCoverage, sourcePoints), excluded));
 };
 
 const SYSTEM_PROMPT = PRESENTATION_PLANNING_PROMPT + '\n\n' + EXPLAINER_PLANNING_PROMPT + '\n\n' + `You are a precise visual writer and director for educational videos and complete news roundups.
@@ -676,9 +682,10 @@ export const planNarratedVideo = async (
   });
   const client = aiInfo.client;
 
-  const sourcePoints = sourcePointsFor(options.originalSourceText ?? options.sourceText);
+  const originalSourceText = options.originalSourceText ?? options.sourceText;
+  const sourcePoints = sourcePointsFor(originalSourceText);
   const requireCoverage = sourcePoints.length > 1;
-  const responseSchema = narrationResponseSchemaFor(requireCoverage);
+  const responseSchema = narrationResponseSchemaFor(requireCoverage, sourcePoints);
   const budget = narrationDurationBudget(options.targetDurationSeconds, options.language, options.ttsSpeed, sourcePoints.length);
   const topicUnits = Math.max(1, Math.floor(budget.targetUnits * 0.9 / Math.max(1, sourcePoints.length)));
   const expressionLimit = maxNarrationExpressionsForDuration(
@@ -748,6 +755,7 @@ export const planNarratedVideo = async (
         hasLocalImages: localImages.length > 0,
         sourceHasNumbers: numericClaims(options.sourceText).length > 0,
         requireCoverage,
+        sourcePoints,
       })}`;
       const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {role: 'system', content: SYSTEM_PROMPT + formatPrompt},
@@ -820,7 +828,7 @@ export const planNarratedVideo = async (
       const wantedButMissing = options.requireCharacters === true
         && !stagedAnything
         && lostCharacters.length === 0
-        && humanExchangeSignal(options.sourceText);
+        && humanExchangeSignal(originalSourceText);
 
       // Collect independent failures in one request. Otherwise a character
       // retry can hide schema errors, which then hide missing source coverage

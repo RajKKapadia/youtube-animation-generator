@@ -94,7 +94,14 @@ rejected.
 New multi-point narration requests require `sourceCoverage`, an array of `{pointId, sceneId,
 beatIds, sourceEvidence}`. The inventory follows the original summary when research is enabled.
 Each point needs an extractive excerpt from its own block and existing spoken beats; reusing
-only the same recap beats for several topics fails validation (`src/source-coverage.ts:86`).
+only the same recap beats for several topics fails validation (`src/source-coverage.ts:105`).
+Authoring supplies one short verbatim excerpt per original point and constrains the generated
+evidence to those values in both provider schemas (`src/source-coverage.ts:80`,
+`src/source-coverage.ts:92`, `src/narration-planner.ts:97`). Local validation still checks that
+the chosen excerpt belongs to its point and its beat references exist. An invalid evidence
+error supplies a valid excerpt and does not also claim the spoken topic was omitted
+(`src/source-coverage.ts:121`, `src/source-coverage.ts:141`). Saved plans continue to accept any
+extractive excerpt within the 600-character limit; evidence is never defaulted or silently replaced.
 Supporting lists introduced inside a section, indented subitems, and tabular headers stay in
 their parent point (`src/source-coverage.ts:13`). This avoids demanding another story for each
 closing takeaway while retaining the complete text for planning.
