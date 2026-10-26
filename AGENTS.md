@@ -119,6 +119,7 @@ environment, it provably made no billed API call.
 | You need to… | Read |
 |---|---|
 | Set up the machine, install the TTS model, fix Chrome | [`docs/setup.md`](docs/setup.md) |
+| Use HyperFrames, Text-to-Lottie, StykAnimate, or recorded voiceovers | [`docs/animation-tools.md`](docs/animation-tools.md) |
 | Understand the pipeline, subsystems, or where a module lives | [`docs/architecture.md`](docs/architecture.md) |
 | Write or edit a plan JSON — schemas, enums, limits, versioning | [`docs/plan-schema.md`](docs/plan-schema.md) |
 | Look up a CLI command, flag, fixture script, or output path | [`docs/commands.md`](docs/commands.md) |

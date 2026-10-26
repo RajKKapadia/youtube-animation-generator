@@ -16,7 +16,7 @@ vi.mock('./generated-visuals.js', async (original) => ({...await original<typeof
 vi.mock('./scene-backgrounds.js', async (original) => ({...await original<typeof import('./scene-backgrounds.js')>(), materializeSceneBackgrounds: backgrounds}));
 
 const draft = draftNarratedPlanSchema.parse({
-  version: 7, kind: 'narrated-video', stage: 'draft', sourceText: 'A queue holds work until a consumer is ready.',
+  version: 8, kind: 'narrated-video', stage: 'draft', sourceText: 'A queue holds work until a consumer is ready.',
   generatedAt: '2026-10-09', model: 'fixture', targetDurationSeconds: 150, language: 'en', title: 'Queue', palette: 'cyan', mediaAssets: [],
   scenes: [{id: 'queue', title: 'Queue', template: 'callout', primaryItems: ['Queue'], secondaryItems: [], leftLabel: '', rightLabel: '', reason: 'Explains a queue.',
     backgroundPrompt: 'Abstract queue.', icons: {focal: null, primary: [null], secondary: []}, visual: {kind: 'diagram', motion: 'reveal', motif: 'none', assetId: null},

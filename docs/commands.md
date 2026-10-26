@@ -8,6 +8,10 @@ Full usage text lives at `src/cli.ts:71-140`.
 
 Provider selection is environment-driven, not flag-driven — see [providers.md](providers.md).
 
+For `tools setup|verify|doctor`, `prepare`, `assemble`, project-directory `publish`,
+and animation selection flags, see [animation-tools.md](animation-tools.md).
+The existing `create` workflow keeps its defaults.
+
 ## Invocations
 
 | Invocation | Purpose | Provider key? |

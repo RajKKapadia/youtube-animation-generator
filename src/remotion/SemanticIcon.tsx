@@ -105,6 +105,8 @@ const ICON_COMPONENTS: Record<SemanticIconId, LucideIcon> = {
   worker: Cog,
 };
 
+export const semanticIconComponentFor = (id: string) => ICON_COMPONENTS[id as SemanticIconId];
+
 const LocalIconAssetsContext = createContext<Record<string, LocalIconAsset>>({});
 
 export const LocalIconAssetsProvider = ({

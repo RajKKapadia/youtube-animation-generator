@@ -78,8 +78,9 @@ export const assertDraftNarrationDuration = (
 };
 
 export const assertMeasuredNarrationDuration = (
-  plan: {durationMs: number; targetDurationSeconds: number},
+  plan: {durationMs: number; targetDurationSeconds: number; audioSource?: {kind: string} | undefined},
 ): void => {
+  if (plan.audioSource?.kind === 'recorded' || plan.audioSource?.kind === 'silent') return;
   const maximumSeconds = plan.targetDurationSeconds + NARRATION_DURATION_TOLERANCE_SECONDS;
   if (plan.durationMs <= maximumSeconds * 1000) return;
   throw new Error(`Measured narration is ${(plan.durationMs / 1000).toFixed(1)}s for a ${plan.targetDurationSeconds}s target; the maximum is ${maximumSeconds}s including ${NARRATION_DURATION_TOLERANCE_SECONDS}s tolerance. Video rendering stopped. Shorten the draft narration and regenerate its audio, or recreate the plan with a longer --target-duration. Saved audio and timed plans remain available for review; --render-plan never rewrites narration.`);

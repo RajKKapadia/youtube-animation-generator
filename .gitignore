@@ -4,3 +4,4 @@ dist/
 .remotion/
 models/supertonic-3/
 samples/
+.animation-tools/

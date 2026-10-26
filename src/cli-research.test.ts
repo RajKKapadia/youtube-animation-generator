@@ -22,7 +22,7 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   planNarratedVideo.mockImplementation(async (options) => ({
-    version: 7, kind: 'narrated-video', stage: 'draft', sourceText: options.sourceText,
+    version: 8, kind: 'narrated-video', stage: 'draft', sourceText: options.sourceText,
     ...(options.research ? {research: options.research, originalSourceText: options.originalSourceText} : {}),
     generatedAt: '2026-10-04', model: 'fixture', targetDurationSeconds: 10, language: 'en', title: 'Queues', mediaAssets: [], palette: 'cyan',
     scenes: [{id: 'queue', template: 'callout', title: 'Queue', primaryItems: ['Queue'], secondaryItems: [],

@@ -20,14 +20,18 @@ verification.
 
 ## Versioning — the most common trap
 
-The current narrated-plan version is **7**, but fixtures on disk are older.
+The current narrated-plan version is **8**, but fixtures on disk are older.
+Version 8 adds project-local animation assets and explicit recorded/silent/TTS
+audio metadata. See [animation-tools.md](animation-tools.md#selection-and-compatibility).
+The reader upgrades version 7 as well as the older contracts below; older examples
+remain accepted through `narratedPlanSchema`.
 `fixtures/sample.narration-plan.json` declares `version: 4` and still loads, because
-`narratedPlanSchema` (`src/types.ts:1782`) is a `z.union` of the v7 draft/timed schemas plus
+`narratedPlanSchema` is a union of the version-8 draft/timed schemas, a version-7 upgrade, and
 legacy v5, v4, v3, v2 and v1 schemas, each carrying a `.transform(normalize…)` that upgrades in
 place.
 
 > **Consequence:** copying `sample.narration-plan.json` as a starting point works, but you are
-> authoring a **v4** document. Declare `version: 7` for anything new.
+> authoring a **v4** document. Declare `version: 8` for anything new.
 
 ## Enumerations
 
@@ -71,7 +75,7 @@ rejected.
 
 | Constraint | Limit |
 |---|---|
-| Scenes per v7 plan / Supertonic job | 1 – 24 (`src/source-coverage.ts:4`) |
+| Scenes per v8 plan / Supertonic job | 1 – 24 (`src/source-coverage.ts:4`) |
 | Beats per scene | 1 – 12 |
 | `primaryItems` / `secondaryItems` | 1 – 6 / 0 – 6 |
 | Plan `title` | ≤ 100 chars |
@@ -105,7 +109,7 @@ extractive excerpt within the 600-character limit; evidence is never defaulted o
 Supporting lists introduced inside a section, indented subitems, and tabular headers stay in
 their parent point (`src/source-coverage.ts:13`). This avoids demanding another story for each
 closing takeaway while retaining the complete text for planning.
-Saved v7 draft/timed schemas validate this metadata when present and allow it to be absent for
+Saved v8 draft/timed schemas validate this metadata when present and allow it to be absent for
 older or hand-written plans (`src/types.ts:1195`, `src/types.ts:1337`). These are structural
 coverage and grounding checks; script review still establishes semantic completeness.
 

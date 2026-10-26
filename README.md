@@ -4,13 +4,14 @@ Turn text into narrated videos, subtitles into editor-ready animation overlays, 
 
 Visuals include animated characters, typography, diagrams, charts, code walkthroughs, local images, icons, and Lottie assets. Generated images and cited web research are optional. Subtitle clips remain separate and audio-free.
 
-The CLI provides four commands:
+The CLI provides these workflows:
 
 | Input | Command | Result |
 | --- | --- | --- |
 | Topic name | `youtube-animations topic "Passkeys"` | A Markdown source document for review |
 | `.srt` or `.vtt` subtitles | `youtube-animations episode.srt` | Separate editor-ready overlay clips plus a placement manifest |
 | `.txt` or `.md` source text | `youtube-animations create summary.md` | A planned, voiced, captioned, and rendered narrated video |
+| Source text → your recording | `youtube-animations prepare summary.md`, then `assemble summary-video` | An editable silent draft, followed by a video aligned to your recorded voice |
 | Narrated plan JSON | `youtube-animations publish summary.narration-timed.json` | Copy-ready title, description, tags, thumbnail, and vertical cover |
 
 Commands in this README use `pnpm run animations` to execute the TypeScript source from the repository. After `pnpm build`, the same arguments can be passed to `node dist/cli.js` or the configured `youtube-animations` binary.
@@ -22,7 +23,12 @@ topic → source.md → draft plan JSON → local speech → timed plan JSON →
                       edit here                       reuse audio
 ```
 
-Creating a source, plan, or publish metadata calls the selected AI provider. `--render-plan` skips AI planning; rendering can run offline once dependencies, the needed model, and referenced assets are available. Generated-image modes can still call their provider for missing assets.
+Creating a source, plan, animation recipe, or publish metadata calls the selected AI provider. `--render-plan` skips AI planning; rendering can run offline once dependencies, the needed model, and referenced assets are available. Generated-image modes can still call their provider for missing assets.
+
+**Optional animation tools and recorded voice:** [setup and workflow guide](docs/animation-tools.md).
+`prepare` automatically selects HyperFrames, Text-to-Lottie, or StykAnimate for supported scenes;
+`assemble` aligns your recording locally and rerenders timing; `publish` creates the publishing kit.
+`create` retains its existing defaults and accepts `--animation-tools auto` to opt in.
 
 Jump to [Setup](#setup), [Narrated videos](#create-narrated-videos), [Review stages](#review-before-rendering), [Animated characters](#animated-character-scenes), [Subtitle overlays](#subtitle-animation-overlays), [Publish kits](#create-a-narrated-video-publish-kit), [Options](#options), or [Development checks](#development-checks).
 
@@ -358,7 +364,7 @@ Research options apply only while planning a new narrated video. Subtitle overla
 
 ### Visual selection
 
-Every version-7 scene persists a discriminated `visual` object plus explicit `icons` selections. `icons.focal` identifies the scene's central semantic symbol, while `icons.primary` and `icons.secondary` align one-for-one with visible items. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated, subject-matched local Lottie asset or remains `null` for code-native visuals. `image-focus` instead references a plan-level local/generated media id, while `data-visualization` stores its validated chart specification. Older version-6 files without icon selections load with conservative label fallbacks; versions 1–5 retain their supported legacy visuals without new foreground media. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. A character exchange can continue across adjacent scenes. If truthful source material cannot support variety, the saved plan receives a warning instead of being rejected or padded with invented content.
+Every version-8 scene persists a discriminated `visual` object plus explicit `icons` selections. `icons.focal` identifies the scene's central semantic symbol, while `icons.primary` and `icons.secondary` align one-for-one with visible items. `kind` chooses the treatment, `motion` chooses the restrained motion behavior, `motif` selects a controlled semantic category, and `assetId` either references a validated, subject-matched local Lottie asset or remains `null` for code-native visuals. `image-focus` instead references a plan-level local/generated media id, while `data-visualization` stores its validated chart specification. Older version-6 files without icon selections load with conservative label fallbacks; versions 1–5 retain their supported legacy visuals without new foreground media. For videos with at least four scenes the planner targets three treatments and avoids adjacent repetition when the source supports it. A character exchange can continue across adjacent scenes. If truthful source material cannot support variety, the saved plan receives a warning instead of being rejected or padded with invented content.
 
 ### Animated character scenes
 
@@ -795,7 +801,7 @@ All treatments use the same motion grammar: narration-beat or subtitle-cue entra
 
 Titles and labels are measured and fitted into their bounds. Icon resolution is deterministic: an explicit, relevance-checked scene icon is tried first; an exact Simple Icons name or explicit brand alias is tried second; an exact entry from `assets/brands/manifest.json` is tried third; and a conservative Lucide label fallback is used last. The built-in catalog includes standards/protocols, compatibility, CPUs, accelerators, memory, circuits, AI models, and the existing software-system concepts. Brand showcases do not use fuzzy matching. Missing or ambiguous logos produce a planning warning; brand names absent from the source and source-unsupported metric numbers are rejected before the plan is saved. The renderer never fabricates a mark or silently substitutes another company. Original logo colors are preserved unless a curated manifest explicitly allows monochrome use.
 
-Narrated plan files are version 7. New subtitle animation plans are version 3 and persist the same palette, treatment, icons, media, captions, background prompts, warnings, and required asset credits; subtitle output manifests are version 4 and record the render-time caption/background settings. Narrated versions 1–6, subtitle versions 1–2, and placement manifests 2–3 remain readable. Existing visuals and timing are preserved during normalization. Use the current plan formats when authoring new treatments. Version-1 subtitle plans normalize to cyan diagrams and render unchanged with the default caption/background-off options. Captions require regeneration because legacy files do not contain original per-cue timing.
+Narrated plan files are version 8, with optional project-local animation assets and recorded-audio provenance. New subtitle animation plans are version 3 and persist the same palette, treatment, icons, media, captions, background prompts, warnings, and required asset credits; subtitle output manifests are version 4 and record the render-time caption/background settings. Narrated versions 1–7, subtitle versions 1–2, and placement manifests 2–3 remain readable. Existing visuals and timing are preserved during normalization. Use the current plan formats when authoring new treatments. Version-1 subtitle plans normalize to cyan diagrams and render unchanged with the default caption/background-off options. Captions require regeneration because legacy files do not contain original per-cue timing.
 
 Ambient backgrounds are generated entirely in Remotion from palette-driven deterministic gradients, moving light fields, a subtle grid, and a vignette. The same palette drives diagram accents and new publish covers. Generated-background dimensions depend on the provider. Prompts include the saved palette, and non-character scenes add slow pan/zoom with readability overlays; character settings stay still. Requested generation never silently falls back to ambient. Changing the palette changes the prompt hash, so cached images cannot silently retain the previous color family.
 

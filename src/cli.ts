@@ -71,6 +71,11 @@ import {
 import {selectSupertonicVoice} from './supertonic/voice-selection.js';
 import {validateImageBackground, type ImageBackground} from './image-background.js';
 import {authorTopicDocument, countWords, topicFileName} from './topic-author.js';
+import {parseAnimationTools, parseSceneTools, animationToolSchema} from './animation-contract.js';
+import {prepareProject, assembleProject, loadAnimationProject, retimeProjectAnimations} from './project-workflow.js';
+import {atomicJson, applicationRoot, sha256, fileHash, runLocalProcess, projectPath, animationToolsRoot} from './animation-runtime.js';
+import {toolAvailability} from './animation-tools.js';
+import {verifyAnimationTools} from './verify-animation-tools.js';
 
 const VERSION = '0.9.0';
 const FORMATS = new Set<OutputFormat>(['prores', 'webm', 'green', 'h264']);
@@ -83,6 +88,10 @@ Usage:
   youtube-animations <subtitle.srt|subtitle.vtt> [options]
   youtube-animations topic "<topic name>" [options]
   youtube-animations create <source.txt|source.md> [options]
+  youtube-animations prepare <source.md> [--animation-tools auto|off|tool,...]
+  youtube-animations prepare --render-plan <plan.json> [options]
+  youtube-animations assemble <project-directory> [--voiceover <file>] [--alignment <words.json>]
+  youtube-animations tools <setup|doctor|verify> [hyperframes|lottie|stykanimate|alignment]
   youtube-animations publish <narrated-plan.json> [options]
   youtube-animations --render-plan <plan.json> [options]
   youtube-animations create --render-plan <narrated-plan.json> [options]
@@ -98,6 +107,10 @@ Shared options:
   --audio-only                      Synthesize voiceover audio without rendering video
   --stills-only                     Render scene screenshot stills without rendering full video
   --review                          Pause for user review between Script, Screenshots, Audio, and Video assembly
+  --animation-tools <selection>     auto, off, or comma-separated tools (prepare: auto; create: off)
+  --scene-tool <scene-id=tool>       Override a scene with builtin, hyperframes, lottie, or stykanimate (repeatable)
+  --voiceover <file>                Recording to align during assemble
+  --alignment <words.json>          Reviewed local word timestamps instead of transcription
   --render-plan <path>              Render an existing plan without calling OpenAI
   --force                           Replace previously generated files
   --background-image <path>         Static local PNG/JPEG/WebP for videos or both publish covers
@@ -1068,6 +1081,10 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
     tokens: true,
     options: {
       'aspect-ratio': {type: 'string', default: '16:9'},
+      'animation-tools': {type: 'string'},
+      'scene-tool': {type: 'string', multiple: true},
+      voiceover: {type: 'string'},
+      alignment: {type: 'string'},
       'background-image': {type: 'string'},
       captions: {type: 'string'},
       'cover-aspect': {type: 'string', default: 'both'},
@@ -1127,6 +1144,28 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   const fps = parsePositiveInteger(values.fps, 30, '--fps');
   const aiProvider = resolveAIProvider();
   const model = values.model ?? defaultModelForProvider(aiProvider);
+  if (positionals[0] === 'tools') {
+    const action = positionals[1];
+    const selected = positionals.slice(2);
+    for (const tool of selected) if (tool !== 'alignment') animationToolSchema.parse(tool);
+    if (action === 'setup') await runLocalProcess(process.execPath, [resolve(applicationRoot, 'scripts/setup-animation-tools.mjs'), ...selected], {timeoutMs: 1800000, onOutput: text => process.stdout.write(text)});
+    else if (action === 'verify') {
+      if (selected.includes('alignment')) throw new Error('Verify recorded speech with assemble; tools verify accepts animation renderers.');
+      await verifyAnimationTools(selected.length ? selected.map(tool => animationToolSchema.parse(tool)) : undefined);
+    }
+    else if (action === 'doctor') {
+      for (const tool of animationToolSchema.options) console.log(`${tool}: ${await toolAvailability(tool) ?? 'ready'}`);
+      console.log(`alignment: ${existsSync(resolve(animationToolsRoot(), 'python')) && existsSync(resolve(animationToolsRoot(), 'models/models--Systran--faster-whisper-small/snapshots/536b0662742c02347bc0e980a01041f333bce120')) ? 'installed; small model cached' : 'run tools setup alignment'}`);
+    }
+    else throw new Error('Use tools setup, tools doctor, or tools verify.');
+    return;
+  }
+  if (positionals[0] === 'assemble') {
+    if (positionals.length !== 2) throw new Error('Provide one project directory after assemble.');
+    if (values['animation-tools'] || values['scene-tool'] || values['render-plan'] || values.research !== 'off' || values['generated-visuals'] !== 'off') throw new Error('Assemble uses saved project settings and never authors new assets.');
+    await assembleProject(resolve(positionals[1]!), {...(values.voiceover ? {voiceover: values.voiceover} : {}), ...(values.alignment ? {alignment: values.alignment} : {}), planOnly: values['plan-only'], force: values.force});
+    return;
+  }
   // `topic` writes the source document the other commands consume, so it runs
   // before any of the render-oriented option validation below.
   if (positionals[0] === 'topic') {
@@ -1270,6 +1309,76 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   };
   const createCommand = positionals[0] === 'create';
   const renderPlanPath = values['render-plan'] ? resolve(values['render-plan']) : undefined;
+  const prepareCommand = positionals[0] === 'prepare';
+  const animatedCreate = createCommand && Boolean(values['animation-tools'] || values['scene-tool']);
+  if (prepareCommand || animatedCreate) {
+    if (common.review) throw new Error('Use prepare, inspect the silent draft, then assemble for animation-tool review. Legacy create --review remains available without animation-tool options.');
+    if (renderPlanPath ? positionals.length !== 1 : positionals.length !== 2) throw new Error('Provide one source file, or --render-plan without a source.');
+    const source = renderPlanPath ?? resolve(positionals[1]!);
+    const stem = fileStem(source).replace(/\.narration-(?:plan|timed)$/iu, '');
+    const directory = common.outputDirectory ?? resolve(dirname(source), `${stem}-video`);
+    const visual = narratedVisualOptions(); validateVisualOptions(visual);
+    const configuration = {aspectRatio, fps, captions: visual.captions, tools: parseAnimationTools(values['animation-tools'] ?? (prepareCommand ? 'auto' : 'off')), overrides: parseSceneTools(values['scene-tool']), sceneBackground: visual.sceneBackground};
+    let backgroundImage;
+    if (visual.imageBackground) {
+      const file = `assets/background${extname(visual.imageBackground.filePath)}`;
+      await mkdir(resolve(directory, 'assets'), {recursive: true});
+      await import('node:fs/promises').then(fs => fs.copyFile(visual.imageBackground!.filePath, resolve(directory, file)));
+      backgroundImage = {file, sha256: visual.imageBackground.sha256};
+    }
+    const sourceHash = sha256(JSON.stringify({input: await fileHash(source), speed: values['tts-speed'], target: values['target-duration'], language: values.language, research, visual: {...visual, imageBackground: backgroundImage}, requireCharacters: values['require-characters'],
+      images: renderPlanPath ? [] : (await discoverLocalImages({sourcePath: source, stem})).map(image => ({id: image.id, sha256: image.sha256})),
+      code: renderPlanPath ? [] : (await discoverLocalCode({sourcePath: source, sourceText: await readFile(source, 'utf8')})).sources.map(code => code.sha256)}));
+    await prepareProject({directory, sourceHash, configuration: {...configuration, ...(backgroundImage ? {backgroundImage} : {})}, model, authorAssets: !renderPlanPath, planOnly: common.planOnly || animatedCreate, force: common.force,
+      authorDraft: async () => {
+        if (renderPlanPath) {
+          const plan = narratedPlanSchema.parse(JSON.parse(await readFile(source, 'utf8')));
+          if (plan.stage !== 'draft') throw new Error('Prepare requires a draft plan; use create --render-plan for timed plans.');
+          for (const asset of plan.mediaAssets) if (asset.source === 'local') {
+            const target = resolve(directory, asset.file); await mkdir(dirname(target), {recursive: true});
+            if (resolve(dirname(source), asset.file) !== target) await import('node:fs/promises').then(fs => fs.copyFile(resolve(dirname(source), asset.file), target));
+          }
+          await mirrorNarratedMediaCaches({plan, sourceDirectory: dirname(source), targetDirectory: directory, stem});
+          for (const asset of plan.animationAssets ?? []) {
+            for (const file of asset.sources) {
+              const from = projectPath(dirname(source), file.file), target = projectPath(directory, file.file);
+              if (from !== target) {await mkdir(dirname(target), {recursive: true}); await import('node:fs/promises').then(fs => fs.copyFile(from, target));}
+            }
+            for (const sequence of Object.values(asset.renders)) if (sequence) {
+              const from = projectPath(dirname(source), sequence.directory), target = projectPath(directory, sequence.directory);
+              if (from !== target) await import('node:fs/promises').then(fs => fs.cp(from, target, {recursive: true}));
+            }
+          }
+          return plan;
+        }
+        await runNarratedWorkflow({assetsDirectory: resolve(values['supertonic-assets-dir']), common: {...common, outputDirectory: directory, planOnly: true, force: true, review: false}, language: parseLanguage(values.language), model, requireCharacters: values['require-characters'], research, sourcePath: source, speed: parseTtsSpeed(values['tts-speed']), steps: parseTtsSteps(values['tts-steps']), targetDurationSeconds: parsePositiveNumber(values['target-duration'], 60, '--target-duration'), visual, voice: parseVoice(values.voice)});
+        const draft = narratedPlanSchema.parse(JSON.parse(await readFile(resolve(directory, `${stem}.narration-plan.json`), 'utf8')));
+        if (draft.stage !== 'draft') throw new Error('Expected a draft plan.'); return draft;
+      },
+      prepareVisuals: async plan => ({backgrounds: await resolveSceneBackgrounds({aspectRatio, outputDirectory: directory, plan, stem, visual}), foregrounds: await resolveForegroundVisuals({aspectRatio, plan, planDirectory: directory, stem, visual})}),
+    });
+    if (animatedCreate && !common.planOnly) {
+      const project = await loadAnimationProject(directory);
+      const draft = narratedPlanSchema.parse(JSON.parse(await readFile(resolve(directory, 'draft.narration-plan.json'), 'utf8')));
+      const preview = narratedPlanSchema.parse(JSON.parse(await readFile(resolve(directory, 'preview.narration-timed.json'), 'utf8')));
+      if (draft.stage !== 'draft' || preview.stage !== 'timed') throw new Error('Invalid animated project plans.');
+      if (common.stillsOnly) {
+        const stillPlan = await retimeProjectAnimations(directory, project, preview, preview);
+        await renderTimedNarration({common: {...common, outputDirectory: directory}, plan: stillPlan, planDirectory: directory, stem: 'draft', visual});
+        return;
+      }
+      const requestedVoice = parseVoice(values.voice);
+      const voice = requestedVoice === 'auto' ? selectSupertonicVoice(draft) : {voice: requestedVoice};
+      let timed = await synthesizeNarration({assetsDirectory: resolve(values['supertonic-assets-dir']), audioDirectoryName: 'tts.audio', draft, force: common.force, outputDirectory: directory, speed: parseTtsSpeed(values['tts-speed']), steps: parseTtsSteps(values['tts-steps']), voice: voice.voice});
+      assertMeasuredNarrationDuration(timed);
+      if (!common.audioOnly) timed = await retimeProjectAnimations(directory, project, preview, timed);
+      await atomicJson(resolve(directory, 'final.narration-timed.json'), timed);
+      if (common.audioOnly) return;
+      await renderTimedNarration({common: {...common, outputDirectory: directory}, plan: timed, planDirectory: directory, stem: 'final', visual});
+    }
+    return;
+  }
+  if (values['animation-tools'] || values['scene-tool'] || values.voiceover || values.alignment) throw new Error('Animation authoring options require prepare/create; recording options require assemble.');
   const narratedOnlyOptions = new Set([
     'research',
     'refresh-research',

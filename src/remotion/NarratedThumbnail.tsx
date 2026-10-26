@@ -328,6 +328,7 @@ const StaticBackdrop = ({accent}: {accent: ReturnType<typeof accentFor>}) => (
 );
 
 export const NarratedThumbnail = ({
+  animationPreview,
   backgroundImageAsset,
   foregroundAssets,
   localBrandAssets,
@@ -340,6 +341,10 @@ export const NarratedThumbnail = ({
   const layout = publishCoverLayout(profile);
   const {vertical} = layout;
   const accent = accentFor(publish.thumbnail.accent);
+  if (animationPreview) return <AbsoluteFill style={{backgroundColor: accent.background.start, color: '#F8FAFC'}}>
+    <Img src={staticFile(animationPreview)} style={{position: 'absolute', objectFit: 'contain', width: vertical ? '100%' : '62%', height: vertical ? '70%' : '100%', right: 0, bottom: 0}} />
+    <div style={{position: 'absolute', left: '6%', top: '8%', width: vertical ? '88%' : '32%'}}><FittedText text={publish.thumbnail.headline} fontWeight={850} lineHeight={1.1} maxWidth={profile.width * (vertical ? .88 : .32)} maxHeight={profile.height * (vertical ? .24 : .8)} maxFontSize={vertical ? 100 : 80} maxLines={5} align="left" /></div>
+  </AbsoluteFill>;
   const semanticIcons = iconRecordForItems({
     primaryItems: scene.primaryItems,
     secondaryItems: scene.secondaryItems,

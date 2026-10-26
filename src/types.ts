@@ -1,3 +1,4 @@
+import {animationAssetSchema, audioSourceSchema, type AnimationAsset} from './animation-contract.js';
 import {compositionSchema, presentationIssue, presentationSchema, storyRoleSchema, type Presentation} from './presentation.js';
 import {explainerSuggestionSchema, explainerSceneSchema, explainerStructureIssue, explainerGroundingIssue, visualMotifSchema} from './explainer-visuals.js';
 import {MAX_NARRATED_SCENES, sourceCoverageSchema, sourceCoverageIssues, sourcePointsFor} from './source-coverage.js';
@@ -1075,13 +1076,20 @@ export const maxNarrationExpressionsForDuration = (
 
 const addNarratedPlanIssues = (
   plan: {
+    animationAssets?: AnimationAsset[] | undefined;
     mediaAssets: NarratedMediaAsset[];
-    scenes: Array<VisualContent & {beats: NarrationBeat[]; visual: NarratedSceneVisual}>;
+    scenes: Array<VisualContent & {id: string; beats: NarrationBeat[]; visual: NarratedSceneVisual}>;
     sourceText: string;
     targetDurationSeconds: number;
   },
   context: z.core.$RefinementCtx,
 ): void => {
+  const animationScenes = new Set<string>(), animationIds = new Set<string>();
+  for (const asset of plan.animationAssets ?? []) {
+    const scene = plan.scenes.find(scene => scene.id === asset.sceneId);
+    if (!scene || animationScenes.has(asset.sceneId) || animationIds.has(asset.id) || (asset.tool === 'stykanimate' && scene.visual.kind !== 'character-scene')) context.addIssue({code: 'custom', message: 'Animation assets must uniquely reference compatible existing scenes.', path: ['animationAssets']});
+    animationScenes.add(asset.sceneId); animationIds.add(asset.id);
+  }
   const beats = plan.scenes.flatMap((scene) => scene.beats);
   if (beats.length > 64) {
     context.addIssue({
@@ -1177,7 +1185,7 @@ const addNarratedPlanIssues = (
 };
 
 export const draftNarratedPlanSchema = z.object({
-  version: z.literal(7),
+  version: z.literal(8),
   kind: z.literal('narrated-video'),
   stage: z.literal('draft'),
   sourceText: z.string().min(1),
@@ -1191,6 +1199,7 @@ export const draftNarratedPlanSchema = z.object({
   palette: videoPaletteSchema,
   planningWarnings: z.array(z.string().min(1)).optional(),
   assetAttributions: z.array(assetAttributionSchema).max(12).default([]),
+  animationAssets: z.array(animationAssetSchema).max(24).optional(),
   mediaAssets: z.array(narratedMediaAssetSchema).max(8),
   sourceCoverage: sourceCoverageSchema.optional(),
   scenes: z.array(draftNarrationSceneSchema).min(1).max(MAX_NARRATED_SCENES),
@@ -1311,7 +1320,7 @@ export const timedNarrationSceneSchema = visualContentSchema.extend({
 export type TimedNarrationScene = z.infer<typeof timedNarrationSceneSchema>;
 
 export const timedNarratedPlanSchema = z.object({
-  version: z.literal(7),
+  version: z.literal(8),
   kind: z.literal('narrated-video'),
   stage: z.literal('timed'),
   sourceText: z.string().min(1),
@@ -1325,11 +1334,13 @@ export const timedNarratedPlanSchema = z.object({
   palette: videoPaletteSchema,
   planningWarnings: z.array(z.string().min(1)).optional(),
   assetAttributions: z.array(assetAttributionSchema).max(12).default([]),
+  animationAssets: z.array(animationAssetSchema).max(24).optional(),
   mediaAssets: z.array(narratedMediaAssetSchema).max(8),
   sampleRate: z.number().int().positive(),
-  voice: z.string().min(1),
-  ttsSpeed: z.number().positive(),
-  ttsSteps: z.number().int().positive(),
+  audioSource: audioSourceSchema.optional(),
+  voice: z.string().min(1).optional(),
+  ttsSpeed: z.number().positive().optional(),
+  ttsSteps: z.number().int().positive().optional(),
   voiceoverPlaybackRate: z.number().positive().default(1),
   voiceoverFile: z.string().min(1),
   durationMs: z.number().int().positive(),
@@ -1337,6 +1348,10 @@ export const timedNarratedPlanSchema = z.object({
   sourceCoverage: sourceCoverageSchema.optional(),
   scenes: z.array(timedNarrationSceneSchema).min(1).max(MAX_NARRATED_SCENES),
 }).superRefine((plan, context) => {
+  const audioKind = plan.audioSource?.kind ?? 'tts';
+  if (audioKind === 'tts' && (!plan.voice || !plan.ttsSpeed || !plan.ttsSteps)) context.addIssue({code: 'custom', message: 'TTS plans require voice, ttsSpeed and ttsSteps.', path: ['audioSource']});
+  if (audioKind === 'recorded' && plan.voiceoverPlaybackRate !== 1) context.addIssue({code: 'custom', message: 'Recorded narration must preserve playback speed.', path: ['voiceoverPlaybackRate']});
+  if (plan.audioSource?.kind === 'recorded' && plan.audioSource.playback.file !== plan.voiceoverFile) context.addIssue({code: 'custom', message: 'Recorded playback must reference the aligned voiceover.', path: ['audioSource']});
   addNarratedPlanIssues(plan, context);
   if (plan.sourceCoverage) {
     for (const message of sourceCoverageIssues(sourcePointsFor(plan.originalSourceText ?? plan.sourceText), plan.sourceCoverage, plan.scenes)) {
@@ -1665,7 +1680,7 @@ const normalizeLegacyDraft = (
   plan: z.infer<typeof legacyDraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1684,7 +1699,7 @@ const normalizeLegacyTimed = (
   plan: z.infer<typeof legacyTimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1709,7 +1724,7 @@ const normalizeLegacyV2Draft = (
   plan: z.infer<typeof legacyV2DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1726,7 +1741,7 @@ const normalizeLegacyV2Timed = (
   plan: z.infer<typeof legacyV2TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1743,7 +1758,7 @@ const normalizeLegacyV3Draft = (
   plan: z.infer<typeof legacyV3DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1756,7 +1771,7 @@ const normalizeLegacyV3Timed = (
   plan: z.infer<typeof legacyV3TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   palette: 'cyan',
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
@@ -1769,7 +1784,7 @@ const normalizeLegacyV4Draft = (
   plan: z.infer<typeof legacyV4DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
@@ -1781,7 +1796,7 @@ const normalizeLegacyV4Timed = (
   plan: z.infer<typeof legacyV4TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   mediaAssets: [],
   scenes: plan.scenes.map((scene) => ({
     ...scene,
@@ -1793,7 +1808,7 @@ const normalizeLegacyV5Draft = (
   plan: z.infer<typeof legacyV5DraftNarratedPlanSchema>,
 ): DraftNarratedPlan => draftNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   mediaAssets: [],
 });
 
@@ -1801,14 +1816,21 @@ const normalizeLegacyV5Timed = (
   plan: z.infer<typeof legacyV5TimedNarratedPlanSchema>,
 ): TimedNarratedPlan => timedNarratedPlanSchema.parse({
   ...plan,
-  version: 7,
+  version: 8,
   mediaAssets: [],
 });
 
+const upgradeNarratedV7 = (input: unknown): unknown => {
+  if (!input || typeof input !== 'object' || (input as {version?: unknown}).version !== 7) return input;
+  const plan = input as Record<string, unknown>;
+  return {...plan, version: 8, ...(plan.stage === 'timed' ? {audioSource: {kind: 'tts'}} : {})};
+};
+
 export const narratedPlanSchema = z.union([
+  z.preprocess((input) => upgradeNarratedV7(input), z.union([draftNarratedPlanSchema, timedNarratedPlanSchema])),
   draftNarratedPlanSchema,
   timedNarratedPlanSchema,
-  z.preprocess((input) => upgradeVisualPlan(input, 6, 7, 'scenes'), z.union([draftNarratedPlanSchema, timedNarratedPlanSchema])),
+  z.preprocess((input) => upgradeVisualPlan(input, 6, 8, 'scenes'), z.union([draftNarratedPlanSchema, timedNarratedPlanSchema])),
   legacyV5DraftNarratedPlanSchema.transform(normalizeLegacyV5Draft),
   legacyV5TimedNarratedPlanSchema.transform(normalizeLegacyV5Timed),
   legacyV4DraftNarratedPlanSchema.transform(normalizeLegacyV4Draft),
@@ -1962,6 +1984,7 @@ export type SelectedMotionAsset = z.infer<typeof selectedMotionAssetSchema>;
 export const publishCoverInputSchema = z.object({
   foregroundAssets: z.record(z.string(), z.string()).optional(),
   localBrandAssets: z.record(z.string(), localBrandAssetSchema).optional(),
+  animationPreview: z.string().min(1).optional(),
   backgroundImageAsset: z.string().min(1).optional(),
   publish: narratedPublishPlanSchema,
   scene: publishSceneSchema,
@@ -2003,6 +2026,7 @@ export const subtitleRenderInputSchema = z.object({
 export type SubtitleRenderInput = z.infer<typeof subtitleRenderInputSchema>;
 
 export const narratedRenderInputSchema = z.object({
+  animationFrames: z.record(z.string(), z.object({directory: z.string(), frameCount: z.number().int().positive(), tool: z.string()})).optional(),
   plan: timedNarratedPlanSchema,
   captions: captionModeSchema,
   sceneBackground: sceneBackgroundModeSchema,

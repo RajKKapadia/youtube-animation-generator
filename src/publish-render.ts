@@ -1,5 +1,7 @@
 import {stageVisualRenderAssets} from './visual-render-assets.js';
 import {validateCoverDirection} from './cover-direction.js';
+import {stageAnimationFrames} from './animation-render-assets.js';
+import type {AnimationAsset} from './animation-contract.js';
 import {existsSync} from 'node:fs';
 import {mkdir, mkdtemp, rm} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
@@ -50,6 +52,7 @@ export interface PublishCoverOutput {
 }
 
 export interface RenderPublishCoversOptions {
+  animationAssets?: AnimationAsset[] | undefined;
   aspectRatio: AspectRatioSelection;
   mediaAssets?: NarratedMediaAsset[];
   planDirectory?: string;
@@ -107,6 +110,7 @@ export const renderPublishCovers = async (
         secondaryItemTimings: coverScene.secondaryItems.map(() => ({startMs: 0})), activityCues: []}],
       sourceTextForScene: () => options.sourceText ?? '',
     });
+    const animations = await stageAnimationFrames((options.animationAssets ?? []).filter(asset => asset.sceneId === options.scene.id), options.planDirectory ?? options.outputDirectory, publicDirectory, outputs.map(output => output.profile.aspectRatio));
     const localIconAssets = staged.localIconAssets;
     console.log('Bundling code-native publish-cover templates...');
     const serveUrl = await bundle({
@@ -131,6 +135,7 @@ export const renderPublishCovers = async (
 
     for (const [index, output] of outputs.entries()) {
       const inputProps = {
+        ...(animations[output.profile.aspectRatio][options.scene.id] ? {animationPreview: `${animations[output.profile.aspectRatio][options.scene.id]!.directory}/frame-${String(animations[output.profile.aspectRatio][options.scene.id]!.frameCount - 1).padStart(6, '0')}.png`} : {}),
         publish: options.publish,
         scene: options.scene,
         profile: output.profile,

@@ -114,7 +114,7 @@ const defaultNarratedProps: NarratedRenderInput = {
   localIconAssets: {},
   motionAssets: {},
   plan: {
-    version: 7,
+    version: 8,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText: 'A request moves through a queue.',

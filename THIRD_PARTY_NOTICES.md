@@ -1,5 +1,27 @@
 # Third-party notices
 
+## Optional animation and recorded-audio runtimes
+
+Setup keeps these checkouts and their license files in ignored `.animation-tools/`;
+the application does not vendor the StykAnimate editor into its React bundle.
+Distribution of a tool installation must retain its upstream notices and satisfy
+that tool's license. Separate-process execution is an architecture choice, not a
+claim that it removes license obligations.
+
+- HyperFrames 0.8.201: Apache-2.0, https://github.com/heygen-com/hyperframes.
+- Text-to-Lottie source/player: MIT, https://github.com/diffusionstudio/lottie.
+- StykAnimate and its MCP: GPL-3.0-or-later, https://github.com/filippocalippo/StykAnimate-App and https://github.com/ghassenTn/stykanimate-mcp.
+- GSAP 3.13.0: its Standard no-charge license, https://gsap.com/standard-license.
+- Inter bundled with the player: SIL Open Font License; retain the upstream font notice when distributing native animation sources.
+- CanvasKit/Skia and their dependencies retain the notices supplied with `canvaskit-wasm` and the upstream player.
+- Faster-Whisper: MIT, https://github.com/SYSTRAN/faster-whisper. Whisper model files retain their upstream model license and provenance. PyAV/FFmpeg retain their separately supplied notices.
+- Curated SVG outlines adapted from Lucide retain the existing Lucide ISC notice.
+
+Recorded-voice acceptance uses the public `tests/jfk.flac` test fixture from
+https://github.com/openai/whisper. Audio is downloaded only for verification and
+is not committed to this repository. Recipe/provider tests use mocked authoring;
+local fixture exports and assembly do not make paid API calls.
+
 ## Remotion and @remotion/lottie
 
 Narrated rendering and synchronized Lottie playback use Remotion 4.0.515 and `@remotion/lottie` 4.0.515:

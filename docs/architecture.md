@@ -4,6 +4,12 @@
 
 ## Design intent
 
+The optional [animation adapters and staged recorded-voice workflow](animation-tools.md)
+add project-local editable sources and frame sequences. Remotion remains the final
+compositor; native editor code runs in separate processes. Bounded animation recipe
+authoring in `src/animation-tools.ts:49` is another provider-backed authoring step;
+assembly and saved-plan rendering remain local.
+
 Three capabilities are deliberately decoupled so each runs independently:
 
 | Capability | Implementation | External dependency |

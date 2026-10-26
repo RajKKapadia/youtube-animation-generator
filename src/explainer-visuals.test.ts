@@ -89,7 +89,7 @@ describe('six explainer treatments', () => {
     const plan = await makeExplainerDraft();
     const legacy = {...plan, version: 6, scenes: [{...plan.scenes[0]!, visual: {kind: 'diagram', motion: 'reveal', motif: 'none', assetId: null}}]};
     const upgraded = narratedPlanSchema.parse(legacy);
-    expect(upgraded.version).toBe(7);
+    expect(upgraded.version).toBe(8);
     expect(upgraded.scenes).toEqual(legacy.scenes);
     expect(narratedPlanSchema.safeParse({...plan, version: 6}).success).toBe(false);
     expect(narratedPlanSchema.safeParse({...plan, version: 6, scenes: [null]}).success).toBe(false);

@@ -74,7 +74,7 @@ describe('narrated CLI plan-only path', () => {
     const planPath = resolve(directory, 'summary.narration-plan.json');
     const evidence = 'Warehouse robots move sealed packages through a sorting hall.';
     await writeFile(planPath, JSON.stringify({
-      version: 7,
+      version: 8,
       kind: 'narrated-video',
       stage: 'draft',
       sourceText: evidence,

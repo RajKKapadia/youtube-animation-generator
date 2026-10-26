@@ -13,7 +13,7 @@ describe('planner request and materialization integration', () => {
     const {scene, sourceText} = EXPLAINER_FIXTURES[2]!;
     create.mockResolvedValue({status: 'completed', output: [], output_text: JSON.stringify({title: scene.title, palette: 'cyan', scenes: [scene]})});
     const plan = await planNarratedVideo({generatedVisuals: 'off', language: 'en', model: 'fixture-model', sourceText, targetDurationSeconds: 10, codeSources: [FIXTURE_CODE]});
-    expect(plan.version).toBe(7);
+    expect(plan.version).toBe(8);
     expect(plan.scenes[0]!.visual).toMatchObject({kind: 'code-walkthrough', excerpt: {text: FIXTURE_CODE.text}});
     const request = create.mock.calls[0]![0];
     expect(request.store).toBe(false);

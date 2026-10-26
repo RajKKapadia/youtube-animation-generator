@@ -80,7 +80,7 @@ describe('local narrated-video image discovery', () => {
     const catalog = await discoverLocalImages({sourcePath, stem: 'summary'});
     const selected = catalog[0]!;
     const plan = draftNarratedPlanSchema.parse({
-      version: 7,
+      version: 8,
       kind: 'narrated-video',
       stage: 'draft',
       sourceText: 'A Queue Diagram explains the Queue.',

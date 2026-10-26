@@ -22,7 +22,8 @@
     "fixtures:voice-expressions": "node --import tsx src/render-voice-expression-fixture.ts",
     "test": "vitest run",
     "fixtures:presentation": "node --import tsx src/render-presentation-fixtures.ts",
-    "fixtures:characters": "node --import tsx src/render-character-prototype.ts"
+    "fixtures:characters": "node --import tsx src/render-character-prototype.ts",
+    "fixtures:animation-tools": "node --import tsx src/verify-animation-tools.ts"
   },
   "engines": {
     "node": ">=22.13"

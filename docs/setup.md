@@ -6,6 +6,9 @@
 
 Nothing needs everything. Check what your task actually requires:
 
+Optional animation editors and local recorded-voice alignment have their own
+explicit [setup and verification commands](animation-tools.md#one-time-setup).
+
 | Task | Provider key | Chrome | TTS model | Git LFS |
 |---|:--:|:--:|:--:|:--:|
 | `pnpm check` / `pnpm test` | — | — | — | — |

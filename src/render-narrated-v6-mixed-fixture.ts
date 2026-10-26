@@ -127,7 +127,7 @@ const main = async () => {
     metaphorRelationship: null,
   };
   const plan = timedNarratedPlanSchema.parse({
-    version: 7,
+    version: 8,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText,

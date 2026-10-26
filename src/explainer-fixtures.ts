@@ -61,7 +61,7 @@ export const fixtureSubtitleSuggestion = (scene: DraftNarrationSceneSuggestion):
 export const makeExplainerDraft = async () => {
   const registry = await loadAssetRegistry();
   const result = materializeNarratedVisuals({registry, scenes: EXPLAINER_FIXTURES.map(({scene}) => scene), codeSources: [FIXTURE_CODE]});
-  return draftNarratedPlanSchema.parse({version: 7, kind: 'narrated-video', stage: 'draft', sourceText: EXPLAINER_FIXTURES.map(({sourceText}) => sourceText).join('\n'), generatedAt: '2026-09-07T00:00:00Z', model: 'offline-fixture', targetDurationSeconds: 36, language: 'en', title: 'Six ways to explain an idea', palette: 'cyan', mediaAssets: [], scenes: result.scenes});
+  return draftNarratedPlanSchema.parse({version: 8, kind: 'narrated-video', stage: 'draft', sourceText: EXPLAINER_FIXTURES.map(({sourceText}) => sourceText).join('\n'), generatedAt: '2026-09-07T00:00:00Z', model: 'offline-fixture', targetDurationSeconds: 36, language: 'en', title: 'Six ways to explain an idea', palette: 'cyan', mediaAssets: [], scenes: result.scenes});
 };
 
 export const makeExplainerTimedPlan = async () => {

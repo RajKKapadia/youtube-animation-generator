@@ -51,7 +51,7 @@ const direction = {
 
 const makePlan = (palette: DraftNarratedPlan['palette'] = 'amber') =>
   draftNarratedPlanSchema.parse({
-    version: 7,
+    version: 8,
     kind: 'narrated-video',
     stage: 'draft',
     sourceText: direction.sourceEvidence,

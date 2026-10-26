@@ -1100,7 +1100,7 @@ const DataVisualizationView = ({
   );
 };
 
-const CinematicSceneFrame = ({
+export const CinematicSceneFrame = ({
   children,
   scene,
 }: {

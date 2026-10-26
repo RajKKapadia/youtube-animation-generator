@@ -119,7 +119,7 @@ const main = async () => {
   );
   await writePcm16Wav(resolve(audioDirectory, 'voiceover.wav'), audio, sampleRate);
   const plan = timedNarratedPlanSchema.parse({
-    version: 7,
+    version: 8,
     kind: 'narrated-video',
     stage: 'timed',
     sourceText:

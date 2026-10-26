@@ -6,10 +6,11 @@ import {
   SceneBackdrop,
 } from './NarratedSceneLayer.js';
 import {videoPaletteFor} from '../visual-palettes.js';
-import {NarratedVisualLayer} from './NarratedVisualLayer.js';
+import {NarratedVisualLayer, CinematicSceneFrame} from './NarratedVisualLayer.js';
 import {LocalBrandAssetsProvider} from './TechnologyBadge.js';
 import {LocalIconAssetsProvider} from './SemanticIcon.js';
 import {NarratedProgress} from './NarratedProgress.js';
+import {ExternalAnimation} from './ExternalAnimation.js';
 
 const renderableNarratedScene = (
   scene: NarratedRenderInput['plan']['scenes'][number],
@@ -24,6 +25,7 @@ const renderableNarratedScene = (
 });
 
 export const NarratedVideo = ({
+  animationFrames,
   audioFile,
   backgroundAssets,
   captions,
@@ -70,7 +72,7 @@ export const NarratedVideo = ({
               scene={scene}
               staged={scene.visual?.kind === 'character-scene'}
             />}
-            <NarratedVisualLayer
+            {animationFrames?.[scene.id] ? <CinematicSceneFrame scene={renderableNarratedScene(scene)}><ExternalAnimation asset={animationFrames[scene.id]!} scene={renderableNarratedScene(scene)} profile={profile} /></CinematicSceneFrame> : <NarratedVisualLayer
               contentTopInset={captionTopInset(captions, profile)}
               fps={fps}
               foregroundAssets={foregroundAssets}
@@ -79,7 +81,7 @@ export const NarratedVideo = ({
               profile={profile}
               scene={renderableNarratedScene(scene)}
               technologyIcons={technologyIcons}
-            />
+            />}
             <PhraseCaption captions={captions} profile={profile} scene={scene} />
           </AbsoluteFill>
         </Sequence>

@@ -180,6 +180,7 @@ export const materializeTimedNarration = ({
   return timedNarratedPlanSchema.parse({
     ...draft,
     stage: 'timed',
+    audioSource: {kind: 'tts'},
     sampleRate: result.sampleRate,
     voice,
     ttsSpeed: speed,

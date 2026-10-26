@@ -1,5 +1,7 @@
 import {validateCoverDirection} from './cover-direction.js';
-import {access, mkdir, readFile, writeFile} from 'node:fs/promises';
+import {access, mkdir, readFile, writeFile, stat, readdir} from 'node:fs/promises';
+import {loadAnimationProject, stageOutputsValid} from './project-workflow.js';
+import {atomicJson, fileHash, sha256} from './animation-runtime.js';
 import {constants} from 'node:fs';
 import {basename, dirname, resolve} from 'node:path';
 import type {ImageBackground} from './image-background.js';
@@ -96,6 +98,31 @@ export interface RunPublishWorkflowOptions {
 export const runPublishWorkflow = async (
   options: RunPublishWorkflowOptions,
 ): Promise<void> => {
+  if ((await stat(options.planPath)).isDirectory()) {
+    const directory = options.planPath, project = await loadAnimationProject(directory);
+    if (project.stages.assemble?.state !== 'complete' || !project.stages.assemble.outputs.some(file => file.file.endsWith('.mp4'))) throw new Error('Assemble a final video before publishing a staged project.');
+    if (!await stageOutputsValid(directory, project.stages.assemble, project.stages.assemble.inputHash)) throw new Error('Final assembly assets changed. Reassemble before publishing.');
+    const planPath = resolve(directory, 'final.narration-timed.json');
+    const signature = sha256(JSON.stringify({plan: await fileHash(planPath), model: options.model, aspectRatio: options.aspectRatio, metadataOnly: options.metadataOnly, editedMetadata: options.renderPublishPath ? await fileHash(options.renderPublishPath) : null}));
+    if (project.stages.publish?.outputs.some(file => file.file.endsWith('.publish.md')) && await stageOutputsValid(directory, project.stages.publish, signature)) {console.log('Reused completed publishing kit.'); return;}
+    const previousPublish = project.stages.publish;
+    project.stages.publish = {state: 'running', inputHash: signature, outputs: []};
+    await atomicJson(resolve(directory, 'project.json'), project);
+    try {
+      // Saved metadata can be rendered again without reauthoring or paying again.
+      const savedMetadata = resolve(directory, 'final.publish.json');
+      await runPublishWorkflow({...options, planPath, force: true, ...(!options.renderPublishPath && previousPublish?.inputHash === signature && await pathExists(savedMetadata) ? {renderPublishPath: savedMetadata} : {})});
+      if (options.renderPublishPath) {
+        const edited = await loadPublishPlan(options.renderPublishPath);
+        await atomicJson(savedMetadata, edited);
+        await writeFile(resolve(directory, 'final.publish.md'), publishKitMarkdown(edited), 'utf8');
+      }
+      const files = (await readdir(directory)).filter(file => /^final.*(?:publish\.(?:json|md)|cover.*\.png|thumbnail.*\.png)$/iu.test(file));
+      project.stages.publish = {state: 'complete', inputHash: signature, outputs: await Promise.all(files.map(async file => ({file, sha256: await fileHash(resolve(directory, file))})))};
+      await atomicJson(resolve(directory, 'project.json'), project);
+    } catch (error) {project.stages.publish = {state: 'failed', inputHash: signature, outputs: [], error: String(error)}; await atomicJson(resolve(directory, 'project.json'), project); throw error;}
+    return;
+  }
   const narration = await loadNarratedPlan(options.planPath);
   const stem = narratedPlanStem(options.planPath);
   const outputDirectory = options.outputDirectory ?? dirname(options.planPath);
@@ -142,6 +169,7 @@ export const runPublishWorkflow = async (
 
   const scene = selectedScene(narration, publish);
   const outputs = await renderPublishCovers({
+    animationAssets: narration.animationAssets,
     aspectRatio: options.aspectRatio,
     mediaAssets: narration.mediaAssets,
     planDirectory: dirname(options.planPath),

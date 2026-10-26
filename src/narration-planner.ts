@@ -886,7 +886,7 @@ export const planNarratedVideo = async (
       ])];
 
       return draftNarratedPlanSchema.parse({
-        version: 7,
+        version: 8,
         kind: 'narrated-video',
         stage: 'draft',
         sourceText: options.sourceText,
@@ -1029,6 +1029,7 @@ export const estimateDraftNarrationTiming = (draft: DraftNarratedPlan): TimedNar
   return timedNarratedPlanSchema.parse({
     ...draft,
     stage: 'timed',
+    audioSource: {kind: 'silent'},
     sampleRate,
     totalSamples: Math.floor((totalDurationMs / 1000) * sampleRate),
     durationMs: totalDurationMs,

@@ -16,6 +16,8 @@ import type {
 import type {SceneBackgroundAssets} from './scene-backgrounds.js';
 import type {GeneratedVisualAssets} from './generated-visuals.js';
 import {stageVisualRenderAssets} from './visual-render-assets.js';
+import {stageAnimationFrames} from './animation-render-assets.js';
+import {fileHash} from './animation-runtime.js';
 import {stageImageBackground, type ImageBackground} from './image-background.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -116,6 +118,10 @@ export const renderNarratedVideo = async (
 ): Promise<NarratedOutput[]> => {
   await mkdir(options.outputDirectory, {recursive: true});
   const outputs = narratedOutputPaths(options);
+  for (const asset of options.plan.animationAssets ?? []) for (const {profile} of outputs) {
+    const sequence = asset.renders[profile.aspectRatio], scene = options.plan.scenes.find(scene => scene.id === asset.sceneId);
+    if (!sequence || !scene || sequence.fps !== options.fps || sequence.width !== profile.width || sequence.height !== profile.height || sequence.frameCount !== Math.ceil(scene.durationMs / 1000 * options.fps)) throw new Error(`Animation timing/profile changed for ${asset.sceneId}. Reassemble using the requested FPS and orientation.`);
+  }
   if (options.stillsOnly) {
     if (!options.force) {
       const stillPaths = narratedStillPaths(options);
@@ -139,9 +145,10 @@ export const renderNarratedVideo = async (
     options.voiceoverBaseDirectory ?? options.outputDirectory,
     options.plan.voiceoverFile,
   );
-  if (!existsSync(voiceoverPath) && !options.stillsOnly) {
+  if (!existsSync(voiceoverPath) && !options.stillsOnly && options.plan.audioSource?.kind !== 'silent') {
     throw new Error(`Narration voiceover does not exist: ${voiceoverPath}`);
   }
+  if (options.plan.audioSource?.kind === 'recorded' && await fileHash(voiceoverPath) !== options.plan.audioSource.playback.sha256) throw new Error('Recorded playback audio changed after alignment. Reassemble the project.');
 
   const publicDirectory = await mkdtemp(resolve(tmpdir(), 'youtube-animations-public-'));
   try {
@@ -197,6 +204,7 @@ export const renderNarratedVideo = async (
     });
 
     console.log('Bundling narrated-video templates...');
+    const animationFrames = await stageAnimationFrames(options.plan.animationAssets ?? [], options.voiceoverBaseDirectory ?? options.outputDirectory, publicDirectory, outputs.map(output => output.profile.aspectRatio));
     const serveUrl = await bundle({
       entryPoint: findEntryPoint(),
       publicDir: publicDirectory,
@@ -215,6 +223,7 @@ export const renderNarratedVideo = async (
 
     for (const [index, output] of outputs.entries()) {
       const inputProps = {
+        animationFrames: animationFrames[output.profile.aspectRatio],
         plan: options.plan,
         captions: options.captions,
         sceneBackground: options.sceneBackground,

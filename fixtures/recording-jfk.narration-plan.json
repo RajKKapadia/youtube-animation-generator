@@ -1,0 +1,187 @@
+{
+  "version": 8,
+  "kind": "narrated-video",
+  "stage": "draft",
+  "sourceText": "The speaker addresses fellow Americans. And so my fellow Americans ask not what your country can do for you ask what you can do for your country.",
+  "generatedAt": "2026-10-26T00:00:00Z",
+  "model": "offline-fixture",
+  "targetDurationSeconds": 12,
+  "language": "en",
+  "title": "Recorded speech integration proof",
+  "palette": "violet",
+  "assetAttributions": [],
+  "mediaAssets": [],
+  "scenes": [
+    {
+      "template": "process-flow",
+      "title": "My fellow Americans",
+      "primaryItems": [
+        "And so my fellow Americans"
+      ],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Offline adapter export verification.",
+      "id": "hyperframes",
+      "backgroundPrompt": "A plain transparent stage.",
+      "visual": {
+        "kind": "icon-spotlight",
+        "motion": "pulse",
+        "motif": "message",
+        "assetId": null
+      },
+      "icons": {
+        "focal": null,
+        "primary": [],
+        "secondary": []
+      },
+      "beats": [
+        {
+          "id": "beat-0-0",
+          "phrases": [
+            {
+              "id": "phrase-0-0",
+              "text": "And so my fellow Americans"
+            }
+          ],
+          "expression": "none",
+          "primaryItemIndices": [
+            0
+          ],
+          "secondaryItemIndices": []
+        }
+      ]
+    },
+    {
+      "template": "process-flow",
+      "title": "Ask not",
+      "primaryItems": [
+        "ask not what your country can do for you"
+      ],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Offline adapter export verification.",
+      "id": "lottie",
+      "backgroundPrompt": "A plain transparent stage.",
+      "visual": {
+        "motif": "message",
+        "kind": "kinetic-text",
+        "motion": "reveal",
+        "assetId": null
+      },
+      "icons": {
+        "focal": null,
+        "primary": [],
+        "secondary": []
+      },
+      "beats": [
+        {
+          "id": "beat-1-0",
+          "phrases": [
+            {
+              "id": "phrase-1-0",
+              "text": "ask not what your country can do for you"
+            }
+          ],
+          "expression": "none",
+          "primaryItemIndices": [
+            0
+          ],
+          "secondaryItemIndices": []
+        }
+      ]
+    },
+    {
+      "template": "process-flow",
+      "title": "Ask what you can do",
+      "primaryItems": [
+        "ask what you can do",
+        "for your country."
+      ],
+      "secondaryItems": [],
+      "leftLabel": "",
+      "rightLabel": "",
+      "reason": "Offline adapter export verification.",
+      "id": "stykanimate",
+      "backgroundPrompt": "A plain transparent stage.",
+      "visual": {
+        "motif": "none",
+        "kind": "character-scene",
+        "motion": "reveal",
+        "set": "none",
+        "sign": null,
+        "cast": [
+          {
+            "id": "speaker",
+            "label": "character",
+            "position": "left",
+            "outfit": "casual",
+            "age": "adult",
+            "behindSet": false,
+            "prop": null,
+            "propPrimaryItemIndex": null
+          },
+          {
+            "id": "audience",
+            "label": "character",
+            "position": "right",
+            "outfit": "casual",
+            "age": "adult",
+            "behindSet": false,
+            "prop": null,
+            "propPrimaryItemIndex": null
+          }
+        ],
+        "sourceEvidence": "The speaker addresses fellow Americans.",
+        "speakers": [
+          {
+            "primaryItemIndex": 0,
+            "castId": "speaker"
+          },
+          {
+            "primaryItemIndex": 1,
+            "castId": "audience"
+          }
+        ],
+        "callout": null,
+        "assetId": null
+      },
+      "icons": {
+        "focal": null,
+        "primary": [],
+        "secondary": []
+      },
+      "beats": [
+        {
+          "id": "beat-2-0",
+          "phrases": [
+            {
+              "id": "phrase-2-0",
+              "text": "ask what you can do"
+            }
+          ],
+          "expression": "none",
+          "primaryItemIndices": [
+            0
+          ],
+          "secondaryItemIndices": []
+        },
+        {
+          "id": "beat-2-1",
+          "phrases": [
+            {
+              "id": "phrase-2-1",
+              "text": "for your country."
+            }
+          ],
+          "expression": "none",
+          "primaryItemIndices": [
+            1
+          ],
+          "secondaryItemIndices": []
+        }
+      ]
+    }
+  ]
+}

@@ -10,7 +10,7 @@ import {
 import {draftNarratedPlanSchema, timedNarratedPlanSchema} from './types.js';
 
 const draft = draftNarratedPlanSchema.parse({
-  version: 7,
+  version: 8,
   kind: 'narrated-video',
   stage: 'draft',
   sourceText: 'A then B.',
