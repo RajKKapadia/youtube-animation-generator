@@ -58,7 +58,7 @@ grep -rn "new OpenAI(\|createAIClient(\|fetch(" src/ --include='*.ts' | grep -v 
 
 # providers.md — resolution order
 sed -n '11,35p' src/ai-client.ts                 # script provider + model defaults
-grep -n "createDefaultImageGenerator" -A 12 src/scene-backgrounds.ts | head -16
+rg -n 'providerOrder|defaultModel|createDefaultImageGenerator' src/providers/image-generation.ts
 grep -n "createDefaultVisualValidator" -A 8 src/generated-visuals.ts | head -10
 
 # providers.md — every planner must branch on provider (Responses API vs chat.completions)

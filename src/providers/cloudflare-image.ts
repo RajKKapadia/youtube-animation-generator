@@ -1,4 +1,4 @@
-import {withTransientImageRetries, type GenerateSceneImage} from '../scene-backgrounds.js';
+import type {GenerateSceneImage} from './image-generation.js';
 
 // Workers AI models do not share a parameter set, and sending the wrong one is
 // a 400 rather than a warning. Two families matter here:
@@ -11,7 +11,7 @@ import {withTransientImageRetries, type GenerateSceneImage} from '../scene-backg
 // The square plate is why generated backgrounds never fitted a 16:9 frame:
 // objectFit:cover cropped ~42% of the height away before anything drew over it.
 const FLUX_MODEL = '@cf/black-forest-labs/flux-1-schnell';
-const DEFAULT_MODEL = '@cf/stabilityai/stable-diffusion-xl-base-1.0';
+export const DEFAULT_CLOUDFLARE_IMAGE_MODEL = '@cf/stabilityai/stable-diffusion-xl-base-1.0';
 
 const FLUX_MAX_PROMPT = 2_048;
 const FLUX_MAX_STEPS = 8;
@@ -78,52 +78,51 @@ export const createCloudflareImageGenerator = (): GenerateSceneImage => {
     );
   }
 
-  return async ({prompt, model, negativePrompt, size}) => withTransientImageRetries(
-    async () => {
-      const activeModel = model && model.startsWith('@cf/') ? model : DEFAULT_MODEL;
-      const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${activeModel}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(
-          cloudflareImageBody({model: activeModel, negativePrompt, prompt, size}),
-        ),
-      });
+  return async ({prompt, model, negativePrompt, size}) => {
+    const activeModel = model.startsWith('@cf/') ? model : DEFAULT_CLOUDFLARE_IMAGE_MODEL;
+    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${activeModel}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      signal: AbortSignal.timeout(30_000),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(
+        cloudflareImageBody({model: activeModel, negativePrompt, prompt, size}),
+      ),
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        const error = new Error(
-          `Cloudflare image generation failed (${response.status}): ${errorText}`,
-        );
-        // withTransientImageRetries keys off status, and fetch does not set it.
-        Object.assign(error, {status: response.status});
-        throw error;
+    if (!response.ok) {
+      const errorText = await response.text();
+      const error = new Error(
+        `Cloudflare image generation failed (${response.status}): ${errorText}`,
+      );
+      // withTransientImageRetries keys off status, and fetch does not set it.
+      Object.assign(error, {status: response.status});
+      throw error;
+    }
+
+    // SDXL-family models stream the image; flux returns base64 inside JSON.
+    if (!(response.headers.get('content-type') ?? '').includes('application/json')) {
+      const binary = Buffer.from(await response.arrayBuffer());
+      if (!binary.length) {
+        throw new Error('Cloudflare image generation returned an empty image stream.');
       }
+      return binary;
+    }
 
-      // SDXL-family models stream the image; flux returns base64 inside JSON.
-      if (!(response.headers.get('content-type') ?? '').includes('application/json')) {
-        const binary = Buffer.from(await response.arrayBuffer());
-        if (!binary.length) {
-          throw new Error('Cloudflare image generation returned an empty image stream.');
-        }
-        return binary;
-      }
+    const data = await response.json() as {
+      result?: {image?: string};
+      success?: boolean;
+      errors?: Array<{message?: string}>;
+    };
 
-      const data = await response.json() as {
-        result?: {image?: string};
-        success?: boolean;
-        errors?: Array<{message?: string}>;
-      };
+    if (!data.result?.image) {
+      const message = data.errors?.[0]?.message ?? 'No image data returned';
+      throw new Error(`Cloudflare image generation returned no image: ${message}`);
+    }
 
-      if (!data.result?.image) {
-        const message = data.errors?.[0]?.message ?? 'No image data returned';
-        throw new Error(`Cloudflare image generation returned no image: ${message}`);
-      }
-
-      return Buffer.from(data.result.image, 'base64');
-    },
-  );
+    return Buffer.from(data.result.image, 'base64');
+  };
 };

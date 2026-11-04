@@ -70,8 +70,9 @@ returns an `openai` SDK client pointed at OpenAI, Gemini, or Groq:
 
 | Call site | Triggered by | Provider | Why direct |
 |---|---|---|---|
-| `src/scene-backgrounds.ts:147` | `--scene-background generated` | OpenAI Images | Image API, not chat |
-| `src/providers/cloudflare-image.ts:19` | `--scene-background generated` | Cloudflare (`fetch`) | Workers AI REST |
+| [`src/providers/image-generation.ts:102`](../src/providers/image-generation.ts#L102) | `--scene-background generated`, `--generated-visuals auto` | OpenAI Images | Images API |
+| [`src/providers/cloudflare-image.ts:84`](../src/providers/cloudflare-image.ts#L84) | Same image generation flags | Cloudflare | Workers AI REST |
+| [`src/providers/gemini-image.ts:12`](../src/providers/gemini-image.ts#L12) | Same image generation flags | Google Gemini | Interactions REST |
 | `src/generated-visuals.ts:208` | `--generated-visuals auto` | OpenAI vision | Validator |
 | `src/generated-visuals.ts:241` | `--generated-visuals auto` | Gemini vision | Validator |
 | `src/source-research.ts:282` | `--research auto\|required` | **OpenAI only** | Hosted `web_search` tool has no compat equivalent |

@@ -7,12 +7,8 @@ import {zodTextFormat} from 'openai/helpers/zod';
 import {z} from 'zod';
 import {profilesForSelection} from './render-profile.js';
 import {withTransientRetries} from './ai-client.js';
-import {
-  IMAGE_SIZE_BY_ASPECT,
-  createDefaultImageGenerator,
-  createOpenAIImageGenerator,
-  type GenerateSceneImage,
-} from './scene-backgrounds.js';
+import {createDefaultImageGenerator, type GenerateSceneImage} from './providers/image-generation.js';
+import {IMAGE_SIZE_BY_ASPECT} from './scene-backgrounds.js';
 import {
   imageQualitySchema,
   renderAspectRatioSchema,

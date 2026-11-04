@@ -1,58 +1,6 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {createCloudflareImageGenerator} from './cloudflare-image.js';
-import {createDefaultImageGenerator} from '../scene-backgrounds.js';
 import {createDefaultVisualValidator} from '../generated-visuals.js';
-
-describe('createDefaultImageGenerator routing', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it('routes to cloudflare when IMAGE_PROVIDER is explicitly cloudflare', () => {
-    vi.stubEnv('IMAGE_PROVIDER', 'cloudflare');
-    vi.stubEnv('CLOUDFLARE_AI_KEY', 'cf-key');
-    vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'cf-acc');
-    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-
-    const generator = createDefaultImageGenerator();
-    expect(typeof generator).toBe('function');
-  });
-
-  it('routes to openai when IMAGE_PROVIDER is explicitly openai', () => {
-    vi.stubEnv('IMAGE_PROVIDER', 'openai');
-    vi.stubEnv('CLOUDFLARE_AI_KEY', 'cf-key');
-    vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'cf-acc');
-    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-
-    const generator = createDefaultImageGenerator();
-    expect(typeof generator).toBe('function');
-  });
-
-  it('auto-detects cloudflare when Cloudflare keys are present and IMAGE_PROVIDER is unset', () => {
-    vi.stubEnv('IMAGE_PROVIDER', '');
-    delete process.env.IMAGE_PROVIDER;
-    vi.stubEnv('CLOUDFLARE_AI_KEY', 'cf-key');
-    vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'cf-acc');
-    vi.stubEnv('OPENAI_API_KEY', '');
-    delete process.env.OPENAI_API_KEY;
-
-    const generator = createDefaultImageGenerator();
-    expect(typeof generator).toBe('function');
-  });
-
-  it('falls back to openai generator when Cloudflare keys are not present', () => {
-    vi.stubEnv('IMAGE_PROVIDER', '');
-    vi.stubEnv('CLOUDFLARE_AI_KEY', '');
-    vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', '');
-    delete process.env.IMAGE_PROVIDER;
-    delete process.env.CLOUDFLARE_AI_KEY;
-    delete process.env.CLOUDFLARE_ACCOUNT_ID;
-    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-
-    const generator = createDefaultImageGenerator();
-    expect(typeof generator).toBe('function');
-  });
-});
 
 describe('createDefaultVisualValidator routing', () => {
   afterEach(() => {
@@ -89,7 +37,7 @@ describe('createDefaultVisualValidator routing', () => {
 describe('createCloudflareImageGenerator', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
-    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('requires CLOUDFLARE_AI_KEY and CLOUDFLARE_ACCOUNT_ID', () => {

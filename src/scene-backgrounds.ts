@@ -2,8 +2,7 @@ import {createHash} from 'node:crypto';
 import {access, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {resolve} from 'node:path';
-import OpenAI from 'openai';
-import {createCloudflareImageGenerator} from './providers/cloudflare-image.js';
+import {createDefaultImageGenerator, type GenerateSceneImage} from './providers/image-generation.js';
 import {z} from 'zod';
 import {profilesForSelection} from './render-profile.js';
 import {
@@ -125,88 +124,6 @@ export const sceneBackgroundCacheKey = ({
 }): string => createHash('sha256')
   .update(JSON.stringify({aspectRatio, model, negativePrompt, prompt, quality, sceneId}))
   .digest('hex');
-
-export interface GenerateSceneImageOptions {
-  model: string;
-  /** Nouns to exclude. Providers without the parameter fold it into the prompt. */
-  negativePrompt?: string | undefined;
-  prompt: string;
-  quality: ImageQuality;
-  size: string;
-}
-
-export type GenerateSceneImage = (
-  options: GenerateSceneImageOptions,
-) => Promise<Buffer>;
-
-const isTransientImageError = (error: unknown): boolean => {
-  const status = (error as {status?: unknown})?.status;
-  return status === 429 || (typeof status === 'number' && status >= 500);
-};
-
-export const withTransientImageRetries = async <T>(
-  operation: () => Promise<T>,
-  wait: (milliseconds: number) => Promise<void> = async (milliseconds) => {
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
-  },
-): Promise<T> => {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (!isTransientImageError(error) || attempt === 2) throw error;
-      await wait(500 * 2 ** attempt);
-    }
-  }
-  throw new Error('Image generation retry loop ended unexpectedly.');
-};
-
-export const createDefaultImageGenerator = (): GenerateSceneImage => {
-  const provider = process.env.IMAGE_PROVIDER?.trim().toLowerCase();
-  if (provider === 'cloudflare') {
-    return createCloudflareImageGenerator();
-  }
-  if (provider === 'openai') {
-    return createOpenAIImageGenerator();
-  }
-  if (process.env.CLOUDFLARE_AI_KEY && process.env.CLOUDFLARE_ACCOUNT_ID) {
-    return createCloudflareImageGenerator();
-  }
-  return createOpenAIImageGenerator();
-};
-
-export const createOpenAIImageGenerator = (): GenerateSceneImage => {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error(
-      'OPENAI_API_KEY is required for uncached image generation.',
-    );
-  }
-  const client = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    maxRetries: 0,
-  });
-  return async ({model, negativePrompt, prompt, quality, size}) => withTransientImageRetries(
-    async () => {
-      const response = await client.images.generate({
-        background: 'opaque',
-        model,
-        n: 1,
-        output_compression: 88,
-        output_format: 'jpeg',
-        // gpt-image has no negative-prompt parameter but follows a stated
-        // exclusion reliably, so fold it back into the prompt here only.
-        prompt: negativePrompt ? `${prompt} Do not include: ${negativePrompt}.` : prompt,
-        quality,
-        size,
-      });
-      const encoded = response.data?.[0]?.b64_json;
-      if (!encoded) {
-        throw new Error('OpenAI image generation returned no image data.');
-      }
-      return Buffer.from(encoded, 'base64');
-    },
-  );
-};
 
 const readManifest = async (directory: string): Promise<BackgroundManifest> => {
   try {

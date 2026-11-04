@@ -17,8 +17,8 @@ explicit [setup and verification commands](animation-tools.md#one-time-setup).
 | `--audio-only` synthesis | — | — | ✅ | ✅ (once) |
 | Authoring a new plan | ✅ any of OpenAI / Gemini / Groq | — | — | — |
 | `--research auto\|required` | ✅ **OpenAI specifically** | — | — | — |
-| `--scene-background generated` | ✅ Cloudflare or OpenAI | — | — | — |
-| `--generated-visuals auto` | ✅ Cloudflare/OpenAI + a vision key | — | — | — |
+| `--scene-background generated` | ✅ Cloudflare, Gemini, or OpenAI | — | — | — |
+| `--generated-visuals auto` | ✅ An image provider and a vision key | — | — | — |
 | Narrated render from a plan | — | ✅ | ✅ | ✅ (once) |
 | Subtitle overlay from a plan | — | ✅ | — | — |
 | Publish covers from metadata | — | ✅ | — | — |
@@ -112,7 +112,8 @@ Minimum viable combinations:
 | Simplest | `OPENAI_API_KEY` alone |
 | Render existing plans only | nothing |
 
-Both providers auto-detect from the keys present; `AI_PROVIDER` and `IMAGE_PROVIDER` override.
+The CLI detects script and image providers from the available keys. Use `AI_PROVIDER` to
+select a script provider or `IMAGE_PROVIDER=auto` for image fallback.
 Full resolution order and every variable: [providers.md](providers.md).
 
 > `--research auto|required` needs `OPENAI_API_KEY` specifically, whatever `AI_PROVIDER` says —

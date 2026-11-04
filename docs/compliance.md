@@ -43,8 +43,9 @@ directory, and removes it afterwards.
 ## Data residency and processing
 
 Source text is sent to whichever **script provider** is active — OpenAI, Google, or Groq — and
-image prompts to whichever **image provider** is active — Cloudflare or OpenAI. These are
-different companies under different terms and jurisdictions.
+image prompts to the configured **image providers** in fallback order: Cloudflare, Gemini,
+then OpenAI. The same prompt can go to more than one provider during a failed request.
+Each provider operates under its own terms. [Image routing](../src/providers/image-generation.ts#L126)
 
 > Confirm the active provider is approved for the data classification of the source text
 > *before* running an authoring command. Switching `AI_PROVIDER` changes who processes customer
@@ -56,7 +57,7 @@ before sending anything non-public.
 
 ## Cost controls
 
-Three flags bill whichever provider is active. All default to off/free:
+Three flags can incur provider charges. All default to off or free:
 
 | Flag | Default | Cost |
 |---|---|---|

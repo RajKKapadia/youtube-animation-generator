@@ -6,11 +6,11 @@ import {
   cloudflareDimensions,
   cloudflareImageBody,
 } from './providers/cloudflare-image.js';
+import {withTransientImageRetries} from './providers/image-generation.js';
 import {
   materializeSceneBackgrounds,
   sceneBackgroundCacheKey,
   sceneBackgroundPrompt,
-  withTransientImageRetries,
 } from './scene-backgrounds.js';
 import {draftNarrationSceneSchema} from './types.js';
 

@@ -10,12 +10,12 @@ keys present in the environment; explicit env vars override.
 | Concern | Providers | Selector | Implementation |
 |---|---|---|---|
 | Script / planning | OpenAI, Gemini, Groq | `AI_PROVIDER` | `src/ai-client.ts` |
-| Image generation | Cloudflare Workers AI, OpenAI | `IMAGE_PROVIDER` | `src/scene-backgrounds.ts`, `src/providers/cloudflare-image.ts` |
+| Image generation | Cloudflare Workers AI, Gemini, OpenAI | `IMAGE_PROVIDER` | [`src/providers/image-generation.ts`](../src/providers/image-generation.ts) |
 | Visual validation | OpenAI, Gemini | _(follows available keys)_ | `src/generated-visuals.ts` |
 | Web research | **OpenAI only** | — | `src/source-research.ts` |
 | Speech | Supertonic 3, local | — | `src/supertonic/` |
 
-Gemini and Groq are reached through their **OpenAI-compatible endpoints**, so the same `openai`
+For script generation, Gemini and Groq use their **OpenAI-compatible endpoints**, so the same `openai`
 SDK object is reused with a different `baseURL` (`ai-client.ts:52-70`). No extra dependency.
 
 ## Provider resolution
@@ -46,15 +46,28 @@ Verified behaviour:
 > OpenAI wins ties. Set `AI_PROVIDER` explicitly to use a different provider when several keys
 > are configured.
 
-### Image provider (`createDefaultImageGenerator`, `scene-backgrounds.ts`)
+### Image provider
 
-1. `IMAGE_PROVIDER=cloudflare` → Cloudflare
-2. `IMAGE_PROVIDER=openai` → OpenAI
-3. `CLOUDFLARE_AI_KEY` **and** `CLOUDFLARE_ACCOUNT_ID` both present → Cloudflare
-4. Fallback → OpenAI
+With `IMAGE_PROVIDER=auto` or unset, the CLI tries these providers in order and skips missing credentials.
 
-> Note the inverted default: **Cloudflare wins ties here**, unlike the script provider.
-> Set `IMAGE_PROVIDER=openai` to force OpenAI when Cloudflare keys exist.
+| Provider | Required credentials | Image model override | Default |
+|---|---|---|---|
+| Cloudflare Workers AI | `CLOUDFLARE_ACCOUNT_ID` and either `CLOUDFLARE_AI_KEY` or `CLOUDFLARE_API_TOKEN` | `CLOUDFLARE_IMAGE_MODEL` | `@cf/stabilityai/stable-diffusion-xl-base-1.0` |
+| Google Gemini | `GOOGLE_GEMINI_API_KEY` | `GOOGLE_GEMINI_IMAGE_MODEL` | `gemini-nano-banana-2.1` |
+| OpenAI | `OPENAI_API_KEY` | `OPENAI_IMAGE_MODEL` | `gpt-image-2` |
+
+The CLI switches on timeouts, connection failures, and HTTP 401, 403, 404, 408, 429, and 5xx.
+It retries HTTP 429 and 5xx up to twice before switching, with HTTP 504 switching immediately.
+Each switch is logged, and later image requests in the same run start at the new provider.
+Other errors, including HTTP 400, stop generation. Set `IMAGE_PROVIDER` to `cloudflare`,
+`gemini`, or `openai` to pin one provider. [Image routing and retry code](../src/providers/image-generation.ts#L19)
+
+`--image-model` applies to the primary provider. Each fallback uses its own model setting.
+The model in background and foreground cache manifests is the requested primary model used
+for cache matching. Matching assets can be reused after a fallback. [CLI wiring](../src/cli.ts#L1259)
+
+Gemini requests a 2K JPEG in the selected aspect ratio via Google's Interactions API.
+[`gemini-image.ts`](../src/providers/gemini-image.ts#L9), [Google image generation guide](https://aistudio.google.com/docs/image-generation)
 
 ### Visual validator (`createDefaultVisualValidator`, `generated-visuals.ts`)
 
@@ -191,11 +204,12 @@ truncates every array to its schema cap.
 # Script provider: openai | gemini | groq (auto-detected when unset)
 AI_PROVIDER=
 
-# Image provider: cloudflare | openai (auto-detected when unset)
-IMAGE_PROVIDER=
+# Image provider: auto | cloudflare | gemini | openai
+IMAGE_PROVIDER=auto
 
 GOOGLE_GEMINI_API_KEY=
 GOOGLE_GEMINI_MODEL=gemini-3.5-flash
+GOOGLE_GEMINI_IMAGE_MODEL=gemini-nano-banana-2.1
 
 GROQ_API_KEY=
 GROQ_MODEL=qwen/qwen3.8-27b
@@ -209,9 +223,8 @@ OPENAI_MODEL=gpt-5.6
 OPENAI_IMAGE_MODEL=gpt-image-2
 ```
 
-`CLOUDFLARE_IMAGE_MODEL` is resolved at `cli.ts:1217`; the Cloudflare generator additionally
-rejects any model not starting with `@cf/` and falls back to the SDXL default
-(`providers/cloudflare-image.ts`).
+The Cloudflare adapter uses SDXL if the selected model ID lacks the `@cf/` prefix.
+[`cloudflare-image.ts`](../src/providers/cloudflare-image.ts#L81)
 
 ### Workers AI models do not share a parameter set
 
@@ -277,8 +290,8 @@ larger budget.
 
 ## Transient-failure retries
 
-`withTransientRetries` (`ai-client.ts`) wraps **every** provider call — both branches of all
-three planners plus the visual validator. It retries up to 4 times on HTTP 429/503/5xx, or on
+`withTransientRetries` (`ai-client.ts`) wraps the planners and visual validators. It retries
+up to 4 times on HTTP 429/503/5xx, or on
 messages containing `quota`, `resource_exhausted`, `rate limit`, or `retry in`.
 
 Backoff honours a server-suggested `retry in Ns` when present, otherwise doubles from 1.5 s. It

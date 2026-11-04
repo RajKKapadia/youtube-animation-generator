@@ -128,7 +128,7 @@ Stills bypass the `--force` preflight and overwrite in place, so a preview loop 
 | `--captions <on\|off>` | `on` (narrated) / `off` (subtitle) | |
 | `--supertonic-assets-dir <path>` | `models/supertonic-3` | |
 | `--model <model>` | per provider (`gpt-5.6` / `gemini-3.5-flash` / `qwen/qwen3.8-27b`) | Script model |
-| `--image-model <model>` | `@cf/…stable-diffusion-xl-base-1.0` when Cloudflare keys exist, else `gpt-image-2` | `cli.ts:1217`. SDXL because `flux-1-schnell` accepts **no** `width`/`height` and so can only return a square plate, which `objectFit: cover` then crops into a 16:9 frame |
+| `--image-model <model>` | [Primary image provider's model](providers.md#image-provider) | Overrides the primary model. Each fallback provider uses its own model setting. [`cli.ts`](../src/cli.ts#L1266) |
 | `--scene-background <ambient\|generated\|image>` | `ambient` (narrated), `off` (subtitle) | `generated` **bills the image provider** |
 | `--generated-visuals <off\|auto>` | `off` | `auto` **bills image + vision** |
 | `--require-characters` | — | Fail when attempted character scenes are all rejected; retry missing human staging once within the shared three-attempt budget. Detection needs a person and an exchange action in the same sentence of the original source; a customer-base mention alone does not trigger it (`narration-planner.ts:64`, `narration-planner.ts:846`) |

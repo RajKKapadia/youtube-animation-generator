@@ -150,18 +150,22 @@ GOOGLE_GEMINI_API_KEY=your_key_here
 GOOGLE_GEMINI_MODEL=gemini-3.5-flash
 ```
 
-Image generation is selected separately with `IMAGE_PROVIDER=cloudflare|openai`. With no selector, Cloudflare wins when both `CLOUDFLARE_AI_KEY` and `CLOUDFLARE_ACCOUNT_ID` are present; otherwise OpenAI is used. Cloudflare setup:
+Image generation uses the first configured provider in this order: **Cloudflare Workers AI → Google Gemini → OpenAI**. Leave `IMAGE_PROVIDER` unset or set it to `auto` to enable fallback. On a timeout, connectivity failure, rate limit, or provider outage, the CLI can switch to the next configured provider and use it for the remaining images. Set `IMAGE_PROVIDER` to `cloudflare`, `gemini`, or `openai` to use only that provider.
 
 ```dotenv
-IMAGE_PROVIDER=cloudflare
+IMAGE_PROVIDER=auto
 CLOUDFLARE_AI_KEY=your_token_here
 CLOUDFLARE_ACCOUNT_ID=your_account_id_here
 CLOUDFLARE_IMAGE_MODEL=@cf/stabilityai/stable-diffusion-xl-base-1.0
+GOOGLE_GEMINI_API_KEY=your_gemini_key_here
+GOOGLE_GEMINI_IMAGE_MODEL=gemini-nano-banana-2.1
+OPENAI_API_KEY=your_openai_key_here
+OPENAI_IMAGE_MODEL=gpt-image-2
 ```
 
 The code defaults to SDXL for Cloudflare, but `.env.example` currently sets `@cf/black-forest-labs/flux-1-schnell`; replace that value to use SDXL. The adapter requests landscape/portrait dimensions for SDXL, while its FLUX path omits size parameters. `--image-quality` is forwarded to OpenAI; the Cloudflare adapter uses its own model-specific parameters.
 
-When forcing OpenAI images while Cloudflare credentials are also present, pass `--image-model gpt-image-2` (or your chosen OpenAI image model): the CLI's automatic model choice checks for `CLOUDFLARE_AI_KEY` independently of `IMAGE_PROVIDER`. Foreground-image validation prefers OpenAI, then Gemini; Groq alone cannot validate generated images.
+`--image-model` overrides the primary provider's model. Fallback providers use their own image model settings. Foreground-image validation prefers OpenAI, then Gemini.
 
 `--research auto|required` uses OpenAI-hosted search. Use `AI_PROVIDER=openai` and an OpenAI model for research runs: the same model argument is passed to research and planning. Ambient backgrounds, local images, and character animation need no image-generation credentials. See [provider details](docs/providers.md).
 
@@ -457,7 +461,7 @@ pnpm run animations create summary.md \
 
 `auto` permits at most two scenes and may generate zero. Each selected scene saves exact source evidence, 2–5 exact source anchors, its narration beat, literal subject/action/environment/framing, and exclusions. Generic decoration, values, charts, quotes, text, logos, interfaces, named-person likenesses, and fabricated documentary evidence are forbidden. Literal editorial depiction is preferred; a metaphor must save its exact relationship to the source.
 
-The CLI uses the selected image provider for separate landscape and portrait assets. OpenAI requests JPEGs at 2048×1152 and 1152×2048; Cloudflare's SDXL adapter requests 1344×760 and 760×1344, while other Cloudflare models can return different dimensions or encodings. A vision check using OpenAI or Gemini receives the complete direction, including framing, exclusions, and any metaphor relationship, and requires a strong subject/action match, no unsupported content, no text/logos/charts/UI, and orientation-safe composition. Symbolic objects are allowed only when they express the saved, source-supported metaphor relationship. One failed check gets one corrective regeneration; a second failure aborts before voice synthesis or rendering and reports the scene, orientation, and rejection reasons. Resume with `--render-plan` to reuse the saved script and research.
+The CLI requests separate landscape and portrait assets. OpenAI requests JPEGs at 2048×1152 and 1152×2048. Gemini requests 2K JPEGs at 16:9 or 9:16. Cloudflare's SDXL adapter requests 1344×760 and 760×1344, while other Cloudflare models can return different dimensions or encodings. A vision check using OpenAI or Gemini receives the complete direction, including framing, exclusions, and any metaphor relationship, and requires a strong subject/action match, no unsupported content, no text/logos/charts/UI, and orientation-safe composition. Symbolic objects are allowed only when they express the saved, source-supported metaphor relationship. One failed check gets one corrective regeneration; a second failure aborts before rendering and reports the scene, orientation, and rejection reasons. Resume with `--render-plan` to reuse the saved script and research.
 
 Assets and their evidence, prompts, model, quality, aspect, cache hash, validation result, and attempt count live in `summary.generated-visuals/manifest.json`. Matching cache entries rerender with `--generated-visuals off`. `--force` does not refresh them; use both `--generated-visuals auto --regenerate-visuals` for an explicit paid refresh.
 
@@ -495,7 +499,7 @@ pnpm run animations create summary.md \
 
 Provider and model selection follow the [setup rules](#ai-and-image-providers), including overrides in `.env`. A scene staged with characters asks for a literal empty interior with a
 visible floor instead of an abstract metaphor, and is composited with a lighter scrim and no
-drift so the room the cast stands in stays readable. Change the model or quality with `--image-model` and `--image-quality`. `--regenerate-backgrounds` refreshes matching cached images; `--force` replaces videos and plans without purchasing new images. All requested images are staged before the cache is promoted, and a failed image request stops before voice synthesis or rendering.
+drift so the room the cast stands in stays readable. Change the model or quality with `--image-model` and `--image-quality`. `--regenerate-backgrounds` refreshes matching cached images; `--force` replaces videos and plans without purchasing new images. The CLI stages all requested images before promoting the cache. If image generation fails after fallback, the render stops and the previous cache is preserved.
 
 Use your own background image in either video workflow, including saved-plan renders:
 
@@ -825,7 +829,7 @@ Asset intake workflow:
 
 LottieFiles is an approved intake source when the individual asset's license and attribution are recorded. Flaticon, Lordicon, and IconScout are manual intake sources only; free Flaticon and Lordicon assets generally require attribution, while paid assets can be used when the user supplies the licensed file and records its terms. The planner and renderer never hotlink or automatically download search results. Rive remains deferred for state-driven character work. Brandfetch is intentionally not integrated because its hotlinking model conflicts with reproducible offline rendering.
 
-Optional scene imagery uses Cloudflare Workers AI or the OpenAI Image API. Publish covers are code-native and never generate images. For OpenAI image setup, see the [official image-generation guide](https://developers.openai.com/api/docs/guides/image-generation).
+Optional scene imagery uses Cloudflare Workers AI, Gemini, or the OpenAI Image API. Publish covers are drawn in code. See the [provider setup](#ai-and-image-providers).
 
 ## Supertonic terms and project notice
 

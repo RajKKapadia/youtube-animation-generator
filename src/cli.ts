@@ -29,6 +29,7 @@ import {
   materializeSceneBackgrounds,
   type SceneBackgroundAssets,
 } from './scene-backgrounds.js';
+import {createDefaultImageGenerator, resolveDefaultImageModel, type GenerateSceneImage} from './providers/image-generation.js';
 import {planAnimations} from './planner.js';
 import {defaultModelForProvider, resolveAIProvider} from './ai-client.js';
 import {runPublishWorkflow} from './publish-workflow.js';
@@ -135,7 +136,7 @@ Narrated video options:
   --target-duration <seconds>       Narration target, maximum 15s overrun (default: 60)
   --captions <on|off>               Phrase captions (default: on)
   --scene-background <mode>         ambient, generated, or image (default: ambient)
-  --image-model <model>             Image model (default: OPENAI_IMAGE_MODEL or gpt-image-2)
+  --image-model <model>             Primary image model (default: selected provider's model)
   --image-quality <quality>         low, medium, or high (default: medium)
   --generated-visuals <off|auto>    Grounded foreground generation (default: off)
   --research <off|auto|required>    Web research before planning (default: off)
@@ -383,6 +384,7 @@ interface NarratedVisualOptions {
   imageBackground?: ImageBackground | undefined;
   captions: CaptionMode;
   generatedVisuals: GeneratedVisualMode;
+  generateImage: GenerateSceneImage;
   imageModel: string;
   imageQuality: ImageQuality;
   regenerateBackgrounds: boolean;
@@ -414,6 +416,7 @@ const resolveForegroundVisuals = async ({
 }): Promise<GeneratedVisualAssets | undefined> => materializeGeneratedVisuals({
   allowGeneration: visual.generatedVisuals === 'auto',
   aspectRatio,
+  generateImage: visual.generateImage,
   model: visual.imageModel,
   outputDirectory: planDirectory,
   plan,
@@ -438,6 +441,7 @@ const resolveSubtitleForegroundVisuals = async ({
 }): Promise<GeneratedVisualAssets | undefined> => materializeGeneratedVisuals({
   allowGeneration: visual.generatedVisuals === 'auto',
   aspectRatio,
+  generateImage: visual.generateImage,
   model: visual.imageModel,
   outputDirectory: planDirectory,
   plan: {
@@ -470,6 +474,7 @@ const resolveSceneBackgrounds = async ({
   );
   return await materializeSceneBackgrounds({
     aspectRatio,
+    generateImage: visual.generateImage,
     model: visual.imageModel,
     outputDirectory,
     palette: plan.palette,
@@ -504,6 +509,7 @@ const resolveSubtitleSceneBackgrounds = async ({
   );
   return await materializeSceneBackgrounds({
     aspectRatio,
+    generateImage: visual.generateImage,
     model: visual.imageModel,
     outputDirectory,
     palette: plan.palette,
@@ -1250,10 +1256,14 @@ export const runCli = async (args: string[] = process.argv.slice(2)) => {
   if (usedPublishOnlyOption) {
     throw new Error('Publish-kit options can only be used with the publish command.');
   }
+  let imageGenerator: GenerateSceneImage | undefined;
+  const generateImage: GenerateSceneImage = (options) =>
+    (imageGenerator ??= createDefaultImageGenerator())(options);
   const commonVisualOptions = {
     imageBackground: imagePath !== undefined ? await validateImageBackground(imagePath) : undefined,
     generatedVisuals: parseGeneratedVisuals(values['generated-visuals']),
-    imageModel: values['image-model'] ?? (process.env.CLOUDFLARE_AI_KEY ? (process.env.CLOUDFLARE_IMAGE_MODEL ?? '@cf/stabilityai/stable-diffusion-xl-base-1.0') : (process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2')),
+    generateImage,
+    imageModel: values['image-model'] ?? resolveDefaultImageModel(),
     imageQuality: parseImageQuality(values['image-quality']),
     regenerateBackgrounds: values['regenerate-backgrounds'],
     regenerateVisuals: values['regenerate-visuals'],

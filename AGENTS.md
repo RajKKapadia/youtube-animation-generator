@@ -32,9 +32,9 @@ reproducible.** So `--render-plan` is the primary development affordance — it 
 entirely. Timing is *derived from measured speech*, never declared: a longer sentence
 mechanically holds its shot longer.
 
-**Providers are pluggable.** Script generation runs on OpenAI, Gemini, or Groq; image
-generation on Cloudflare Workers AI or OpenAI. Both auto-detect from whichever keys are
-present, and `AI_PROVIDER` / `IMAGE_PROVIDER` override. One exception: `--research` requires
+**Providers are pluggable.** Script generation runs on OpenAI, Gemini, or Groq. Image
+generation tries configured providers in order: Cloudflare Workers AI, Gemini, then OpenAI.
+`AI_PROVIDER` and `IMAGE_PROVIDER` can select specific providers. One exception: `--research` requires
 `OPENAI_API_KEY` specifically — it uses OpenAI-hosted web search, which the other providers do
 not expose. → [`docs/providers.md`](docs/providers.md)
 
