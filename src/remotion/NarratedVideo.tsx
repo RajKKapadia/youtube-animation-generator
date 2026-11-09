@@ -1,3 +1,4 @@
+import {chooseStorySpeechCues} from '../story-motion.js';
 import {AbsoluteFill, Audio, Sequence, staticFile} from 'remotion';
 import type {NarratedRenderInput} from '../types.js';
 import {
@@ -16,6 +17,7 @@ const renderableNarratedScene = (
   scene: NarratedRenderInput['plan']['scenes'][number],
 ) => ({
   ...scene,
+  speechCues: scene.visual.kind === 'story-motion' ? chooseStorySpeechCues(scene.visual,scene.wordTimings,scene.beats.flatMap(beat => beat.phrases)) : undefined,
   activityCues: scene.beats.map((beat) => ({
     startMs: beat.startMs,
     text: beat.phrases.map(({text}) => text).join(' '),

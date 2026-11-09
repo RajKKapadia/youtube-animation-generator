@@ -1,3 +1,4 @@
+import {compileStoryMotion, storyMotionCueIssue, chooseStorySpeechCues, type SpeechCue} from './story-motion.js';
 import {animationAssetSchema, audioSourceSchema, type AnimationAsset} from './animation-contract.js';
 import {compositionSchema, presentationIssue, presentationSchema, storyRoleSchema, type Presentation} from './presentation.js';
 import {explainerSuggestionSchema, explainerSceneSchema, explainerStructureIssue, explainerGroundingIssue, visualMotifSchema} from './explainer-visuals.js';
@@ -320,7 +321,7 @@ export const narratedVisualKindSchema = z.enum([
   'image-focus',
   'data-visualization',
   'kinetic-text', 'before-after', 'code-walkthrough', 'sequence-diagram', 'layered-architecture',
-  'character-scene',
+  'character-scene', 'story-motion',
 ]);
 
 export type NarratedVisualKind = z.infer<typeof narratedVisualKindSchema>;
@@ -354,7 +355,7 @@ const ALLOWED_NARRATED_MOTIONS: Record<NarratedVisualKind, NarratedMotion[]> = {
   'data-visualization': ['reveal', 'count-up'],
   'kinetic-text': ['reveal', 'pulse'], 'before-after': ['reveal'],
   'code-walkthrough': ['scan'], 'sequence-diagram': ['flow'], 'layered-architecture': ['reveal'],
-  'character-scene': ['reveal'],
+  'character-scene': ['reveal'], 'story-motion': ['flow'],
 };
 
 const addNarratedVisualIssues = (
@@ -747,6 +748,10 @@ const addSubtitlePlanIssues = (
   const usedMediaIds = new Set<string>();
   let generatedCount = 0;
   for (const [clipIndex, clip] of plan.clips.entries()) {
+    if (clip.visual.kind === 'story-motion') {
+      try { compileStoryMotion(clip.visual, clip.captionCues.length ? clip.captionCues.map(cue=>({...cue,provenance:'subtitle' as const})) : [{text:clip.transcript,startMs:0,durationMs:clip.durationMs,provenance:'estimate'}], clip.durationMs); }
+      catch(error) {context.addIssue({code:'custom',message:String(error instanceof Error?error.message:error),path:['clips',clipIndex,'visual','actions']});}
+    }
     if (clip.template === 'comparison' && clip.secondaryItems.length === 0) {
       context.addIssue({
         code: 'custom',
@@ -895,8 +900,8 @@ const upgradeVisualPlan = (input: unknown, from: number, to: number, field: 'sce
   return plan.version === from && Array.isArray(plan[field]) && plan[field]!.every((item) => item !== null && typeof item === 'object' && isLegacyVisual(item.visual)) ? {...plan, version: to} : input;
 };
 
-export const subtitleSavedPlanV3Schema = z.object({
-  version: z.literal(3),
+const subtitleSavedPlanFields = {
+  version: z.literal(4),
   sourceSubtitle: z.string().min(1),
   generatedAt: z.string().min(1),
   model: z.string().min(1),
@@ -905,7 +910,12 @@ export const subtitleSavedPlanV3Schema = z.object({
   assetAttributions: z.array(assetAttributionSchema).max(12).default([]),
   mediaAssets: z.array(narratedMediaAssetSchema).max(12).default([]),
   clips: z.array(subtitleAnimationClipSchema),
-}).superRefine(addSubtitlePlanIssues);
+};
+export const subtitleSavedPlanV4Schema = z.object(subtitleSavedPlanFields).superRefine(addSubtitlePlanIssues);
+export const subtitleSavedPlanV3Schema = z.object({...subtitleSavedPlanFields, version: z.literal(3)}).superRefine((plan, context) => {
+  addSubtitlePlanIssues(plan, context);
+  if(plan.clips.some(clip=>clip.visual.kind==='story-motion')) context.addIssue({code:'custom',message:'Story-motion requires subtitle plan version 4.',path:['version']});
+});
 
 const normalizeLegacySavedPlan = (
   plan: z.infer<typeof legacySavedPlanSchema>,
@@ -930,6 +940,7 @@ const normalizeLegacySavedPlan = (
 export const subtitleSavedPlanV2Schema = z.preprocess((input) => upgradeVisualPlan(input, 2, 3, 'clips'), subtitleSavedPlanV3Schema);
 
 export const savedPlanSchema = z.union([
+  subtitleSavedPlanV4Schema,
   subtitleSavedPlanV3Schema,
   subtitleSavedPlanV2Schema,
   legacySavedPlanSchema.transform(normalizeLegacySavedPlan),
@@ -946,6 +957,7 @@ export interface RenderableVisualScene extends VisualContent {
   primaryItemTimings: VisualItemTiming[];
   secondaryItemTimings: VisualItemTiming[];
   activityCues: Array<{startMs: number; text: string}>;
+  speechCues?: SpeechCue[] | undefined;
 }
 
 const addNarrationSceneIssues = (
@@ -954,6 +966,10 @@ const addNarrationSceneIssues = (
 ): void => {
   const layoutIssue = presentationIssue(scene);
   if (layoutIssue) context.addIssue({code: 'custom', message: layoutIssue, path: ['presentation']});
+  if (scene.visual?.kind === 'story-motion') {
+    const cueIssue = storyMotionCueIssue(scene.visual, scene.beats.flatMap(beat => beat.phrases.map(phrase => phrase.text)).join(' '));
+    if (cueIssue) context.addIssue({code: 'custom', message: cueIssue, path: ['visual', 'actions']});
+  }
   if (scene.visual) {
     const issue = explainerStructureIssue({...scene, visual: scene.visual});
     if (issue) context.addIssue({code: 'custom', message: issue, path: ['visual']});
@@ -1185,7 +1201,7 @@ const addNarratedPlanIssues = (
 };
 
 export const draftNarratedPlanSchema = z.object({
-  version: z.literal(8),
+  version: z.union([z.literal(8), z.literal(9)]),
   kind: z.literal('narrated-video'),
   stage: z.literal('draft'),
   sourceText: z.string().min(1),
@@ -1205,6 +1221,7 @@ export const draftNarratedPlanSchema = z.object({
   scenes: z.array(draftNarrationSceneSchema).min(1).max(MAX_NARRATED_SCENES),
 }).superRefine((plan, context) => {
   addNarratedPlanIssues(plan, context);
+  if (plan.version < 9 && plan.scenes.some(scene => scene.visual.kind === 'story-motion')) context.addIssue({code: 'custom', message: 'Story-motion requires narrated plan version 9.', path: ['version']});
   if (plan.sourceCoverage) {
     for (const message of sourceCoverageIssues(sourcePointsFor(plan.originalSourceText ?? plan.sourceText), plan.sourceCoverage, plan.scenes)) {
       context.addIssue({code: 'custom', message, path: ['sourceCoverage']});
@@ -1263,7 +1280,10 @@ export const anchoredItemTimingSchema = visualItemTimingSchema.extend({
   beatId: z.string().min(1),
 });
 
+export const speechWordSchema = z.object({text: z.string().min(1), startMs: z.number().nonnegative(), durationMs: z.number().positive(), probability: z.number().min(0).max(1)});
+
 export const timedNarrationSceneSchema = visualContentSchema.extend({
+  wordTimings: z.array(speechWordSchema).max(2000).optional(),
   presentation: presentationSchema.optional(),
   storyRole: storyRoleSchema.optional(),
   id: z.string().min(1).max(80),
@@ -1277,6 +1297,16 @@ export const timedNarrationSceneSchema = visualContentSchema.extend({
   secondaryItemTimings: z.array(anchoredItemTimingSchema).max(6),
 }).superRefine((scene, context) => {
   addNarrationSceneIssues(scene, context);
+  if (scene.visual.kind === 'story-motion') {
+    try {
+      compileStoryMotion(scene.visual, chooseStorySpeechCues(scene.visual, scene.wordTimings, scene.beats.flatMap(beat => beat.phrases)), scene.durationMs);
+    } catch (error) {context.addIssue({code: 'custom', message: String(error instanceof Error ? error.message : error), path: ['visual', 'actions']});}
+  }
+  let previousWordEnd = 0;
+  for (const word of scene.wordTimings ?? []) {
+    if (word.startMs < previousWordEnd || word.startMs + word.durationMs > scene.durationMs) context.addIssue({code: 'custom', message: 'Aligned words must be chronological and inside the scene.', path: ['wordTimings']});
+    previousWordEnd = word.startMs + word.durationMs;
+  }
   for (const [field, items, beatField] of [
     ['primaryItemTimings', scene.primaryItems, 'primaryItemIndices'],
     ['secondaryItemTimings', scene.secondaryItems, 'secondaryItemIndices'],
@@ -1320,7 +1350,7 @@ export const timedNarrationSceneSchema = visualContentSchema.extend({
 export type TimedNarrationScene = z.infer<typeof timedNarrationSceneSchema>;
 
 export const timedNarratedPlanSchema = z.object({
-  version: z.literal(8),
+  version: z.union([z.literal(8), z.literal(9)]),
   kind: z.literal('narrated-video'),
   stage: z.literal('timed'),
   sourceText: z.string().min(1),
@@ -1353,6 +1383,7 @@ export const timedNarratedPlanSchema = z.object({
   if (audioKind === 'recorded' && plan.voiceoverPlaybackRate !== 1) context.addIssue({code: 'custom', message: 'Recorded narration must preserve playback speed.', path: ['voiceoverPlaybackRate']});
   if (plan.audioSource?.kind === 'recorded' && plan.audioSource.playback.file !== plan.voiceoverFile) context.addIssue({code: 'custom', message: 'Recorded playback must reference the aligned voiceover.', path: ['audioSource']});
   addNarratedPlanIssues(plan, context);
+  if (plan.version < 9 && plan.scenes.some(scene => scene.visual.kind === 'story-motion')) context.addIssue({code: 'custom', message: 'Story-motion requires narrated plan version 9.', path: ['version']});
   if (plan.sourceCoverage) {
     for (const message of sourceCoverageIssues(sourcePointsFor(plan.originalSourceText ?? plan.sourceText), plan.sourceCoverage, plan.scenes)) {
       context.addIssue({code: 'custom', message, path: ['sourceCoverage']});

@@ -47,6 +47,7 @@ export const toolAvailability = async (tool: AnimationTool, requireProof = true)
 };
 
 export const authorAnimationRecipe = async (scene: TimedNarrationScene, tool: AnimationTool, model?: string): Promise<AnimationRecipe> => {
+  if (scene.visual.kind === 'story-motion') throw new Error('External recipes cannot preserve story-motion actions; use builtin.');
   const info = createAIClient({model});
   const system = 'Choose one bounded animation recipe. Do not write code, add facts or alter supplied labels. Return only JSON. StykAnimate requires character-exchange; Lottie requires icon-reveal or pulse; HyperFrames supports kinetic-text, comparison, diagram, chart.';
   const input = JSON.stringify({tool, visual: scene.visual, title: scene.title, primaryItems: scene.primaryItems, secondaryItems: scene.secondaryItems});
@@ -122,6 +123,7 @@ export const renderAnimationAsset = async (asset: AnimationAsset, sourceScene: T
 };
 
 export const createAnimationAsset = async (scene: TimedNarrationScene, tool: AnimationTool, recipe: AnimationRecipe, options: {projectDirectory: string; aspectRatio: AspectRatioSelection; fps: number; palette: DraftNarratedPlan['palette']; forced?: boolean}): Promise<AnimationAsset> => {
+  if (scene.visual.kind === 'story-motion') throw new Error('External animation recipes cannot preserve story-motion actions; use the built-in compositor.');
   if (tool === 'stykanimate' && scene.visual.kind !== 'character-scene') throw new Error('StykAnimate requires a grounded character-scene.');
   if (tool === 'stykanimate' && scene.visual.kind === 'character-scene' && (scene.visual.set !== 'none' || scene.visual.callout || scene.visual.cast.some(character => character.prop))) throw new Error('This StykAnimate recipe does not support sets, props or callouts; retain the built-in character treatment.');
   if (!recipeSupportsTool(recipe, tool)) throw new Error('Animation recipe does not match its tool.');
@@ -169,6 +171,11 @@ export const materializeAnimations = async (plan: TimedNarratedPlan, options: {p
   for (const id of Object.keys(options.overrides)) if (!plan.scenes.some(scene => scene.id === id)) throw new Error(`Unknown scene override: ${id}`);
   for (const scene of plan.scenes) {
     const override = options.overrides[scene.id];
+    if (scene.visual.kind === 'story-motion') {
+      if (override && override !== 'builtin') throw new Error(`${scene.id}: ${override} cannot preserve story-motion actions; select builtin.`);
+      warnings.push(`${scene.id}: retained built-in story choreography; external recipes do not support its object actions.`);
+      continue;
+    }
     const selected = override === 'builtin' ? null : override ?? suggestedAnimationTool(scene);
     if (!selected || (!override && !options.tools.includes(selected))) continue;
     try {

@@ -43,7 +43,7 @@ re-derive a version you already have.
 
 ### Chrome must be declared explicitly
 
-`findBrowserExecutable()` probes **Linux paths only** — `src/narrated-render.ts:31`,
+`findBrowserExecutable()` probes **Linux paths only** — `src/narrated-render.ts:32`,
 `src/render.ts:27`, `src/publish-render.ts:34`:
 
 ```bash

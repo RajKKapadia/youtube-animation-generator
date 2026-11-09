@@ -550,7 +550,7 @@ export const materializeNarratedVisuals = ({
   const materializedScenes = scenes.map((scene) => {
     const icons = materializeIcons(scene);
     if (scene.visual.kind === 'code-walkthrough') return {...scene, icons, visual: materializeCodeVisual(scene.visual, codeSources)};
-    if (scene.visual.kind === 'kinetic-text' || scene.visual.kind === 'before-after' || scene.visual.kind === 'sequence-diagram' || scene.visual.kind === 'layered-architecture') return {...scene, icons, visual: {...scene.visual, assetId: null}};
+    if (scene.visual.kind === 'kinetic-text' || scene.visual.kind === 'before-after' || scene.visual.kind === 'sequence-diagram' || scene.visual.kind === 'layered-architecture' || scene.visual.kind === 'story-motion') return {...scene, icons, visual: {...scene.visual, assetId: null}};
     if (scene.visual.kind === 'image-focus') {
       if (scene.visual.source === 'local') {
         const image = scene.visual.localImageId
@@ -886,7 +886,7 @@ export const planNarratedVideo = async (
       ])];
 
       return draftNarratedPlanSchema.parse({
-        version: 8,
+        version: materialized.scenes.some(scene => scene.visual.kind === 'story-motion') ? 9 : 8,
         kind: 'narrated-video',
         stage: 'draft',
         sourceText: options.sourceText,

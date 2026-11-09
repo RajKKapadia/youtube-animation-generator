@@ -11,8 +11,9 @@ Read this before writing or editing any plan JSON or fixture.
 | Draft | `"draft"` | Authoring, or a human | Scenes, items, phrase text. **No timings.** |
 | Timed | `"timed"` | `narration-audio.ts` after synthesis | Adds `startMs`, `durationMs`, `sampleCount` per phrase |
 
-**Timing is derived, never declared.** Phrase duration is *measured from synthesized speech*, so
-a longer sentence mechanically holds its shot longer. (`--stills-only` is the one exception: it
+**Timing is derived, never declared.** Utterance duration is measured from synthesized speech; phrase
+boundaries are estimated within it unless verified local word alignment is available. A
+longer sentence mechanically holds its shot longer. (`--stills-only` is the one exception: it
 *estimates* timings from word counts so it can preview without running TTS — see
 [commands.md](commands.md#how---stills-only-avoids-the-tts-model).) `targetDurationSeconds` is a planning
 hint only and is routinely overshot — a 15 s target legitimately produced 16.12 s of audio in
@@ -20,7 +21,10 @@ verification.
 
 ## Versioning — the most common trap
 
-The current narrated-plan version is **8**, but fixtures on disk are older.
+Story-motion narrated plans use **version 9**, and story-motion subtitle plans use **version 4**.
+Existing narrated version 8 and subtitle version 3 plans retain their previous rendering.
+The reader accepts both; the planner chooses the newer version when it authors story motion.
+The ordinary narrated-plan version remains **8**, and fixtures on disk can be older.
 Version 8 adds project-local animation assets and explicit recorded/silent/TTS
 audio metadata. See [animation-tools.md](animation-tools.md#selection-and-compatibility).
 The reader upgrades version 7 as well as the older contracts below; older examples
@@ -31,18 +35,57 @@ legacy v5, v4, v3, v2 and v1 schemas, each carrying a `.transform(normalize…)`
 place.
 
 > **Consequence:** copying `sample.narration-plan.json` as a starting point works, but you are
-> authoring a **v4** document. Declare `version: 8` for anything new.
+> authoring a **v4** document. Declare `version: 9` for story motion, or `version: 8` for the existing treatments.
 
 ## Enumerations
 
 | Field | Values | Definition |
 |---|---|---|
-| `template` | `process-flow`, `comparison`, `timeline`, `callout` | `types.ts:20` |
+| `template` | `process-flow`, `comparison`, `timeline`, `callout` | `types.ts:21` |
 | `palette` | `cyan`, `violet`, `emerald`, `amber`, `rose` | `visual-palettes.ts:3` |
 | `expression` | `none`, `laugh`, `breath`, `sigh` | `supertonic/expressions.ts:3` |
-| `aspectRatio` | `16:9`, `9:16` (`both` for selection) | `types.ts:29` |
+| `aspectRatio` | `16:9`, `9:16` (`both` for selection) | `types.ts:30` |
 | `voice` | `auto`, `M1`–`M5`, `F1`–`F5` | `supertonic/protocol.ts` |
-| `visual.kind` | 14 treatments incl. `character-scene` | `types.ts:304` |
+| `visual.kind` | Includes `story-motion` and the existing treatments | `src/types.ts` (`narratedVisualKindSchema`) |
+
+### `story-motion` payload
+
+The graph declares persistent `objects`, directed `relations`, and cue-linked `actions`.
+Objects have stable IDs, short extractive labels, optional catalog icons and named states,
+plus required `sourceEvidence`. Roles are `subject`, `payload`, and `note`. The supported
+budget is four subjects (three when payloads travel), two notes, eight total objects,
+eight relations and 32 actions (`src/story-motion.ts:29`). These are readability budgets,
+not topic-specific recipes.
+
+Actions are `reveal`, `retire`, `emphasize`, `focus`, `connect`, `disconnect`, `transfer`,
+and `state`. Connect/disconnect target a relation; transfer targets a payload and names a
+relation; state names a declared object state. One reveal introduces an object, which
+later actions may reuse. Dependencies, unknown IDs, conflicting property writes, missing
+introductions and unconnected transfers are validated (`src/story-motion.ts:117`).
+
+Every action has an extractive evidence excerpt and a `cue` containing exact narration
+text, zero-based `occurrence` and `edge: start|end`. `sync: start|finish|span` controls
+whether movement starts at, arrives on, or runs through the cue. `pace` is a preference;
+the compiler resolves the duration against actual cue and dependency windows. No model
+authored coordinates or absolute action timestamps are accepted.
+
+New TTS story plans try the installed local alignment worker, without installing or
+downloading models (`src/speech-alignment.ts`). Accepted word spans persist as optional
+scene-relative `wordTimings`; captions and item entrances are updated together. Recorded
+plans retain their aligned words too. If alignment is unavailable, rejected, or cannot
+match all action anchors, timing falls back to estimated phrase/subtitle spans with a
+saved warning. Low-confidence alignment is never labelled word-verified.
+
+Rendering saves `<stem>.motion-review.json` with resolved action times, provenance,
+timing warnings and sampled overlap/bounds findings for each requested orientation
+(`src/narrated-render.ts`). These checks cover object boxes and do not establish complete
+visual or semantic quality. Inspect the motion preview as well.
+
+Use `pnpm fixtures:story-motion -- /tmp/story --plans-only`, validate with
+`pnpm animations create --render-plan /tmp/story/story.narration-plan.json --plan-only`,
+then render with `pnpm fixtures:story-motion -- /tmp/story --audio --portrait`.
+The optional `--audio` uses local Supertonic and alignment; omit it for estimated,
+silent timing. `--stills-only` renders both orientations. No provider call is made.
 
 ### `character-scene` payload
 
@@ -110,18 +153,18 @@ Supporting lists introduced inside a section, indented subitems, and tabular hea
 their parent point (`src/source-coverage.ts:13`). This avoids demanding another story for each
 closing takeaway while retaining the complete text for planning.
 Saved v8 draft/timed schemas validate this metadata when present and allow it to be absent for
-older or hand-written plans (`src/types.ts:1195`, `src/types.ts:1337`). These are structural
+older or hand-written plans (`src/types.ts:1211`, `src/types.ts:1367`). These are structural
 coverage and grounding checks; script review still establishes semantic completeness.
 
 The scene limit is shared by planning, saved plans, and speech-worker jobs. Legacy schemas
 retain their original limits. JSON-mode recovery preserves scenes beyond the sixth and wraps
 long caption phrases rather than truncating narration (`src/narration-plan-recovery.ts`).
 All providers rename duplicate caption phrase IDs during response recovery, preserving speech,
-beat IDs and anchors (`src/narration-plan-recovery.ts:386`). Saved-plan validation still rejects
-duplicate IDs; recovery runs only when authoring a new plan (`src/types.ts:968`).
+beat IDs and anchors (`src/narration-plan-recovery.ts:387`). Saved-plan validation still rejects
+duplicate IDs; recovery runs only when authoring a new plan (`src/types.ts:984`).
 
 - `template: "comparison"` **fails validation** when `secondaryItems` is empty
-  (`types.ts:946`).
+  (`types.ts:957`).
 - A beat's `primaryItemIndices` are **zero-based indices into the scene's `primaryItems`**,
   selecting which labels are lit while that beat is spoken.
 - **Every primary item must be anchored exactly once, in visual order.** Each index must appear
@@ -131,10 +174,10 @@ duplicate IDs; recovery runs only when authoring a new plan (`src/types.ts:968`)
 - Phrase `text` must not contain `<laugh>`, `<breath>` or `<sigh>` — expressions belong in the
   beat's `expression` field.
 - Research-enriched plans must carry **both** `originalSourceText` and `research`, or neither
-  (`types.ts:1197`). Research bundles contain at most 16 claims, six citations per claim,
+  (`types.ts:1213`). Research bundles contain at most 16 claims, six citations per claim,
   100 sources and 20 queries; every claim citation must name a saved source. Optional
   `research.warnings` records dropped citations, failed tool actions and trimmed results
-  (`types.ts:68`, `types.ts:94`). An unavailable `auto` research run instead records its
+  (`types.ts:69`, `types.ts:95`). An unavailable `auto` research run instead records its
   warning in `planningWarnings` and keeps the original source without a research bundle
   (`cli.ts:872`, `cli.ts:895`).
 

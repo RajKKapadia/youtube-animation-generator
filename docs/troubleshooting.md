@@ -26,8 +26,8 @@
 | `spawn ENOENT` on `/usr/bin/google-chrome-stable` | Linux-only path on a macOS host | Export `REMOTION_BROWSER_EXECUTABLE`; if the script ignores it, see below |
 | Render silently downloads a browser | Script ignores the env var, falls back to `undefined` | Expected for `fixtures:narrated-layouts`; it is **not** your configured Chrome |
 | `corepack: command not found` | Node ≥ 25 unbundled corepack | Use the pnpm already on `PATH` if it matches `packageManager` |
-| Plan rejected but "looks right" | Authored against the v4 fixture | Declare `version: 7`; check the limits in [plan-schema.md](plan-schema.md#cardinality-and-length-limits) |
-| `comparison` template validation failure | `secondaryItems` is empty | Populate it, or use another template (`types.ts:946`) |
+| Plan rejected but "looks right" | Authored against an older contract | Use narrated v9 for story motion or v8 for existing treatments; check [plan-schema.md](plan-schema.md#versioning--the-most-common-trap) |
+| `comparison` template validation failure | `secondaryItems` is empty | Populate it, or use another template (`types.ts:957`) |
 | Video longer than `targetDurationSeconds` | Duration is derived from measured speech | Expected. Shorten `phrases[].text` to shorten the video. |
 | Garbled or truncated worker IPC | Something wrote to stdout in worker code | Route all worker logging to stderr (`worker.ts:16`) |
 | `Choose either --stills-only or --audio-only, not both.` | Conflicting stage flags | Pick one; they gate different stages |

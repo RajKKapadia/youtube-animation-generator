@@ -1,3 +1,4 @@
+import {StoryMotionView} from './StoryMotion.js';
 import {DirectedScene, hasDirectedLayout, PresentationLeadIn} from './DirectedScene.js';
 import {KineticText, BeforeAfter, CodeWalkthrough, SequenceDiagram, LayeredArchitecture, LineChart} from './ExplainerVisuals.js';
 import type {CSSProperties, ReactNode} from 'react';
@@ -1177,6 +1178,7 @@ const CharacterSceneView = ({
   profile,
   scene,
 }: {
+  chromaKey?: boolean;
   contentTopInset: number;
   fps: number;
   palette: VideoPalette;
@@ -1254,6 +1256,7 @@ const CharacterSceneView = ({
 };
 
 export const NarratedVisualLayer = ({
+  chromaKey = false,
   contentTopInset,
   fps,
   foregroundAssets,
@@ -1263,6 +1266,7 @@ export const NarratedVisualLayer = ({
   scene,
   technologyIcons,
 }: {
+  chromaKey?: boolean;
   contentTopInset: number;
   fps: number;
   foregroundAssets: Record<string, string>;
@@ -1311,6 +1315,7 @@ export const NarratedVisualLayer = ({
 
   const content = (() => {
     switch (scene.visual.kind) {
+      case 'story-motion': return <StoryMotionView chromaKey={chromaKey} contentTopInset={contentTopInset} palette={palette} profile={profile} scene={scene} />;
       case 'kinetic-text': return <KineticText palette={palette} profile={profile} scene={scene} />;
       case 'before-after': return <BeforeAfter palette={palette} profile={profile} scene={scene} />;
       case 'code-walkthrough': return <CodeWalkthrough contentTopInset={contentTopInset} palette={palette} profile={profile} scene={scene} />;

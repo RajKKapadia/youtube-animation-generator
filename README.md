@@ -785,7 +785,7 @@ Subtitle inputs default to an adjacent `animations/` directory. Saved subtitle p
 - `timeline` — ordered stages or events
 - `callout` — definitions, concepts, and important statistics
 
-These four layouts remain available under `visual.kind: "diagram"`. Narrated videos and version-3 subtitle plans also support:
+These four layouts remain available under `visual.kind: "diagram"`. Narrated videos and subtitle plans also support:
 
 - `agent-workflow` — one central agent, surrounding tools, and beat-driven request/result activity
 - `brand-showcase` — exact product or company marks with staggered entrances and very slow drift
@@ -800,8 +800,19 @@ These four layouts remain available under `visual.kind: "diagram"`. Narrated vid
 - `sequence-diagram` — 2–4 participants exchanging 2–6 directed, source-supported messages
 - `layered-architecture` — 2–6 source-ordered layers assembled progressively
 - `character-scene` — 2–3 code-drawn people with cue-timed speaking turns, props, and optional counter/callout
+- `story-motion` — persistent objects with story-authored connections, transfers, state changes, focus and qualifications; saved as narrated v9 or subtitle v4
 
-All treatments use the same motion grammar: narration-beat or subtitle-cue entrances, stable hold frames, small ambient movement, and one dominant moving element. They do not use random motion, constant bouncing, rapid spinning, or effects behind the protected caption lane.
+Existing treatments use narration-beat or subtitle-cue entrances, stable hold frames and small ambient movement. Story motion gives each action its own narrated text anchor and can act on the same object repeatedly. It uses installed local word alignment for new generated narration when verification succeeds, with explicit estimated-timing warnings otherwise. Related objects remain on stage as their relationships change; action sequences come from the saved plan. Rendering writes a motion-review report with timing provenance and sampled object overlap/clipping diagnostics. See [the story-motion contract](docs/plan-schema.md#story-motion-payload) and [implementation direction](docs/story-driven-motion-plan.md).
+
+Preview the offline benchmark without authoring a new plan:
+
+```bash
+pnpm fixtures:story-motion -- /tmp/story --plans-only
+pnpm animations create --render-plan /tmp/story/story.narration-plan.json --plan-only
+pnpm fixtures:story-motion -- /tmp/story --audio --portrait
+```
+
+The last command needs the local speech model and Chrome. Omit `--audio` for an estimated silent preview, or add `--stills-only` for scene images. Existing saved plans retain their prior visuals; rerendering them does not automatically author new choreography.
 
 Titles and labels are measured and fitted into their bounds. Icon resolution is deterministic: an explicit, relevance-checked scene icon is tried first; an exact Simple Icons name or explicit brand alias is tried second; an exact entry from `assets/brands/manifest.json` is tried third; and a conservative Lucide label fallback is used last. The built-in catalog includes standards/protocols, compatibility, CPUs, accelerators, memory, circuits, AI models, and the existing software-system concepts. Brand showcases do not use fuzzy matching. Missing or ambiguous logos produce a planning warning; brand names absent from the source and source-unsupported metric numbers are rejected before the plan is saved. The renderer never fabricates a mark or silently substitutes another company. Original logo colors are preserved unless a curated manifest explicitly allows monochrome use.
 

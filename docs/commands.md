@@ -178,6 +178,7 @@ model. **Not uniformly portable:**
 | Script | Produces | Browser resolution | macOS |
 |---|---|---|:--:|
 | `fixtures:explainers` | Stills + MP4s, 6 treatments × 2 aspects, `index.html` | env var, then Linux probe (`:19`) | ✅ |
+| `fixtures:story-motion` | Graph plans, optional local audio, motion reports, stills/MP4s | env var, then Linux probe | ✅ with Chrome env |
 | `fixtures:presentation` | Stills | env var, then Linux probe (`:17`) | ✅ |
 | `fixtures:chroma-text` | Stills | env var, then Linux literal (`:20`) | ✅ |
 | `fixtures:characters` | Stills + MP4s, 3 scenarios × 2 aspects | env var, then macOS + Linux probe | ✅ |
@@ -200,6 +201,13 @@ pnpm fixtures:explainers -- /tmp/gallery --stills-only   # fast
 pnpm fixtures:explainers -- /tmp/gallery                 # full MP4s, several minutes
 open /tmp/gallery/index.html
 ```
+
+Story-motion fixtures (`src/render-story-motion-fixtures.ts`) support `--plans-only`,
+`--stills-only`, `--portrait`, and `--audio` (installed local Supertonic/alignment).
+Validate the saved draft with `animations create --render-plan ... --plan-only` before
+rendering. After a narrated run, `--reuse-audio` keeps the verified timing if the script
+is identical; `--subtitle-stills` renders both orientations, transparent/green backgrounds,
+and captions on/off. These flags are for the fixture script, not `animations create`.
 
 ## Other scripts
 

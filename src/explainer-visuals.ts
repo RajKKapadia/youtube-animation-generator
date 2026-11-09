@@ -1,3 +1,4 @@
+import {storyMotionSchema, storyMotionStructureIssue, storyMotionGroundingIssue, STORY_MOTION_PROMPT} from './story-motion.js';
 import {z} from 'zod';
 import {sourceContainsGroundedText} from './source-grounding.js';
 import {semanticIconDefinitionFor} from './icon-catalog.js';
@@ -94,12 +95,12 @@ export const codeExcerptSchema = z.object({
   sourceHash: z.string().regex(/^[a-f0-9]{64}$/u), snippetHash: z.string().regex(/^[a-f0-9]{64}$/u),
 });
 const codeScene = z.object({...codeFields, excerpt: codeExcerptSchema});
-const simpleSuggestions = [kinetic, beforeAfter, sequence, architecture, characterScene] as const;
+const simpleSuggestions = [kinetic, beforeAfter, sequence, architecture, characterScene, storyMotionSchema] as const;
 export const explainerSuggestionSchema = z.union([...simpleSuggestions, codeSuggestion]);
 export const explainerSceneSchema = z.union([
   kinetic.extend({assetId: z.null()}), beforeAfter.extend({assetId: z.null()}),
   sequence.extend({assetId: z.null()}), architecture.extend({assetId: z.null()}), codeScene.extend({assetId: z.null()}),
-  characterScene.extend({assetId: z.null()}),
+  characterScene.extend({assetId: z.null()}), storyMotionSchema.extend({assetId: z.null()}),
 ]);
 
 type Scene = VisualContent & {visual: NarratedVisualSuggestion | NarratedSceneVisual};
@@ -108,6 +109,7 @@ const isOrderedCoverage = (indices: number[], count: number) => indices.length =
 /** Shared by model-output recovery and strict persisted-plan validation. */
 export const explainerStructureIssue = (scene: Scene): string | null => {
   const {visual, primaryItems, secondaryItems} = scene;
+  if (visual.kind === 'story-motion') return storyMotionStructureIssue(visual);
   const checkPrimary = (indices: number[]) => isOrderedCoverage(indices, primaryItems.length);
   if (visual.kind === 'kinetic-text' && (primaryItems.length > 4 || secondaryItems.length)) return 'Kinetic text requires 1-4 primary statements and no secondary items.';
   if (visual.kind === 'before-after') {
@@ -162,6 +164,7 @@ export const explainerGroundingIssue = (scene: Scene, sourceText: string): strin
   const structural = explainerStructureIssue(scene);
   if (structural) return structural;
   const {visual} = scene;
+  if (visual.kind === 'story-motion') return storyMotionGroundingIssue(visual, sourceText);
   const supported = (excerpt: string, labels: string[]) => sourceContainsGroundedText(sourceText, excerpt) && labels.every((label) => sourceContainsGroundedText(excerpt, label));
   if (visual.kind === 'kinetic-text' && scene.primaryItems.some((item) => !sourceContainsGroundedText(sourceText, item))) return 'Kinetic statements must be exact source excerpts.';
   if (visual.kind === 'before-after' && visual.pairs.some((pair) => !supported(pair.sourceEvidence, [scene.primaryItems[pair.primaryItemIndex]!, scene.secondaryItems[pair.secondaryItemIndex]!])) ) return 'Each before/after pair must share an exact source excerpt supporting both states.';
@@ -189,7 +192,7 @@ export const explainerGroundingIssue = (scene: Scene, sourceText: string): strin
 
 export const visualTreatmentKey = (visual: NarratedVisualSuggestion | NarratedSceneVisual): string => visual.kind === 'data-visualization' ? `${visual.kind}:${visual.chart.type}` : visual.kind;
 
-export const EXPLAINER_PLANNING_PROMPT = `Additional animation treatments (choose the structure that explains the content before considering media preferences):
+export const EXPLAINER_PLANNING_PROMPT = STORY_MOTION_PROMPT + '\n\n' + `Additional animation treatments (choose the structure that explains the content before considering media preferences):
 - character-scene: reveal a staged exchange between 2-3 people. Strongly prefer it over a diagram when the source narrates a concrete interaction between people, such as a check-in, consultation, purchase, or handoff. Never stage a concept, a system, or software as people. Only two things are required: cast, 2-3 people each with a distinct lowercase-hyphen id and a left/center/right position; and sourceEvidence, one excerpt copied verbatim from the source describing this interaction. primaryItems are the steps in order, and speakers gives each change of speaker its own primaryItemIndex; a turn runs until the next begins, so covering every step is optional. Every other field is filled in when omitted, so set only what the source supports: outfit=uniform for a staff role, age only if the source says child or senior, set=counter with someone behindSet plus a short sign for a desk or window, an available icon id as a held prop with the primaryItemIndex that raises it, and a callout marking the outcome with a neutral, positive, or warning tone and its own verbatim sourceEvidence. Use callout fallback and no secondary items. Keep cast ids stable across consecutive scenes continuing one exchange.
 - kinetic-text: reveal or pulse 1-4 exact source phrases in primaryItems, with callout fallback and no secondary items.
 - before-after: reveal 1-3 pairs of primary before states and secondary after states. Use comparison fallback with both labels. pairs reference ordered item indices. Each sourceEvidence must contain both states and explicitly support the transformation; never imply an improvement absent from the source.

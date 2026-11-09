@@ -6,9 +6,14 @@ and StykAnimate supplies editable character projects through a separate MCP
 process. Recipes are bounded data, not arbitrary provider-authored programs.
 
 Implementation: `src/animation-tools.ts:49` (both authoring providers),
-`src/animation-tools.ts:67` (local export), `src/project-workflow.ts:61`
-(preparation), `src/recording-alignment.ts:26` (matching). The fixture commands
+`src/animation-tools.ts:68` (local export), `src/project-workflow.ts:61`
+(preparation), `src/recording-alignment.ts:27` (matching). The fixture commands
 below are reproducible verification, without paid authoring.
+
+Story-motion graphs stay in the built-in compositor. Current external recipes cannot
+preserve their repeated object actions: automatic selection reports this choice, and
+forcing an external tool fails before authoring/export (`src/animation-tools.ts`,
+`materializeAnimations` and `createAnimationAsset`).
 
 ## One-time setup
 

@@ -1,3 +1,4 @@
+import {alignGeneratedStoryNarration} from './speech-alignment.js';
 import {access, mkdir, mkdtemp, rename, rm} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {resolve} from 'node:path';
@@ -251,7 +252,7 @@ export const synthesizeNarration = async (
         })),
       })),
     });
-    const timed = materializeTimedNarration({
+    let timed = materializeTimedNarration({
       audioDirectoryName: options.audioDirectoryName,
       draft: options.draft,
       result,
@@ -261,6 +262,7 @@ export const synthesizeNarration = async (
       voice: options.voice,
     });
 
+    timed = await alignGeneratedStoryNarration(options.draft, timed, stagingDirectory);
     if (options.force) {
       await rm(finalAudioDirectory, {recursive: true, force: true});
     }

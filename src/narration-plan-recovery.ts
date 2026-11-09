@@ -1,3 +1,4 @@
+import {storyMotionSchema} from './story-motion.js';
 import {z} from 'zod';
 import {MAX_NARRATED_SCENES} from './source-coverage.js';
 import {semanticIconDefinitionFor} from './icon-catalog.js';
@@ -429,7 +430,7 @@ export const recoverNarrationResponse = (input: unknown): {
       // actually matter. Re-parsing the single branch names the real fields.
       const focused = kind === 'character-scene'
         ? characterSceneSuggestionSchema.safeParse(candidate)
-        : null;
+        : kind === 'story-motion' ? storyMotionSchema.safeParse(candidate) : null;
       const details = planningValidationSummary(
         focused && !focused.success ? focused.error : visual.error,
       );

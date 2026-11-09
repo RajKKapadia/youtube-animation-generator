@@ -23,7 +23,8 @@
     "test": "vitest run",
     "fixtures:presentation": "node --import tsx src/render-presentation-fixtures.ts",
     "fixtures:characters": "node --import tsx src/render-character-prototype.ts",
-    "fixtures:animation-tools": "node --import tsx src/verify-animation-tools.ts"
+    "fixtures:animation-tools": "node --import tsx src/verify-animation-tools.ts",
+    "fixtures:story-motion": "node --import tsx src/render-story-motion-fixtures.ts"
   },
   "engines": {
     "node": ">=22.13"

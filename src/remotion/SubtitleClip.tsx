@@ -59,6 +59,7 @@ export const SubtitleClip = ({
     icons: clip.icons,
     primaryItemTimings,
     secondaryItemTimings,
+    speechCues: clip.captionCues.length ? clip.captionCues.map(cue => ({...cue, provenance: 'subtitle' as const})) : [{text: clip.transcript, startMs: 0, durationMs: clip.durationMs, provenance: 'estimate' as const}],
     activityCues: clip.captionCues.length > 0
       ? clip.captionCues.map(({startMs, text}) => ({startMs, text}))
       : [{startMs: 0, text: clip.transcript}],
@@ -108,6 +109,7 @@ export const SubtitleClip = ({
             />
           ) : (
             <NarratedVisualLayer
+              chromaKey={greenScreen}
               contentTopInset={captionTopInset(captions, profile)}
               fps={fps}
               foregroundAssets={foregroundAssets}

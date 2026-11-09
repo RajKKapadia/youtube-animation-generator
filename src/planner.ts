@@ -1,3 +1,5 @@
+import {compileStoryMotion} from './story-motion.js';
+import {compactSchemaText} from './schema-prompt.js';
 import {directScenes, PRESENTATION_PLANNING_PROMPT} from './presentation.js';
 import {EXPLAINER_PLANNING_PROMPT, visualTreatmentKey} from './explainer-visuals.js';
 import {codeCatalogPrompt, type CodeSource} from './local-code.js';
@@ -7,7 +9,7 @@ import {zodTextFormat} from 'openai/helpers/zod';
 import {z} from 'zod';
 import {
   subtitleAnimationPlanResponseSchema,
-  subtitleSavedPlanV3Schema,
+  subtitleSavedPlanV3Schema, subtitleSavedPlanV4Schema,
   type DraftNarrationSceneSuggestion,
   type GeneratedVisualMode,
   type LegacyAnimationClip,
@@ -468,8 +470,9 @@ export const materializeSubtitleVisualPlan = async ({
     };
   });
 
-  return subtitleSavedPlanV3Schema.parse({
-    version: 3,
+  for(const clip of clips)if(clip.visual.kind==='story-motion')warnings.push(...compileStoryMotion(clip.visual,clip.captionCues.map(cue=>({...cue,provenance:'subtitle' as const})),clip.durationMs).warnings.map(warning=>`${clip.id}: ${warning}`));
+  return (clips.some(clip=>clip.visual.kind==='story-motion') ? subtitleSavedPlanV4Schema : subtitleSavedPlanV3Schema).parse({
+    version: clips.some(clip => clip.visual.kind === 'story-motion') ? 4 : 3,
     sourceSubtitle,
     generatedAt: new Date().toISOString(),
     model,
@@ -533,7 +536,7 @@ export const planAnimations = async (
     const chatResponse = await withTransientRetries(async () => client.chat.completions.create({
       model: aiInfo.model,
       messages: [
-        {role: 'system', content: `${SYSTEM_PROMPT}\n\nRespond strictly with JSON for { palette: "cyan"|"violet"|"emerald"|"amber"|"rose", animations: [...] } matching the requested schema.`},
+        {role: 'system', content: `${SYSTEM_PROMPT}\n\nRespond strictly with JSON matching this shape: ${compactSchemaText(z.toJSONSchema(subtitleAnimationPlanResponseSchema))}`},
         {
           role: 'user',
           content: [

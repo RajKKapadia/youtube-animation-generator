@@ -1,3 +1,4 @@
+import {storyTimingWarnings} from './story-motion.js';
 import {z} from 'zod';
 import {normalizeNarrationSpeech} from './narration-speech.js';
 import {timedNarratedPlanSchema, type DraftNarratedPlan, type TimedNarratedPlan} from './types.js';
@@ -87,7 +88,10 @@ export const materializeRecordedPlan = (draft: DraftNarratedPlan, report: Alignm
       })};
     });
     const anchors = (lane: 'primaryItemIndices' | 'secondaryItemIndices', count: number) => Array.from({length: count}, (_, itemIndex) => {const beat = beats.find(beat => beat[lane].includes(itemIndex))!; return {beatId: beat.id, startMs: beat.startMs};});
-    return {...scene, startMs, durationMs, beats, primaryItemTimings: anchors('primaryItemIndices', scene.primaryItems.length), secondaryItemTimings: anchors('secondaryItemIndices', scene.secondaryItems.length)};
+    return {...scene, wordTimings: wordsInScene(report.words, startMs, durationMs), startMs, durationMs, beats, primaryItemTimings: anchors('primaryItemIndices', scene.primaryItems.length), secondaryItemTimings: anchors('secondaryItemIndices', scene.secondaryItems.length)};
   });
-  return timedNarratedPlanSchema.parse({...draft, stage: 'timed', audioSource: {kind: 'recorded', original: {file: audio.originalFile, sha256: audio.sha256}, playback: {file: audio.voiceoverFile, sha256: audio.playbackSha256}, alignmentReport: 'alignment/report.json'}, voiceoverFile: audio.voiceoverFile, sampleRate: audio.sampleRate, totalSamples: audio.totalSamples, durationMs: audio.durationMs, voiceoverPlaybackRate: 1, scenes});
+  const plan = timedNarratedPlanSchema.parse({...draft, stage: 'timed', audioSource: {kind: 'recorded', original: {file: audio.originalFile, sha256: audio.sha256}, playback: {file: audio.voiceoverFile, sha256: audio.playbackSha256}, alignmentReport: 'alignment/report.json'}, voiceoverFile: audio.voiceoverFile, sampleRate: audio.sampleRate, totalSamples: audio.totalSamples, durationMs: audio.durationMs, voiceoverPlaybackRate: 1, scenes});
+  return {...plan,planningWarnings:[...new Set([...(plan.planningWarnings??[]),...storyTimingWarnings(plan)])]};
 };
+
+export const wordsInScene = (words: RecordedWord[], startMs: number, durationMs: number) => words.filter(word => word.startMs >= startMs && word.endMs <= startMs + durationMs).map(word => ({text: word.word.trim(), startMs: word.startMs - startMs, durationMs: word.endMs - word.startMs, probability: word.probability}));

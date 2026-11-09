@@ -2,6 +2,12 @@
 
 Status: proposed implementation; no runtime changes in this document. Audited 2026-11-02.
 
+For the broader story-driven direction requested on 2026-11-09, see
+[Story-driven motion proposal](story-driven-motion-plan.md). It extends this proposal
+from named choreography recipes to persistent objects, story events, and voice-aligned
+actions. That document now records the locally implemented foundation and the remaining
+work. The recipe-specific milestones below remain historical proposals.
+
 ## Goal and assessment
 
 Produce coherent animated explanations like the supplied 30-second Rust reference:
@@ -25,13 +31,13 @@ uses frame sequences from the clip; it does not verify the video's factual claim
 
 | Reference capability | Existing foundation | Remaining gap |
 |---|---|---|
-| Cohesive graphics and eased motion | Four templates, 14 visual kinds, and shared spring/entrance/connector/chart constants (`src/types.ts:22`, `src/types.ts:313`, `src/remotion/cinematic-motion.ts:8`) | Design new choreography using these foundations; changing easing alone will not provide it. |
-| Central subject with orbiting concepts | Agent-workflow positions tools around a focal subject and animates request/result motion; icon spotlight has a specialized orbiting marker (`src/remotion/NarratedVisualLayer.tsx:175`, `src/remotion/NarratedVisualLayer.tsx:274`, `src/remotion/NarratedVisualLayer.tsx:678`) | General concept orbit with moving satellites, controlled reveals, legible labels, and no requirement that the subject be an AI agent. |
+| Cohesive graphics and eased motion | Four templates, 14 visual kinds, and shared spring/entrance/connector/chart constants (`src/types.ts:23`, `src/types.ts:314`, `src/remotion/cinematic-motion.ts:8`) | Design new choreography using these foundations; changing easing alone will not provide it. |
+| Central subject with orbiting concepts | Agent-workflow positions tools around a focal subject and animates request/result motion; icon spotlight has a specialized orbiting marker (`src/remotion/NarratedVisualLayer.tsx:176`, `src/remotion/NarratedVisualLayer.tsx:275`, `src/remotion/NarratedVisualLayer.tsx:679`) | General concept orbit with moving satellites, controlled reveals, legible labels, and no requirement that the subject be an AI agent. |
 | Source → processor → output | Process arrows and sequence messages already draw progressively (`src/remotion/AnimationClip.tsx:257`, `src/remotion/ExplainerVisuals.tsx:114`) | Persistent nodes that change state, payload movement, and a coordinated result annotation. |
 | Transformation inside one object | Before/after reveals two comparison cards (`src/remotion/ExplainerVisuals.tsx:59`) | Keep one object's location and identity while its badge, color, and inner content change. |
-| Character climbs learning steps | Code-drawn people support speech, blinking, nodding, held props, and grounded exchanges (`src/remotion/CharacterScene.tsx:147`) | Travel, hop/landing, and a symbolic solo guide. Current character scenes require 2–3 people and an actual source-described exchange (`src/explainer-visuals.ts:66`). |
-| Question cards remain beside changing visuals | Narrated scenes render in separate sequences with a persistent segmented progress bar (`src/remotion/NarratedVideo.tsx:60`, `src/remotion/NarratedProgress.tsx:6`) | A semantic agenda and shared stage across a related group of scenes. |
-| Same visual behavior in both main paths | Subtitle clips and narrated scenes already feed the same visual layer (`src/remotion/SubtitleClip.tsx:47`, `src/remotion/SubtitleClip.tsx:110`, `src/remotion/NarratedVideo.tsx:75`) | Preserve this sharing for actions, layout, and validation. |
+| Character climbs learning steps | Code-drawn people support speech, blinking, nodding, held props, and grounded exchanges (`src/remotion/CharacterScene.tsx:147`) | Travel, hop/landing, and a symbolic solo guide. Current character scenes require 2–3 people and an actual source-described exchange (`src/explainer-visuals.ts:67`). |
+| Question cards remain beside changing visuals | Narrated scenes render in separate sequences with a persistent segmented progress bar (`src/remotion/NarratedVideo.tsx:62`, `src/remotion/NarratedProgress.tsx:6`) | A semantic agenda and shared stage across a related group of scenes. |
+| Same visual behavior in both main paths | Subtitle clips and narrated scenes already feed the same visual layer (`src/remotion/SubtitleClip.tsx:47`, `src/remotion/SubtitleClip.tsx:111`, `src/remotion/NarratedVideo.tsx:77`) | Preserve this sharing for actions, layout, and validation. |
 | Speech-independent pacing | Silent audio metadata and silent project previews exist (`src/animation-contract.ts:37`, `src/project-workflow.ts:78`) | Preview duration currently derives from narration word count and evenly distributed beats (`src/narration-planner.ts:963`); finished silent output needs its own reading and action budget. |
 | Editable external animations | HyperFrames, Lottie, and StykAnimate are integrated, with seven recipe treatments (`src/animation-contract.ts:10`) | Recipes are deliberately bounded: e.g. HyperFrames commonly reveals text rows and Lottie draws text plus focal rings (`src/animation-recipes.ts:42`, `src/animation-recipes.ts:86`). These adapters alone do not provide reference-level choreography. |
 
@@ -44,13 +50,13 @@ Give new recipes dedicated routing and retain connected geometry where it explai
 Planner parity needs particular attention. Narration supplies a schema-derived compact shape
 to Gemini/Groq (`src/narration-planner.ts:752`), and animation recipe authoring does likewise
 (`src/animation-tools.ts:49`). Subtitle planning uses a general JSON instruction on its
-compatibility branch rather than the full schema-derived shape (`src/planner.ts:532`).
+compatibility branch rather than the full schema-derived shape (`src/planner.ts:535`).
 Correct that discrepancy as part of integrating richer treatments.
 
 ## Proposed architecture
 
 Keep plan JSON as the contract and Remotion as the final compositor. Extend the existing
-shared visual scene contract (`src/types.ts:940`) with a bounded choreography description.
+shared visual scene contract (`src/types.ts:951`) with a bounded choreography description.
 Start with semantic recipes and controlled actions; model-authored arbitrary JavaScript,
 SVG paths, coordinates, or a general animation editor are outside this release.
 
@@ -108,7 +114,7 @@ surface warnings; do not repair an unsupported semantic relationship into a new 
 
 Introduce explicit backward-compatible readers and fixture coverage for the new saved
 contracts. Current canonical versions are narrated v8 and subtitle v3
-(`src/types.ts:1188`, `src/types.ts:899`); new choreography-aware contracts should use
+(`src/types.ts:1204`, `src/types.ts:904`); new choreography-aware contracts should use
 narrated v9 and subtitle v4, with legacy plans retaining their established rendering.
 
 ### 3. Implement three reusable treatments
@@ -174,7 +180,7 @@ Render and inspect landscape/portrait; captions on/off; dark, transparent, and g
 backgrounds; TTS-shaped timings, recording pauses, subtitle bounds, and silent pacing.
 Inspect short MP4s and frames immediately before/after each semantic action, including
 boundaries and final holds. Existing production stills capture 50% and 88% only
-(`src/narrated-render.ts:250`), which is insufficient to establish smooth choreography.
+(`src/narrated-render.ts:264`), which is insufficient to establish smooth choreography.
 
 Release acceptance:
 

@@ -62,7 +62,7 @@ returns an `openai` SDK client pointed at OpenAI, Gemini, or Groq:
 | Call site | Triggered by | Cost class |
 |---|---|---|
 | `src/narration-planner.ts:731` | `create <source.md>` | Tokens |
-| `src/planner.ts:509` | `<subtitle.srt>` without `--render-plan` | Tokens |
+| `src/planner.ts:512` | `<subtitle.srt>` without `--render-plan` | Tokens |
 | `src/publish.ts:160` | `publish <plan.json>` | Tokens |
 | `src/topic-author.ts` | `topic "<name>"` | Tokens |
 
@@ -192,6 +192,15 @@ The client prefers a compiled `worker.js` when present, else runs `worker.ts` vi
 real-time. Voice `auto` selection lives in `voice-selection.ts` and reports its rationale.
 
 ## Rendering subsystem
+
+**Story motion.** `src/story-motion.ts` defines the persistent object/action contract,
+source/cue validation, pure scheduling, graph layout and intermediate-state diagnostics.
+`src/remotion/StoryMotion.tsx` renders the same graph in narrated and subtitle paths.
+`src/speech-alignment.ts` applies the installed local recording aligner to new story TTS
+and saves verified scene-relative words or explicit fallback warnings. The authored graph
+contains semantic cue anchors, not model-authored frame coordinates. Saved-plan rendering
+uses persisted timing and makes no alignment/provider call. See
+[the contract](plan-schema.md#story-motion-payload).
 
 Remotion bundles `src/remotion/index.tsx` and drives headless Chrome. Four compositions are
 registered in `Root.tsx`: `AnimationClip`, `SubtitleClip`, `NarratedVideo`,

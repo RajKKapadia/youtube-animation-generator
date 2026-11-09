@@ -169,7 +169,7 @@ dominant term.
 > touching prompt wording.
 
 The compat endpoints do **not** implement `/responses`, so every planner branches on
-`aiInfo.provider` — `planner.ts:513`, `publish.ts:178`, `narration-planner.ts:731`.
+`aiInfo.provider` — `planner.ts:516`, `publish.ts:178`, `narration-planner.ts:731`.
 
 Because JSON mode does not enforce a schema, non-OpenAI output is parsed with Zod and may fail.
 Two compensations apply:
@@ -177,7 +177,7 @@ Two compensations apply:
 1. **A 3-attempt repair loop** (`narration-planner.ts`) feeds validation errors back to the
    model and asks it to fix the plan, on every provider.
 2. **Coercion before validation** — `sanitizeNarratedCandidate`
-   (`narration-plan-recovery.ts:241`), applied only to non-OpenAI output at `narration-planner.ts:811`.
+   (`narration-plan-recovery.ts:242`), applied only to non-OpenAI output at `narration-planner.ts:811`.
 
 A third compensation applies to **every** provider: `repairCharacterScene` also runs inside
 `recoverNarrationResponse`, because strict structured outputs guarantee a character scene's
@@ -185,7 +185,7 @@ A third compensation applies to **every** provider: `repairCharacterScene` also 
 stage is still fatal on the OpenAI path.
 
 Duplicate caption phrase IDs also recover locally on every provider, preserving spoken text,
-beat IDs, item anchors and already unique phrase IDs (`narration-plan-recovery.ts:386`).
+beat IDs, item anchors and already unique phrase IDs (`narration-plan-recovery.ts:387`).
 
 The sanitizer silently repairs rather than rejects. It substitutes an invalid `template` with
 `comparison` (when `secondaryItems` is non-empty) or `callout`, replaces empty `primaryItems`

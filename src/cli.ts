@@ -1032,6 +1032,7 @@ const runNarratedWorkflow = async ({
     steps,
     voice: selectedVoice.voice,
   });
+  printPlanningWarnings(timed.planningWarnings?.filter(warning=>!draft.planningWarnings?.includes(warning)));
   await writeJson(timedPath, timed, common.force);
   if (planPath) {
     await writeFile(regeneratedScriptPath, narrationScriptMarkdown(draft), 'utf8');

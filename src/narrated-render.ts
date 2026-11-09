@@ -1,3 +1,4 @@
+import {compileStoryMotion,chooseStorySpeechCues,layoutStoryMotion,reviewStoryMotion} from './story-motion.js';
 import {existsSync} from 'node:fs';
 import {copyFile, mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -118,6 +119,19 @@ export const renderNarratedVideo = async (
 ): Promise<NarratedOutput[]> => {
   await mkdir(options.outputDirectory, {recursive: true});
   const outputs = narratedOutputPaths(options);
+  const storyReview=outputs.flatMap(({profile})=>options.plan.scenes.flatMap(scene=>{
+    if(scene.visual.kind!=='story-motion')return [];
+    const timeline=compileStoryMotion(scene.visual,chooseStorySpeechCues(scene.visual,scene.wordTimings,scene.beats.flatMap(beat=>beat.phrases)),scene.durationMs);
+    const inset=options.captions==='off'?0:profile.aspectRatio==='9:16'?180:190;
+    const layout=layoutStoryMotion(scene.visual,profile.width-profile.safeArea.left-profile.safeArea.right,profile.height-profile.safeArea.top-profile.safeArea.bottom-inset-110);
+    return [{sceneId:scene.id,aspectRatio:profile.aspectRatio,warnings:timeline.warnings,findings:reviewStoryMotion(scene.visual,timeline,layout),actions:timeline.actions}];
+  }));
+  if(storyReview.length){
+    const report=resolve(options.outputDirectory,`${options.stem}.motion-review.json`);
+    await writeFile(report,JSON.stringify({version:1,scenes:storyReview},null,2));
+    console.log(`Saved story motion review: ${report}`);
+    for(const scene of storyReview)for(const finding of scene.findings)console.warn(`Motion review: ${scene.sceneId} ${scene.aspectRatio} ${finding.kind} (${finding.objects.join(', ')}) near ${finding.timeMs}ms.`);
+  }
   for (const asset of options.plan.animationAssets ?? []) for (const {profile} of outputs) {
     const sequence = asset.renders[profile.aspectRatio], scene = options.plan.scenes.find(scene => scene.id === asset.sceneId);
     if (!sequence || !scene || sequence.fps !== options.fps || sequence.width !== profile.width || sequence.height !== profile.height || sequence.frameCount !== Math.ceil(scene.durationMs / 1000 * options.fps)) throw new Error(`Animation timing/profile changed for ${asset.sceneId}. Reassemble using the requested FPS and orientation.`);
